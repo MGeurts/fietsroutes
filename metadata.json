@@ -1,0 +1,6 @@
+{
+  "name": "Fietsroute Planner NL & BE",
+  "description": "Open-source fietsknooppunten routeplanner voor Nederland en België op basis van OpenStreetMap, met GPX export, knooppuntenstrookje en PHP/Laravel ondersteuning voor Antagonist.",
+  "requestFramePermissions": ["geolocation"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
