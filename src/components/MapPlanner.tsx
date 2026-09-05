@@ -2,7 +2,8 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import L from 'leaflet';
 import { KnooppuntNode, MapTileProvider } from '../types';
 import { fetchKnooppuntenInBBox } from '../services/overpassService';
-import { Search, Loader2, Layers, Crosshair, ZoomIn, ZoomOut, Compass, Sparkles } from 'lucide-react';
+import { getAllOfficialCorridors } from '../data/officialGisCorridors';
+import { Search, Loader2, Layers, Crosshair, ZoomIn, ZoomOut, Compass, Sparkles, Route } from 'lucide-react';
 
 interface MapPlannerProps {
   availableNodes: KnooppuntNode[];
@@ -60,6 +61,7 @@ export const MapPlanner: React.FC<MapPlannerProps> = ({
   const mapInstanceRef = useRef<L.Map | null>(null);
   const baseTileLayerRef = useRef<L.TileLayer | null>(null);
   const overlayTileLayerRef = useRef<L.TileLayer | null>(null);
+  const networkLayerGroupRef = useRef<L.LayerGroup | null>(null);
   const markersLayerGroupRef = useRef<L.LayerGroup | null>(null);
   const routePolylineRef = useRef<L.Polyline | null>(null);
   const routeDecoratorsLayerRef = useRef<L.LayerGroup | null>(null);
@@ -71,6 +73,7 @@ export const MapPlanner: React.FC<MapPlannerProps> = ({
   const [isSearchingLocation, setIsSearchingLocation] = useState(false);
   const [searchMessage, setSearchMessage] = useState<string | null>(null);
   const [showLayerMenu, setShowLayerMenu] = useState(false);
+  const [showNetworkLines, setShowNetworkLines] = useState(true);
   const [currentZoom, setCurrentZoom] = useState(13);
 
   // Initialize Leaflet Map
@@ -84,7 +87,22 @@ export const MapPlanner: React.FC<MapPlannerProps> = ({
       zoomControl: false,
     });
 
+    // Explicit custom panes for strict layering:
+    // 1. Base tiles: zIndex 200 (default tilePane)
+    // 2. Official Network connections (blue): zIndex 350
+    // 3. Active user route (red): zIndex 450
+    // 4. Markers & Knooppunten badges: zIndex 600 (default markerPane)
+    if (!map.getPane('networkPane')) {
+      const networkPane = map.createPane('networkPane');
+      networkPane.style.zIndex = '350';
+    }
+    if (!map.getPane('activeRoutePane')) {
+      const activeRoutePane = map.createPane('activeRoutePane');
+      activeRoutePane.style.zIndex = '450';
+    }
+
     mapInstanceRef.current = map;
+    networkLayerGroupRef.current = L.layerGroup().addTo(map);
     markersLayerGroupRef.current = L.layerGroup().addTo(map);
 
     map.on('zoomend', () => {
@@ -94,6 +112,8 @@ export const MapPlanner: React.FC<MapPlannerProps> = ({
     return () => {
       map.remove();
       mapInstanceRef.current = null;
+      networkLayerGroupRef.current = null;
+      markersLayerGroupRef.current = null;
     };
   }, []);
 
@@ -282,6 +302,88 @@ export const MapPlanner: React.FC<MapPlannerProps> = ({
     });
   }, [availableNodes, selectedNodes, onNodeClick]);
 
+  // Render Official Blue Network Connections (OSM RCN Corridors)
+  useEffect(() => {
+    const map = mapInstanceRef.current;
+    const networkGroup = networkLayerGroupRef.current;
+    if (!map || !networkGroup) return;
+
+    networkGroup.clearLayers();
+    if (!showNetworkLines) return;
+
+    const corridors = getAllOfficialCorridors();
+
+    corridors.forEach((corridor) => {
+      if (!corridor.coordinates || corridor.coordinates.length < 2) return;
+
+      // Clean blue line as seen in official OpenStreetMap Cycle map
+      const polyline = L.polyline(corridor.coordinates, {
+        color: '#2563eb', // Authentic cycling network blue
+        weight: 3.5,
+        opacity: 0.8,
+        lineCap: 'round',
+        lineJoin: 'round',
+        pane: 'networkPane',
+      });
+
+      // Hover feedback
+      polyline.on('mouseover', () => {
+        polyline.setStyle({
+          color: '#1d4ed8',
+          weight: 5.5,
+          opacity: 1,
+        });
+      });
+
+      polyline.on('mouseout', () => {
+        polyline.setStyle({
+          color: '#2563eb',
+          weight: 3.5,
+          opacity: 0.8,
+        });
+      });
+
+      // Detailed tooltip
+      polyline.bindTooltip(
+        `<div class="p-1 font-sans text-slate-900">
+           <div class="flex items-center gap-1.5 font-bold text-xs text-blue-900">
+             <span class="w-2.5 h-2.5 rounded-full bg-blue-600 inline-block"></span>
+             <span>Verbinding ${corridor.from} ↔ ${corridor.to}</span>
+           </div>
+           <div class="text-[11px] text-slate-600 mt-0.5">
+             <span class="font-semibold text-slate-800">${corridor.distanceKm} km</span> &bull; Officieel Fietsnetwerk
+           </div>
+           <div class="text-[10px] text-emerald-700 font-medium mt-1">
+             Klik om toe te voegen aan route
+           </div>
+         </div>`,
+        {
+          sticky: true,
+          opacity: 0.95,
+        }
+      );
+
+      // On click: append node to route
+      polyline.on('click', () => {
+        const nodeA = availableNodes.find((n) => n.ref === corridor.from);
+        const nodeB = availableNodes.find((n) => n.ref === corridor.to);
+        if (!nodeA && !nodeB) return;
+
+        const lastSelected = selectedNodes[selectedNodes.length - 1];
+        if (lastSelected?.ref === corridor.from && nodeB) {
+          onNodeClick(nodeB);
+        } else if (lastSelected?.ref === corridor.to && nodeA) {
+          onNodeClick(nodeA);
+        } else if (nodeA && nodeB) {
+          onNodeClick(nodeA);
+          onNodeClick(nodeB);
+        }
+      });
+
+      networkGroup.addLayer(polyline);
+    });
+  }, [showNetworkLines, availableNodes, selectedNodes, onNodeClick]);
+
   // Update Route Polyline and Directional Markers
   useEffect(() => {
     const map = mapInstanceRef.current;
@@ -304,6 +406,7 @@ export const MapPlanner: React.FC<MapPlannerProps> = ({
         opacity: 0.95,
         lineCap: 'round',
         lineJoin: 'round',
+        pane: 'activeRoutePane',
       }).addTo(map);
 
       routePolylineRef.current = polyline;
@@ -338,6 +441,7 @@ export const MapPlanner: React.FC<MapPlannerProps> = ({
         const arrowMarker = L.marker([p1[0], p1[1]], {
           icon: arrowIcon,
           interactive: false,
+          pane: 'activeRoutePane',
           zIndexOffset: 500,
         });
 
@@ -637,6 +741,23 @@ export const MapPlanner: React.FC<MapPlannerProps> = ({
 
         {/* Action Pills & Layer Switcher */}
         <div className="pointer-events-auto flex items-center gap-2">
+          {/* Toggle Official Blue Network Lines */}
+          <button
+            onClick={() => setShowNetworkLines(!showNetworkLines)}
+            className={`flex items-center gap-1.5 px-3 py-1.5 backdrop-blur text-xs font-semibold rounded-md border shadow-xs transition active:scale-95 cursor-pointer ${
+              showNetworkLines
+                ? 'bg-blue-50/95 border-blue-300 text-blue-700 ring-1 ring-blue-400/30'
+                : 'bg-white/95 border-slate-200 text-slate-600 hover:bg-slate-50'
+            }`}
+            title="Schakel weergave van officiële knooppuntverbindingen (blauwe lijnen) in/uit"
+          >
+            <div className="flex items-center gap-1">
+              <span className={`w-3 h-1 rounded-full ${showNetworkLines ? 'bg-blue-600' : 'bg-slate-300'}`} />
+              <Route className={`w-3.5 h-3.5 ${showNetworkLines ? 'text-blue-600' : 'text-slate-400'}`} />
+            </div>
+            <span>Netwerk {showNetworkLines ? 'Aan' : 'Uit'}</span>
+          </button>
+
           {/* Overpass Query Trigger */}
           <button
             onClick={handleScanBBoxForKnooppunten}
@@ -761,12 +882,19 @@ export const MapPlanner: React.FC<MapPlannerProps> = ({
 
       {/* Map Bottom-Left Attribution & Helper Badge */}
       <div className="absolute bottom-6 left-6 z-[1000] flex flex-col sm:flex-row items-start sm:items-center gap-2 pointer-events-none">
-        <div className="bg-white/80 backdrop-blur-md px-3 py-1 text-[10px] text-slate-500 rounded border border-slate-200 shadow-xs">
-          © OpenStreetMap contributors | Knooppuntdata NL/BE 2024
+        <div className="bg-white/90 backdrop-blur-md px-3 py-1.5 text-[11px] text-slate-700 rounded-md border border-slate-200 shadow-xs flex items-center gap-3">
+          <div className="flex items-center gap-1.5" title="Officiële verbindingen tussen knooppunten">
+            <span className="w-3.5 h-1 bg-blue-600 rounded-full inline-block"></span>
+            <span className="font-semibold text-blue-900">Fietsnetwerk (OSM)</span>
+          </div>
+          <div className="flex items-center gap-1.5" title="Jouw geplande route">
+            <span className="w-3.5 h-1 bg-red-600 rounded-full inline-block"></span>
+            <span className="font-semibold text-red-900">Geplande route</span>
+          </div>
         </div>
-        <div className="hidden sm:flex items-center gap-2 bg-white/90 backdrop-blur px-3 py-1 rounded border border-slate-200 text-[10px] font-medium text-slate-600 shadow-xs">
+        <div className="hidden sm:flex items-center gap-2 bg-white/90 backdrop-blur px-3 py-1.5 rounded-md border border-slate-200 text-[11px] font-medium text-slate-600 shadow-xs">
           <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-          <span>Klik op knooppunten om te verbinden</span>
+          <span>Klik op knooppunten of blauwe lijnen om route uit te breiden</span>
         </div>
       </div>
     </div>
