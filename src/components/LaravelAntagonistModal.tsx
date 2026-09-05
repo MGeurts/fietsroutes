@@ -471,7 +471,7 @@ jobs:
               <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-200 text-emerald-950 text-[11px] space-y-1">
                 <div className="font-bold">Klaar! Geen achtergrondproces nodig</div>
                 <p>
-                  Je kunt je terminal nu sluiten. Herd serveert via het meegeleverde <code>LocalValetDriver.php</code> en <code>index.php</code> automatisch de gecompileerde app op <strong>https://fietsroute.test</strong>!
+                  Je kunt je terminal nu sluiten. Herd serveert via het meegeleverde <code>index.php</code> en <code>public/index.php</code> automatisch de gecompileerde app op <strong>https://fietsroute.test</strong>!
                 </p>
               </div>
             </div>

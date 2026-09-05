@@ -201,7 +201,7 @@ This generates an optimized, self-contained `dist/` directory.
 
 You're all set! 
 - **No background Node.js process required**: You can close your terminal and do **not** need to run `npm run dev`.
-- Herd's built-in Nginx webserver uses the included `LocalValetDriver.php` and `index.php` to immediately serve the compiled planner directly at **`https://fietsroute.test`** with automatic local SSL certificates.
+- Herd's built-in Nginx webserver uses the included `index.php` and `public/index.php` to immediately serve the compiled planner directly at **`https://fietsroute.test`** with automatic local SSL certificates.
 - If you ever change the TypeScript or React source code, just run `npm run build` again to refresh the build.
 
 ---
