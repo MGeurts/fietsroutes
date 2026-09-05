@@ -45,7 +45,39 @@ export const INITIAL_NODES: KnooppuntNode[] = [
     name: 'Bessemer / N77',
     municipality: 'Zutendaal',
     region: 'Belgisch Limburg',
-    connections: ['64', '251', '63', '550', '252']
+    connections: ['64', '251', '63', '550', '252', '65', '532']
+  },
+  {
+    id: 'kp-65',
+    ref: '65',
+    lat: 50.87940,
+    lng: 5.60869,
+    name: 'Gellik / Albertkanaal',
+    municipality: 'Lanaken',
+    region: 'Belgisch Limburg',
+    highlight: 'Albertkanaal fietssnelweg & Brug van Gellik',
+    connections: ['62', '533', '66', '558']
+  },
+  {
+    id: 'kp-533',
+    ref: '533',
+    lat: 50.88941,
+    lng: 5.57699,
+    name: 'Eigenbilzen / Albertkanaal',
+    municipality: 'Bilzen',
+    region: 'Belgisch Limburg',
+    connections: ['65', '532', '505']
+  },
+  {
+    id: 'kp-505',
+    ref: '505',
+    lat: 50.89226,
+    lng: 5.57074,
+    name: 'Stevoorden-Hoefaert / Eigenbilzen',
+    municipality: 'Bilzen',
+    region: 'Belgisch Limburg',
+    highlight: 'Natuurgebied Stevoorden-Hoefaert',
+    connections: ['533', '69', '504']
   },
   {
     id: 'kp-63',
@@ -116,7 +148,7 @@ export const INITIAL_NODES: KnooppuntNode[] = [
     name: 'Roelen / Munsterbilzen grens',
     municipality: 'Zutendaal / Bilzen',
     region: 'Belgisch Limburg',
-    connections: ['64', '69']
+    connections: ['64', '533', '62', '69']
   },
   {
     id: 'kp-29',

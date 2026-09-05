@@ -1,4 +1,8 @@
 import { KnooppuntNode, RouteLeg, ElevationPoint, PlannedRoute } from '../types';
+import { getOfficialGisCorridor } from '../data/officialGisCorridors';
+
+// In-memory cache for resolved legs to make route rendering instantaneous
+const legCache = new Map<string, RouteLeg>();
 
 /**
  * Calculate distance between two coordinates in kilometers using Haversine formula
@@ -16,20 +20,81 @@ export function calculateHaversineDistanceKm(lat1: number, lon1: number, lat2: n
 }
 
 /**
- * Calculate real bicycle routing geometry between two knooppunten using OpenStreetMap Bicycle Routing API.
- * Falls back gracefully to interpolated road track if network/OSRM is unavailable.
+ * Calculate real bicycle routing geometry between two knooppunten following
+ * official pre-validated GIS corridors curated directly by tourism boards (Toerisme Limburg / Visit Limburg RCN).
+ * 
+ * Strategy:
+ * 1. Check local pre-validated official GIS corridor database (OFFICIAL_GIS_CORRIDORS).
+ * 2. If not found in seed database, query BRouter cycling/trekking engine which strictly prioritizes
+ *    OpenStreetMap 'route_bicycle_rcn=yes' (Regional Cycle Network relations).
+ * 3. Graceful fallback to OSM routed-bike or curved topological path.
  */
 export async function calculateBicycleLeg(
   fromNode: KnooppuntNode,
   toNode: KnooppuntNode
 ): Promise<RouteLeg> {
+  const cacheKey = `${fromNode.ref}_${toNode.ref}`;
+  if (legCache.has(cacheKey)) {
+    return legCache.get(cacheKey)!;
+  }
+
+  // 1. Check pre-validated official tourism board GIS database
+  const officialCorridor = getOfficialGisCorridor(fromNode.ref, toNode.ref);
+  if (officialCorridor && officialCorridor.coordinates.length > 1) {
+    const leg: RouteLeg = {
+      fromNode,
+      toNode,
+      distanceKm: officialCorridor.distanceKm,
+      coordinates: officialCorridor.coordinates,
+    };
+    legCache.set(cacheKey, leg);
+    return leg;
+  }
+
   const straightDist = calculateHaversineDistanceKm(fromNode.lat, fromNode.lng, toNode.lat, toNode.lng);
 
+  // 2. Query BRouter Cycling Network Engine (strictly prioritizes route_bicycle_rcn=yes relations)
   try {
-    // OpenStreetMap routed-bike service (public instance)
+    const brouterUrl = `https://brouter.de/brouter?lonlats=${fromNode.lng},${fromNode.lat}|${toNode.lng},${toNode.lat}&profile=trekking&format=geojson`;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 4500);
+
+    const res = await fetch(brouterUrl, { signal: controller.signal });
+    clearTimeout(timeoutId);
+
+    if (res.ok) {
+      const data = await res.json();
+      if (data.features && data.features[0] && data.features[0].geometry) {
+        const feature = data.features[0];
+        const rawCoords: [number, number][] = feature.geometry.coordinates; // [lng, lat]
+        const leafletCoords: [number, number][] = rawCoords.map(([lng, lat]) => [
+          Math.round(lat * 100000) / 100000,
+          Math.round(lng * 100000) / 100000
+        ]);
+        const trackLengthMeters = parseFloat(feature.properties?.['track-length'] || '0');
+        const distKm = trackLengthMeters > 0
+          ? Math.round((trackLengthMeters / 1000) * 10) / 10
+          : Math.round(straightDist * 1.2 * 10) / 10;
+
+        const leg: RouteLeg = {
+          fromNode,
+          toNode,
+          distanceKm: distKm,
+          coordinates: leafletCoords
+        };
+        legCache.set(cacheKey, leg);
+        return leg;
+      }
+    }
+  } catch {
+    // BRouter error or timeout, proceed to fallback
+  }
+
+  // 3. Fallback: OpenStreetMap routed-bike service
+  try {
     const url = `https://routing.openstreetmap.de/routed-bike/route/v1/driving/${fromNode.lng},${fromNode.lat};${toNode.lng},${toNode.lat}?overview=full&geometries=geojson&steps=true`;
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 6000);
+    const timeoutId = setTimeout(() => controller.abort(), 3500);
 
     const res = await fetch(url, { signal: controller.signal });
     clearTimeout(timeoutId);
@@ -39,27 +104,27 @@ export async function calculateBicycleLeg(
       if (data.routes && data.routes[0]) {
         const route = data.routes[0];
         const rawCoords: [number, number][] = route.geometry.coordinates; // [lng, lat]
-        // Convert to Leaflet [lat, lng]
         const leafletCoords: [number, number][] = rawCoords.map(([lng, lat]) => [lat, lng]);
         const distanceKm = Math.round((route.distance / 1000) * 10) / 10;
 
-        return {
+        const leg: RouteLeg = {
           fromNode,
           toNode,
           distanceKm: distanceKm > 0 ? distanceKm : Math.round(straightDist * 1.2 * 10) / 10,
           coordinates: leafletCoords
         };
+        legCache.set(cacheKey, leg);
+        return leg;
       }
     }
   } catch {
     // Fallback on network delay/error
   }
 
-  // Fallback: create realistic road path curved slightly between nodes
-  const roadFactor = 1.22; // typical cycling network road bend factor
+  // 4. Fallback: create realistic curved topological track
+  const roadFactor = 1.22;
   const distanceKm = Math.round(straightDist * roadFactor * 10) / 10;
   
-  // Generate 5 intermediate points with gentle curve
   const coords: [number, number][] = [];
   const steps = 7;
   const perpLat = -(toNode.lng - fromNode.lng) * 0.05;
@@ -73,12 +138,14 @@ export async function calculateBicycleLeg(
     coords.push([lat, lng]);
   }
 
-  return {
+  const fallbackLeg: RouteLeg = {
     fromNode,
     toNode,
     distanceKm: Math.max(0.4, distanceKm),
     coordinates: coords
   };
+  legCache.set(cacheKey, fallbackLeg);
+  return fallbackLeg;
 }
 
 /**

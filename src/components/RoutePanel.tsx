@@ -251,16 +251,52 @@ export const RoutePanel: React.FC<RoutePanelProps> = ({
             <div className="space-y-1.5">
               {selectedNodes.map((node, index) => {
                 const nextLeg = routeLegs[index];
+                const isStart = index === 0;
+                const isEnd = index === selectedNodes.length - 1;
+                const isInBetween = !isStart && !isEnd;
+
                 return (
                   <div key={`${node.ref}-${index}`} className="flex flex-col">
                     <div className="flex items-center gap-3 bg-white p-2 border border-slate-200 rounded-md shadow-xs hover:border-slate-300 transition group">
-                      <div className="w-8 h-8 rounded-full border-2 border-emerald-500 flex items-center justify-center font-bold text-emerald-700 text-sm bg-white shrink-0">
-                        {node.ref}
+                      <div className="relative shrink-0 flex items-center justify-center">
+                        <div className={`w-8 h-8 rounded-full border-2 flex items-center justify-center font-black text-xs bg-white ${
+                          isStart
+                            ? 'border-lime-500 text-stone-900 ring-2 ring-lime-400/40'
+                            : isEnd
+                            ? 'border-rose-500 text-stone-900 ring-2 ring-rose-400/40'
+                            : 'border-slate-400 text-stone-800'
+                        }`}>
+                          {node.ref}
+                        </div>
+                        {isStart && (
+                          <span className="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full bg-lime-500 text-white flex items-center justify-center text-[8px] font-bold shadow-xs" title="Start">
+                            ▶
+                          </span>
+                        )}
+                        {isEnd && (
+                          <span className="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full bg-rose-600 text-white flex items-center justify-center text-[7px] font-bold shadow-xs" title="Einde">
+                            ■
+                          </span>
+                        )}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <div className="text-xs font-semibold text-slate-800 truncate">
-                          {index === 0 ? 'Start: ' : index === selectedNodes.length - 1 ? 'Einde: ' : 'Via: '}
-                          Knooppunt {node.ref}
+                        <div className="text-xs font-semibold text-slate-800 truncate flex items-center gap-1.5">
+                          {isStart && (
+                            <span className="text-[10px] uppercase font-bold text-lime-700 bg-lime-50 px-1.5 py-0.5 rounded border border-lime-200">
+                              Start
+                            </span>
+                          )}
+                          {isEnd && (
+                            <span className="text-[10px] uppercase font-bold text-rose-700 bg-rose-50 px-1.5 py-0.5 rounded border border-rose-200">
+                              Eind
+                            </span>
+                          )}
+                          {isInBetween && (
+                            <span className="text-[10px] font-medium text-slate-500">
+                              Via
+                            </span>
+                          )}
+                          <span>Knooppunt {node.ref}</span>
                         </div>
                         <span className="text-slate-400 text-[11px] block truncate">
                           {node.name || node.municipality || node.region || 'Fietsnetwerk'}

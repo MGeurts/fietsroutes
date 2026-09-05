@@ -1,9 +1,12 @@
 @import "tailwindcss";
 
 /* Leaflet marker container cleanup */
-.custom-knooppunt-icon {
+.custom-knooppunt-icon,
+.current-location-red-dot,
+.route-direction-arrow {
   background: transparent !important;
   border: none !important;
+  overflow: visible !important;
 }
 
 .leaflet-popup-content-wrapper {

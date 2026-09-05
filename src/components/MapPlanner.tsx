@@ -15,6 +15,37 @@ interface MapPlannerProps {
   onChangeTileProvider: (provider: MapTileProvider) => void;
 }
 
+// Calculate bearing angle between two coordinates
+function calculateBearing(p1: [number, number], p2: [number, number]): number {
+  const lat1 = (p1[0] * Math.PI) / 180;
+  const lon1 = (p1[1] * Math.PI) / 180;
+  const lat2 = (p2[0] * Math.PI) / 180;
+  const lon2 = (p2[1] * Math.PI) / 180;
+  const y = Math.sin(lon2 - lon1) * Math.cos(lat2);
+  const x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(lon2 - lon1);
+  const brng = (Math.atan2(y, x) * 180) / Math.PI;
+  return (brng + 360) % 360;
+}
+
+// Marker pin SVGs matching authentic cycling maps (screenshot)
+const startPinSvg = `
+  <div class="flex flex-col items-center drop-shadow-sm" title="Start knooppunt">
+    <svg width="24" height="28" viewBox="0 0 24 28" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M12 27.5C12 27.5 2.5 18 2.5 11C2.5 5.8 6.7 1.5 12 1.5C17.3 1.5 21.5 5.8 21.5 11C21.5 18 12 27.5 12 27.5Z" fill="#84cc16" stroke="#ffffff" stroke-width="1.8" stroke-linejoin="round"/>
+      <polygon points="10,7.5 16,11 10,14.5" fill="#ffffff"/>
+    </svg>
+  </div>
+`;
+
+const endPinSvg = `
+  <div class="flex flex-col items-center drop-shadow-sm" title="Eind knooppunt">
+    <svg width="24" height="28" viewBox="0 0 24 28" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M12 27.5C12 27.5 2.5 18 2.5 11C2.5 5.8 6.7 1.5 12 1.5C17.3 1.5 21.5 5.8 21.5 11C21.5 18 12 27.5 12 27.5Z" fill="#e11d48" stroke="#ffffff" stroke-width="1.8" stroke-linejoin="round"/>
+      <rect x="8.5" y="7.5" width="7" height="7" rx="1.5" fill="#ffffff"/>
+    </svg>
+  </div>
+`;
+
 export const MapPlanner: React.FC<MapPlannerProps> = ({
   availableNodes,
   selectedNodes,
@@ -31,6 +62,9 @@ export const MapPlanner: React.FC<MapPlannerProps> = ({
   const overlayTileLayerRef = useRef<L.TileLayer | null>(null);
   const markersLayerGroupRef = useRef<L.LayerGroup | null>(null);
   const routePolylineRef = useRef<L.Polyline | null>(null);
+  const routeDecoratorsLayerRef = useRef<L.LayerGroup | null>(null);
+  const currentLocationMarkerRef = useRef<L.Marker | null>(null);
+  const currentLocationCircleRef = useRef<L.Circle | null>(null);
 
   const [isSearchingNodes, setIsSearchingNodes] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -43,9 +77,9 @@ export const MapPlanner: React.FC<MapPlannerProps> = ({
   useEffect(() => {
     if (!mapContainerRef.current || mapInstanceRef.current) return;
 
-    // Default center: Zutendaal Centrum (50.9337, 5.5757)
+    // Default center: Zutendaal & Hoge Kempen cycle loop (50.912, 5.590)
     const map = L.map(mapContainerRef.current, {
-      center: [50.9337, 5.5757],
+      center: [50.912, 5.590],
       zoom: 13,
       zoomControl: false,
     });
@@ -148,33 +182,44 @@ export const MapPlanner: React.FC<MapPlannerProps> = ({
       uniqueNodes.push(node);
     });
 
-    // Render each node with authentic green badge design
+    // Render each node with authentic badge design and role pins (start, inbetween, end)
     uniqueNodes.forEach((node) => {
       const isSelected = selectedIndices.has(node.ref);
-      const orders = selectedIndices.get(node.ref);
+      const isStart = selectedNodes.length > 0 && selectedNodes[0].ref === node.ref;
+      const isEnd = selectedNodes.length > 1 && selectedNodes[selectedNodes.length - 1].ref === node.ref;
 
-      // Icon HTML with authentic Professional Polish styling (clean white circle with emerald border & font)
+      let rolePinHtml = '';
+      if (isStart && isEnd) {
+        // Loop: start and end on same node
+        rolePinHtml = `<div class="flex items-center gap-0.5 pointer-events-none">${startPinSvg}${endPinSvg}</div>`;
+      } else if (isStart) {
+        rolePinHtml = startPinSvg;
+      } else if (isEnd) {
+        rolePinHtml = endPinSvg;
+      }
+
+      // Icon HTML with authentic styling (white circle with crisp red border on active route, emerald for available)
       const isHighlight = !!node.highlight;
       const ringClass = isSelected
-        ? 'ring-4 ring-emerald-400 ring-offset-2 ring-offset-white shadow-xl scale-110 z-30'
-        : 'hover:scale-115 hover:shadow-lg transition-transform';
+        ? 'ring-3 ring-red-500/40 shadow-lg scale-105 z-20'
+        : 'hover:scale-110 hover:shadow-md transition-transform';
 
       const bgClass = isSelected
-        ? 'bg-emerald-500 text-white font-black border-2 border-emerald-600'
+        ? 'bg-white text-stone-950 font-black border-[2.5px] border-red-600'
         : isHighlight
         ? 'bg-white text-emerald-800 font-extrabold border-2 border-emerald-500 ring-2 ring-amber-300'
         : 'bg-white text-emerald-800 font-bold border-2 border-emerald-500';
 
       const badgeHtml = `
-        <div class="relative flex items-center justify-center">
+        <div class="relative flex flex-col items-center justify-center">
+          ${rolePinHtml ? `
+            <div class="absolute bottom-[100%] mb-0.5 left-1/2 -translate-x-1/2 pointer-events-none z-30">
+              ${rolePinHtml}
+            </div>
+          ` : ''}
           <div class="w-8 h-8 rounded-full flex items-center justify-center text-xs shadow-md transition-all cursor-pointer ${bgClass} ${ringClass}">
             ${node.ref}
           </div>
-          ${isSelected && orders ? `
-            <div class="absolute -top-2 -right-2 bg-slate-900 text-white text-[10px] font-bold w-5 h-5 rounded-full flex items-center justify-center border-2 border-white shadow-sm">
-              ${orders.join(',')}
-            </div>
-          ` : ''}
           ${isHighlight && !isSelected ? `
             <div class="absolute -top-1.5 -right-1.5 bg-amber-400 text-slate-900 w-3.5 h-3.5 rounded-full flex items-center justify-center text-[8px] font-bold shadow-xs">
               ★
@@ -237,7 +282,7 @@ export const MapPlanner: React.FC<MapPlannerProps> = ({
     });
   }, [availableNodes, selectedNodes, onNodeClick]);
 
-  // Update Route Polyline
+  // Update Route Polyline and Directional Markers
   useEffect(() => {
     const map = mapInstanceRef.current;
     if (!map) return;
@@ -246,20 +291,60 @@ export const MapPlanner: React.FC<MapPlannerProps> = ({
       map.removeLayer(routePolylineRef.current);
       routePolylineRef.current = null;
     }
+    if (routeDecoratorsLayerRef.current) {
+      map.removeLayer(routeDecoratorsLayerRef.current);
+      routeDecoratorsLayerRef.current = null;
+    }
 
     if (routeCoordinates && routeCoordinates.length > 1) {
-      // Create glowing dual-layer polyline for high visibility
+      // Vivid red polyline matching professional cycling network applications
       const polyline = L.polyline(routeCoordinates, {
-        color: '#10b981',
-        weight: 5,
-        opacity: 0.9,
+        color: '#dc2626', // Vibrant red route corridor
+        weight: 5.5,
+        opacity: 0.95,
         lineCap: 'round',
         lineJoin: 'round',
       }).addTo(map);
 
       routePolylineRef.current = polyline;
+
+      // Add directional arrow indicators along the route (as seen in screenshot)
+      const decoratorsGroup = L.layerGroup().addTo(map);
+      routeDecoratorsLayerRef.current = decoratorsGroup;
+
+      const totalPoints = routeCoordinates.length;
+      const step = Math.max(12, Math.floor(totalPoints / Math.min(8, Math.max(2, selectedNodes.length))));
+      
+      for (let i = Math.floor(step / 2); i < totalPoints - 1; i += step) {
+        const p1 = routeCoordinates[i];
+        const p2 = routeCoordinates[Math.min(i + 2, totalPoints - 1)];
+        if (!p1 || !p2) continue;
+
+        const angle = calculateBearing(p1, p2);
+
+        const arrowIcon = L.divIcon({
+          className: 'route-direction-arrow',
+          html: `
+            <div class="w-4 h-4 rounded-full bg-red-600 border border-white flex items-center justify-center shadow-xs" style="transform: rotate(${angle}deg);" title="Fietsrichting">
+              <svg width="8" height="8" viewBox="0 0 8 8" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M4 1L7 5H5V7H3V5H1L4 1Z" fill="white"/>
+              </svg>
+            </div>
+          `,
+          iconSize: [16, 16],
+          iconAnchor: [8, 8],
+        });
+
+        const arrowMarker = L.marker([p1[0], p1[1]], {
+          icon: arrowIcon,
+          interactive: false,
+          zIndexOffset: 500,
+        });
+
+        decoratorsGroup.addLayer(arrowMarker);
+      }
     }
-  }, [routeCoordinates]);
+  }, [routeCoordinates, selectedNodes]);
 
   // Fetch real knooppunten from OpenStreetMap via Overpass for current map viewport
   const handleScanBBoxForKnooppunten = useCallback(async () => {
@@ -389,17 +474,119 @@ export const MapPlanner: React.FC<MapPlannerProps> = ({
     };
   }, [availableNodes, onNodeClick, handleScanBBoxForKnooppunten]);
 
-  // Center on user geolocation
+  // Place distinct red dot on current location with pulse animation
+  const placeCurrentLocationDot = (lat: number, lng: number, accuracy?: number) => {
+    const map = mapInstanceRef.current;
+    if (!map) return;
+
+    if (currentLocationMarkerRef.current) {
+      map.removeLayer(currentLocationMarkerRef.current);
+      currentLocationMarkerRef.current = null;
+    }
+    if (currentLocationCircleRef.current) {
+      map.removeLayer(currentLocationCircleRef.current);
+      currentLocationCircleRef.current = null;
+    }
+
+    if (accuracy && accuracy < 2000) {
+      const circle = L.circle([lat, lng], {
+        radius: accuracy,
+        color: '#ef4444',
+        weight: 1.5,
+        fillColor: '#ef4444',
+        fillOpacity: 0.12,
+      }).addTo(map);
+      currentLocationCircleRef.current = circle;
+    }
+
+    const redDotIcon = L.divIcon({
+      className: 'current-location-red-dot',
+      html: `
+        <div class="relative flex items-center justify-center w-8 h-8 pointer-events-auto cursor-pointer" title="Mijn huidige locatie">
+          <span class="absolute w-7 h-7 rounded-full bg-red-500 opacity-60 animate-ping"></span>
+          <span class="absolute w-5 h-5 rounded-full bg-red-500/25"></span>
+          <span class="relative w-3.5 h-3.5 bg-red-600 border-2 border-white rounded-full shadow-md"></span>
+        </div>
+      `,
+      iconSize: [32, 32],
+      iconAnchor: [16, 16],
+    });
+
+    const marker = L.marker([lat, lng], {
+      icon: redDotIcon,
+      zIndexOffset: 3000,
+    }).addTo(map);
+
+    marker.bindPopup(`
+      <div class="p-1 font-sans text-xs min-w-[170px]">
+        <div class="font-bold text-red-600 flex items-center gap-1.5 mb-1 text-sm">
+          <span class="w-2.5 h-2.5 rounded-full bg-red-600 shadow-xs"></span>
+          Mijn huidige locatie
+        </div>
+        <div class="text-slate-500 text-[11px] mb-2 font-mono">${lat.toFixed(5)}, ${lng.toFixed(5)}</div>
+        <button id="btn-find-nearest-node" class="w-full py-1 px-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-[11px] font-semibold transition cursor-pointer">
+          Vind dichtstbijzijnde knooppunt
+        </button>
+      </div>
+    `, { offset: [0, -10] });
+
+    marker.on('popupopen', () => {
+      const btn = document.getElementById('btn-find-nearest-node');
+      if (btn) {
+        btn.onclick = () => {
+          let nearestNode: KnooppuntNode | null = null;
+          let minDist = Infinity;
+          availableNodes.forEach((n) => {
+            const d = Math.hypot(n.lat - lat, n.lng - lng);
+            if (d < minDist) {
+              minDist = d;
+              nearestNode = n;
+            }
+          });
+          if (nearestNode) {
+            onNodeClick(nearestNode);
+            map.flyTo([(nearestNode as KnooppuntNode).lat, (nearestNode as KnooppuntNode).lng], 14);
+            marker.closePopup();
+            setSearchMessage(`Dichtstbijzijnde knooppunt ${(nearestNode as KnooppuntNode).ref} toegevoegd`);
+            setTimeout(() => setSearchMessage(null), 3500);
+          }
+        };
+      }
+    });
+
+    currentLocationMarkerRef.current = marker;
+  };
+
+  // Center on user geolocation and place red dot
   const handleLocateMe = () => {
-    if (!navigator.geolocation || !mapInstanceRef.current) return;
+    if (!navigator.geolocation || !mapInstanceRef.current) {
+      setSearchMessage('Geolocatie wordt niet ondersteund door deze browser.');
+      setTimeout(() => setSearchMessage(null), 3000);
+      return;
+    }
+
+    setIsSearchingLocation(true);
+    setSearchMessage('Huidige locatie bepalen...');
+
     navigator.geolocation.getCurrentPosition(
       (pos) => {
-        const { latitude, longitude } = pos.coords;
-        mapInstanceRef.current?.flyTo([latitude, longitude], 13);
+        setIsSearchingLocation(false);
+        const { latitude, longitude, accuracy } = pos.coords;
+        placeCurrentLocationDot(latitude, longitude, accuracy);
+        mapInstanceRef.current?.flyTo([latitude, longitude], 14, { duration: 1.2 });
+        setSearchMessage('Huidige locatie gemarkeerd met rode stip');
+        setTimeout(() => setSearchMessage(null), 4000);
       },
-      () => {
-        setSearchMessage('Locatietoegang geweigerd of niet beschikbaar.');
-        setTimeout(() => setSearchMessage(null), 3000);
+      (err) => {
+        setIsSearchingLocation(false);
+        console.warn('Geolocation error:', err);
+        setSearchMessage('Locatietoegang niet beschikbaar of geweigerd.');
+        setTimeout(() => setSearchMessage(null), 3500);
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 60000,
       }
     );
   };

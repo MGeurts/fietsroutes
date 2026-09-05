@@ -14,17 +14,20 @@ export default function App() {
   // Available nodes in current state (preloaded + Overpass queried)
   const [availableNodes, setAvailableNodes] = useState<KnooppuntNode[]>(INITIAL_NODES);
 
-  // Default initial route: Authentic Zutendaal & Hoge Kempen loop (251 -> 252 -> 550 -> 62 -> 64 -> 251)
+  // Default initial route matching user's curated loop (64 -> 251 -> 252 -> 62 -> 65 -> 533 -> 532 -> 64)
   const defaultInitialNodes = [
-    INITIAL_NODES.find((n) => n.ref === '251') || INITIAL_NODES[0], // Zutendaal Centrum
-    INITIAL_NODES.find((n) => n.ref === '252') || INITIAL_NODES[4], // Wiemesmeer
-    INITIAL_NODES.find((n) => n.ref === '550') || INITIAL_NODES[6], // Fietsen door de Heide
-    INITIAL_NODES.find((n) => n.ref === '62') || INITIAL_NODES[2],  // Bessemer
-    INITIAL_NODES.find((n) => n.ref === '64') || INITIAL_NODES[1],  // Lieteberg
+    INITIAL_NODES.find((n) => n.ref === '64') || INITIAL_NODES[0],  // 64: Start (Lieteberg)
+    INITIAL_NODES.find((n) => n.ref === '251') || INITIAL_NODES[1], // 251: Zutendaal
+    INITIAL_NODES.find((n) => n.ref === '252') || INITIAL_NODES[2], // 252: Wiemesmeer
+    INITIAL_NODES.find((n) => n.ref === '62') || INITIAL_NODES[3],  // 62: Bessemer
+    INITIAL_NODES.find((n) => n.ref === '65') || INITIAL_NODES[4],  // 65: Gellik / Albertkanaal
+    INITIAL_NODES.find((n) => n.ref === '533') || INITIAL_NODES[5], // 533: Eigenbilzen
+    INITIAL_NODES.find((n) => n.ref === '532') || INITIAL_NODES[6], // 532: Roelen
+    INITIAL_NODES.find((n) => n.ref === '64') || INITIAL_NODES[0],  // 64: End (Lieteberg)
   ];
 
   const [selectedNodes, setSelectedNodes] = useState<KnooppuntNode[]>(defaultInitialNodes);
-  const [routeName, setRouteName] = useState<string>('Zutendaal & Fietsen door de Heide');
+  const [routeName, setRouteName] = useState<string>('Rondrit Nationaal Park Hoge Kempen & Albertkanaal');
   const [routeLegs, setRouteLegs] = useState<RouteLeg[]>([]);
   const [fullCoordinates, setFullCoordinates] = useState<[number, number][]>([]);
   const [totalDistanceKm, setTotalDistanceKm] = useState<number>(0);
