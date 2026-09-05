@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Server, Code, Copy, Check, X, Download, ShieldCheck, Database, ExternalLink, GitBranch } from 'lucide-react';
+import { Server, Code, Copy, Check, X, ShieldCheck, Database, ExternalLink, GitBranch, Zap } from 'lucide-react';
 
 interface LaravelAntagonistModalProps {
   isOpen: boolean;
@@ -10,7 +10,7 @@ export const LaravelAntagonistModal: React.FC<LaravelAntagonistModalProps> = ({
   isOpen,
   onClose,
 }) => {
-  const [activeTab, setActiveTab] = useState<'overview' | 'laravel' | 'php_simple' | 'htaccess' | 'github_actions'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'herd' | 'laravel' | 'php_simple' | 'htaccess' | 'github_actions'>('overview');
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
   if (!isOpen) return null;
@@ -322,6 +322,18 @@ jobs:
           </button>
 
           <button
+            onClick={() => setActiveTab('herd')}
+            className={`px-3 py-2 rounded-t-lg font-bold transition flex items-center gap-1.5 cursor-pointer shrink-0 ${
+              activeTab === 'herd'
+                ? 'bg-white text-slate-900 border-t-2 border-red-500 shadow-xs'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
+            }`}
+          >
+            <Zap className="w-3.5 h-3.5 text-red-500" />
+            <span>Laravel Herd (Lokaal)</span>
+          </button>
+
+          <button
             onClick={() => setActiveTab('laravel')}
             className={`px-3 py-2 rounded-t-lg font-bold transition flex items-center gap-1.5 cursor-pointer shrink-0 ${
               activeTab === 'laravel'
@@ -415,8 +427,52 @@ jobs:
                 <ol className="list-decimal list-inside space-y-1 text-xs">
                   <li>Clone je repository: <code>git clone https://github.com/MGeurts/fietsroute.git</code></li>
                   <li>Voeg de broncode toe of download de bestanden via de onderstaande tabbladen.</li>
-                  <li>Kies het tabblad <strong>Laravel Integratie</strong> of <strong>Eenvoudig PHP</strong> om de bestanden in te zien en te kopiëren.</li>
+                  <li>Kies het tabblad <strong>Laravel Herd</strong>, <strong>Laravel Integratie</strong> of <strong>Eenvoudig PHP</strong> om de bestanden in te zien en te kopiëren.</li>
                 </ol>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'herd' && (
+            <div className="space-y-4">
+              <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
+                <div className="flex items-center gap-2">
+                  <div className="w-6 h-6 rounded-md bg-red-600 text-white flex items-center justify-center font-bold text-xs">H</div>
+                  <h3 className="text-sm font-bold text-slate-900">Laravel Herd gebruiken zónder <code>npm run dev</code></h3>
+                </div>
+                <p className="text-slate-600 text-[11px]">
+                  Krijg je in je browser de rode melding <strong>"404 Site not found"</strong> op <code>https://fietsroute.test</code>? Dat betekent enkel dat Herd de map nog niet aan het domein heeft gekoppeld. Volg deze twee stappen:
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <div className="font-bold text-slate-900">Stap 1: Koppel de map in Laravel Herd</div>
+                <p className="text-slate-600 text-[11px]">
+                  Open PowerShell of Windows Terminal in de projectmap en voer uit:
+                </p>
+                <pre className="p-3 bg-slate-900 text-emerald-400 rounded-xl font-mono text-[11px] overflow-x-auto">
+                  herd link fietsroute
+                </pre>
+                <p className="text-slate-500 text-[11px]">
+                  <em>(Of open Herd Settings &gt; Sites &gt; klik op "+" en selecteer de map <code>fietsroute</code>).</em>
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <div className="font-bold text-slate-900">Stap 2: Bouw het pakket éénmalig</div>
+                <p className="text-slate-600 text-[11px]">
+                  Omdat de browser kant-en-klare HTML, CSS en JS nodig heeft, bouw je het project één keer:
+                </p>
+                <pre className="p-3 bg-slate-900 text-emerald-400 rounded-xl font-mono text-[11px] overflow-x-auto">
+                  npm run build
+                </pre>
+              </div>
+
+              <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-200 text-emerald-950 text-[11px] space-y-1">
+                <div className="font-bold">Klaar! Geen achtergrondproces nodig</div>
+                <p>
+                  Je kunt je terminal nu sluiten. Herd serveert via het meegeleverde <code>LocalValetDriver.php</code> en <code>index.php</code> automatisch de gecompileerde app op <strong>https://fietsroute.test</strong>!
+                </p>
               </div>
             </div>
           )}

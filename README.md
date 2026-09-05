@@ -160,6 +160,52 @@ npm run clean
 
 ---
 
+## ⚡ Using Laravel Herd as Local Server (No `npm run dev` needed)
+
+**Yes! You can use Laravel Herd (`https://fietsroute.test`) directly as your local development server without keeping `npm run dev` running.**
+
+### Why did you see "404 Site not found" in Herd?
+When Herd displays its red **"404 - Site not found"** error screen, it means Herd does not yet know which folder corresponds to the domain `fietsroute.test`.
+
+### Step 1: Link your project folder in Laravel Herd
+
+Choose **one** of these two quick ways:
+
+- **Via Terminal / PowerShell (Fastest)**:
+  Open your terminal inside the `fietsroute` folder and run:
+  ```powershell
+  cd C:\pad\naar\fietsroute
+  herd link fietsroute
+  ```
+  *(Or simply `herd link` if the folder itself is already named `fietsroute`)*.
+
+- **Via the Herd Windows App GUI**:
+  1. Click the **Laravel Herd** icon in your Windows system tray (bottom right near the clock).
+  2. Open **Settings** > **Sites**.
+  3. Click **"+"** or **"Link Path"** and select your `fietsroute` project folder.
+  4. Ensure the site name is set to `fietsroute` so it answers to `https://fietsroute.test`.
+
+---
+
+### Step 2: Build the static bundle once
+
+Because web browsers cannot execute TypeScript (`.tsx`) files natively without compilation, build the production assets **once**:
+
+```powershell
+npm run build
+```
+
+This generates an optimized, self-contained `dist/` directory.
+
+### Step 3: Open `https://fietsroute.test`!
+
+You're all set! 
+- **No background Node.js process required**: You can close your terminal and do **not** need to run `npm run dev`.
+- Herd's built-in Nginx webserver uses the included `LocalValetDriver.php` and `index.php` to immediately serve the compiled planner directly at **`https://fietsroute.test`** with automatic local SSL certificates.
+- If you ever change the TypeScript or React source code, just run `npm run build` again to refresh the build.
+
+---
+
 ## 🌐 Online & Cloud Development Server
 
 If you want to host an online development instance (e.g. on a VPS, Google Cloud Run, Render, DigitalOcean, or Docker container):
