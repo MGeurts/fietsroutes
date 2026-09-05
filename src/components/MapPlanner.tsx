@@ -9,7 +9,8 @@ interface MapPlannerProps {
   selectedNodes: KnooppuntNode[];
   routeCoordinates: [number, number][];
   onNodeClick: (node: KnooppuntNode) => void;
-  onAddNewNode: (node: KnooppuntNode) => void;
+  onAddNewNode?: (node: KnooppuntNode) => void;
+  onAddNewNodes?: (nodes: KnooppuntNode[]) => void;
   activeTileProvider: MapTileProvider;
   onChangeTileProvider: (provider: MapTileProvider) => void;
 }
@@ -20,6 +21,7 @@ export const MapPlanner: React.FC<MapPlannerProps> = ({
   routeCoordinates,
   onNodeClick,
   onAddNewNode,
+  onAddNewNodes,
   activeTileProvider,
   onChangeTileProvider,
 }) => {
@@ -35,16 +37,16 @@ export const MapPlanner: React.FC<MapPlannerProps> = ({
   const [isSearchingLocation, setIsSearchingLocation] = useState(false);
   const [searchMessage, setSearchMessage] = useState<string | null>(null);
   const [showLayerMenu, setShowLayerMenu] = useState(false);
-  const [currentZoom, setCurrentZoom] = useState(12);
+  const [currentZoom, setCurrentZoom] = useState(13);
 
   // Initialize Leaflet Map
   useEffect(() => {
     if (!mapContainerRef.current || mapInstanceRef.current) return;
 
-    // Default center: Zutendaal / Belgian Limburg border region (50.9315, 5.5728)
+    // Default center: Zutendaal Centrum (50.9337, 5.5757)
     const map = L.map(mapContainerRef.current, {
-      center: [50.9315, 5.5728],
-      zoom: 12,
+      center: [50.9337, 5.5757],
+      zoom: 13,
       zoomControl: false,
     });
 
@@ -128,8 +130,26 @@ export const MapPlanner: React.FC<MapPlannerProps> = ({
       selectedIndices.set(node.ref, arr);
     });
 
-    // Render each node with authentic green badge design
+    // Deduplicate nodes spatially so that duplicate badges (e.g. 62, 64) are NEVER rendered twice
+    const uniqueNodes: KnooppuntNode[] = [];
+    const seenSpatial = new Map<string, [number, number]>();
+
     availableNodes.forEach((node) => {
+      const existingCoords = seenSpatial.get(node.ref);
+      if (existingCoords) {
+        if (
+          Math.abs(existingCoords[0] - node.lat) < 0.005 &&
+          Math.abs(existingCoords[1] - node.lng) < 0.005
+        ) {
+          return; // Skip duplicate marker
+        }
+      }
+      seenSpatial.set(node.ref, [node.lat, node.lng]);
+      uniqueNodes.push(node);
+    });
+
+    // Render each node with authentic green badge design
+    uniqueNodes.forEach((node) => {
       const isSelected = selectedIndices.has(node.ref);
       const orders = selectedIndices.get(node.ref);
 
@@ -258,17 +278,12 @@ export const MapPlanner: React.FC<MapPlannerProps> = ({
     try {
       const fetchedNodes = await fetchKnooppuntenInBBox(south, west, north, east);
       if (fetchedNodes.length > 0) {
-        let addedCount = 0;
-        fetchedNodes.forEach((node) => {
-          const exists = availableNodes.some(
-            (n) => n.ref === node.ref && Math.abs(n.lat - node.lat) < 0.005 && Math.abs(n.lng - node.lng) < 0.005
-          );
-          if (!exists) {
-            onAddNewNode(node);
-            addedCount++;
-          }
-        });
-        setSearchMessage(`${fetchedNodes.length} knooppunten gevonden (${addedCount} nieuw toegevoegd)`);
+        if (onAddNewNodes) {
+          onAddNewNodes(fetchedNodes);
+        } else if (onAddNewNode) {
+          fetchedNodes.forEach((node) => onAddNewNode(node));
+        }
+        setSearchMessage(`${fetchedNodes.length} knooppunten gesynchroniseerd vanuit OpenStreetMap`);
       } else {
         setSearchMessage('Geen extra knooppunten gevonden in dit venster. Zoom eventueel verder in.');
       }
@@ -278,7 +293,7 @@ export const MapPlanner: React.FC<MapPlannerProps> = ({
       setIsSearchingNodes(false);
       setTimeout(() => setSearchMessage(null), 5000);
     }
-  }, [availableNodes, onAddNewNode]);
+  }, [onAddNewNodes, onAddNewNode]);
 
   // Search places / addresses via OpenStreetMap Nominatim
   const handleSearchLocation = async (e: React.FormEvent) => {

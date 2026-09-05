@@ -73,7 +73,6 @@ export async function fetchKnooppuntenInBBox(
       if (!data.elements) continue;
 
       const nodes: KnooppuntNode[] = [];
-      const seen = new Set<string>();
 
       for (const el of data.elements) {
         if (!el.lat || !el.lon) continue;
@@ -82,9 +81,17 @@ export async function fetchKnooppuntenInBBox(
 
         // Clean ref (keep only short node numbers like "01", "64", "550", "A")
         const cleanRef = ref.trim();
-        const key = `${cleanRef}-${el.lat.toFixed(4)}-${el.lon.toFixed(4)}`;
-        if (seen.has(key)) continue;
-        seen.add(key);
+
+        // Spatial deduplication: in OSM, multi-lane roads or dual intersections often have
+        // 2 or more nodes with the same rcn_ref (e.g. node 62 or 567).
+        // Only keep one authoritative node per physical intersection (within ~400m / 0.005 deg).
+        const isDuplicateNearby = nodes.some(
+          (existing) =>
+            existing.ref === cleanRef &&
+            Math.abs(existing.lat - el.lat) < 0.005 &&
+            Math.abs(existing.lng - el.lon) < 0.005
+        );
+        if (isDuplicateNearby) continue;
 
         nodes.push({
           id: `osm-${el.id}`,
@@ -92,7 +99,7 @@ export async function fetchKnooppuntenInBBox(
           lat: el.lat,
           lng: el.lon,
           name: el.tags?.name || `Knooppunt ${cleanRef}`,
-          region: el.tags?.operator || (el.lat < 51.05 && el.lon > 5.2 ? 'Limburg' : 'OSM Knooppuntennetwerk')
+          region: el.tags?.operator || (el.lat < 51.05 && el.lon > 5.2 ? 'Belgisch Limburg' : 'OSM Knooppuntennetwerk')
         });
       }
 

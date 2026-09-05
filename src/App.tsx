@@ -14,17 +14,17 @@ export default function App() {
   // Available nodes in current state (preloaded + Overpass queried)
   const [availableNodes, setAvailableNodes] = useState<KnooppuntNode[]>(INITIAL_NODES);
 
-  // Default initial route: Scenic Hoge Kempen loop around Zutendaal & Maasmechelen
+  // Default initial route: Authentic Zutendaal & Hoge Kempen loop (251 -> 252 -> 550 -> 62 -> 64 -> 251)
   const defaultInitialNodes = [
-    INITIAL_NODES.find((n) => n.ref === '64') || INITIAL_NODES[0], // Zutendaal
-    INITIAL_NODES.find((n) => n.ref === '65') || INITIAL_NODES[1], // Papendaal
-    INITIAL_NODES.find((n) => n.ref === '66') || INITIAL_NODES[2], // Kattevennen
-    INITIAL_NODES.find((n) => n.ref === '550') || INITIAL_NODES[3], // Fietsen door de Heide
-    INITIAL_NODES.find((n) => n.ref === '60') || INITIAL_NODES[10], // Terhills / Connecterra
+    INITIAL_NODES.find((n) => n.ref === '251') || INITIAL_NODES[0], // Zutendaal Centrum
+    INITIAL_NODES.find((n) => n.ref === '252') || INITIAL_NODES[4], // Wiemesmeer
+    INITIAL_NODES.find((n) => n.ref === '550') || INITIAL_NODES[6], // Fietsen door de Heide
+    INITIAL_NODES.find((n) => n.ref === '62') || INITIAL_NODES[2],  // Bessemer
+    INITIAL_NODES.find((n) => n.ref === '64') || INITIAL_NODES[1],  // Lieteberg
   ];
 
   const [selectedNodes, setSelectedNodes] = useState<KnooppuntNode[]>(defaultInitialNodes);
-  const [routeName, setRouteName] = useState<string>('Nationaal Park Hoge Kempen & Heide');
+  const [routeName, setRouteName] = useState<string>('Zutendaal & Fietsen door de Heide');
   const [routeLegs, setRouteLegs] = useState<RouteLeg[]>([]);
   const [fullCoordinates, setFullCoordinates] = useState<[number, number][]>([]);
   const [totalDistanceKm, setTotalDistanceKm] = useState<number>(0);
@@ -103,7 +103,49 @@ export default function App() {
 
   // Add dynamically discovered node from Overpass
   const handleAddNewNode = useCallback((node: KnooppuntNode) => {
-    setAvailableNodes((prev) => [...prev, node]);
+    setAvailableNodes((prev) => {
+      if (prev.some((n) => n.ref === node.ref && Math.abs(n.lat - node.lat) < 0.005 && Math.abs(n.lng - node.lng) < 0.005)) {
+        return prev;
+      }
+      return [...prev, node];
+    });
+  }, []);
+
+  // Add/synchronize dynamically discovered nodes from Overpass with spatial deduplication
+  const handleAddNewNodes = useCallback((newNodes: KnooppuntNode[]) => {
+    setAvailableNodes((prev) => {
+      const updated = [...prev];
+      for (const node of newNodes) {
+        // If an existing node has the same ref within ~1.5km (0.015 deg), align coordinates to OSM
+        const existingIdx = updated.findIndex(
+          (n) =>
+            n.ref === node.ref &&
+            Math.abs(n.lat - node.lat) < 0.015 &&
+            Math.abs(n.lng - node.lng) < 0.015
+        );
+
+        if (existingIdx >= 0) {
+          updated[existingIdx] = {
+            ...updated[existingIdx],
+            lat: node.lat,
+            lng: node.lng,
+            id: node.id,
+          };
+        } else {
+          // If no node with same ref exists nearby (within 500m), safely append
+          const isDuplicateNear = updated.some(
+            (n) =>
+              n.ref === node.ref &&
+              Math.abs(n.lat - node.lat) < 0.005 &&
+              Math.abs(n.lng - node.lng) < 0.005
+          );
+          if (!isDuplicateNear) {
+            updated.push(node);
+          }
+        }
+      }
+      return updated;
+    });
   }, []);
 
   // Reordering and removing nodes
@@ -338,6 +380,7 @@ export default function App() {
             routeCoordinates={fullCoordinates}
             onNodeClick={handleNodeClick}
             onAddNewNode={handleAddNewNode}
+            onAddNewNodes={handleAddNewNodes}
             activeTileProvider={activeTileProvider}
             onChangeTileProvider={setActiveTileProvider}
           />

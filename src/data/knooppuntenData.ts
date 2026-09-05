@@ -1,7 +1,7 @@
 import { KnooppuntNode } from '../types';
 
 export const POPULAR_REGIONS = [
-  { id: 'limburg_be', name: 'Belgisch Limburg (Zutendaal & Kempen)', center: [50.9315, 5.5728] as [number, number], zoom: 12 },
+  { id: 'limburg_be', name: 'Belgisch Limburg (Zutendaal & Kempen)', center: [50.9337, 5.5757] as [number, number], zoom: 12 },
   { id: 'limburg_nl', name: 'Nederlands Zuid-Limburg (Heuvelland & Maastricht)', center: [50.8514, 5.6909] as [number, number], zoom: 12 },
   { id: 'antwerpen', name: 'Antwerpse Kempen & Kalmthoutse Heide', center: [51.3850, 4.4750] as [number, number], zoom: 12 },
   { id: 'veluwe', name: 'Veluwe & Utrechtse Heuvelrug', center: [52.1326, 5.9288] as [number, number], zoom: 11 },
@@ -14,80 +14,129 @@ export const POPULAR_REGIONS = [
  * Centered around Zutendaal, Hoge Kempen, Bokrijk, Maasmechelen, Hasselt, Maastricht, etc.
  */
 export const INITIAL_NODES: KnooppuntNode[] = [
-  // Zutendaal & Nationaal Park Hoge Kempen area
+  // Zutendaal & Nationaal Park Hoge Kempen area (verified with OpenStreetMap cycle network)
+  {
+    id: 'kp-251',
+    ref: '251',
+    lat: 50.93368,
+    lng: 5.57570,
+    name: 'Zutendaal Centrum',
+    municipality: 'Zutendaal',
+    region: 'Belgisch Limburg',
+    highlight: 'Kerkplein Zutendaal & Groenste snoepje van Vlaanderen',
+    connections: ['64', '534', '252', '62', '29']
+  },
   {
     id: 'kp-64',
     ref: '64',
-    lat: 50.9315,
-    lng: 5.5728,
-    name: 'Zutendaal Dorp',
+    lat: 50.91965,
+    lng: 5.56714,
+    name: 'Lieteberg / Bezoekerscentrum',
     municipality: 'Zutendaal',
     region: 'Belgisch Limburg',
-    highlight: 'Groenste snoepje van Vlaanderen & toegang tot Hoge Kempen',
-    connections: ['63', '65', '550', '29', '30']
+    highlight: 'Toegangspoort Lieteberg, blotevoetenpad & insectenmuseum',
+    connections: ['251', '62', '532', '567']
   },
   {
-    id: 'kp-65',
-    ref: '65',
-    lat: 50.9452,
-    lng: 5.5980,
-    name: 'Papendaal & Hesselsberg',
+    id: 'kp-62',
+    ref: '62',
+    lat: 50.92074,
+    lng: 5.60791,
+    name: 'Bessemer / N77',
     municipality: 'Zutendaal',
     region: 'Belgisch Limburg',
-    connections: ['64', '66', '550']
-  },
-  {
-    id: 'kp-66',
-    ref: '66',
-    lat: 50.9634,
-    lng: 5.6275,
-    name: 'Kattevennen & Kosmodroom',
-    municipality: 'Genk / Zutendaal',
-    region: 'Belgisch Limburg',
-    highlight: 'Toegangspoort Kattevennen Nationaal Park',
-    connections: ['65', '67', '30', '550']
-  },
-  {
-    id: 'kp-550',
-    ref: '550',
-    lat: 50.9782,
-    lng: 5.6601,
-    name: 'Fietsen door de Heide (Hoge Kempen)',
-    municipality: 'Maasmechelen / Zutendaal',
-    region: 'Belgisch Limburg',
-    highlight: '★ Iconische houten fietsbrug door de Mechelse Heide',
-    connections: ['64', '65', '66', '60', '551']
-  },
-  {
-    id: 'kp-551',
-    ref: '551',
-    lat: 50.9880,
-    lng: 5.6980,
-    name: 'Station As & Mijnkathedraal',
-    municipality: 'As',
-    region: 'Belgisch Limburg',
-    highlight: 'Historisch Kolenspoor & uitkijktoren',
-    connections: ['550', '41', '565']
+    connections: ['64', '251', '63', '550', '252']
   },
   {
     id: 'kp-63',
     ref: '63',
-    lat: 50.9150,
-    lng: 5.5410,
-    name: 'Stalkerbos & Munsterbilzen grens',
+    lat: 50.92381,
+    lng: 5.65726,
+    name: 'Bessemerveld / Gellik',
+    municipality: 'Lanaken / Zutendaal',
+    region: 'Belgisch Limburg',
+    connections: ['62', '131']
+  },
+  {
+    id: 'kp-252',
+    ref: '252',
+    lat: 50.94116,
+    lng: 5.59278,
+    name: 'Wiemesmeer / Trichterweg',
+    municipality: 'Zutendaal',
+    region: 'Belgisch Limburg',
+    connections: ['251', '534', '550', '62']
+  },
+  {
+    id: 'kp-534',
+    ref: '534',
+    lat: 50.94204,
+    lng: 5.56804,
+    name: 'Papendaal / Molenblook',
+    municipality: 'Zutendaal',
+    region: 'Belgisch Limburg',
+    connections: ['251', '252', '29']
+  },
+  {
+    id: 'kp-550',
+    ref: '550',
+    lat: 50.95166,
+    lng: 5.61940,
+    name: 'Fietsen door de Heide (Hoge Kempen)',
+    municipality: 'Maasmechelen / Zutendaal',
+    region: 'Belgisch Limburg',
+    highlight: '★ Iconische houten fietsbrug door de Mechelse Heide',
+    connections: ['252', '62', '60']
+  },
+  {
+    id: 'kp-567',
+    ref: '567',
+    lat: 50.91680,
+    lng: 5.54238,
+    name: 'Stalkerbos',
+    municipality: 'Zutendaal',
+    region: 'Belgisch Limburg',
+    connections: ['64', '69', '29']
+  },
+  {
+    id: 'kp-69',
+    ref: '69',
+    lat: 50.91217,
+    lng: 5.54180,
+    name: 'Munsterbos / Munsterbilzen',
+    municipality: 'Bilzen / Zutendaal',
+    region: 'Belgisch Limburg',
+    connections: ['567', '532']
+  },
+  {
+    id: 'kp-532',
+    ref: '532',
+    lat: 50.91028,
+    lng: 5.56689,
+    name: 'Roelen / Munsterbilzen grens',
     municipality: 'Zutendaal / Bilzen',
     region: 'Belgisch Limburg',
-    connections: ['64', '68', '131']
+    connections: ['64', '69']
+  },
+  {
+    id: 'kp-29',
+    ref: '29',
+    lat: 50.94552,
+    lng: 5.54601,
+    name: 'Sledderlo / Genk Zuid',
+    municipality: 'Genk / Zutendaal',
+    region: 'Belgisch Limburg',
+    connections: ['251', '534', '567', '30']
   },
   {
     id: 'kp-30',
     ref: '30',
-    lat: 50.9410,
-    lng: 5.5180,
-    name: 'Genk Sledderlo & Schansbroek',
+    lat: 50.95668,
+    lng: 5.53369,
+    name: 'Kattevennen West / Genk',
     municipality: 'Genk',
     region: 'Belgisch Limburg',
-    connections: ['64', '66', '31']
+    connections: ['29', '31']
   },
   {
     id: 'kp-31',
