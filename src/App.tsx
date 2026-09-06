@@ -36,8 +36,9 @@ export default function App() {
   const [selectedBike, setSelectedBike] = useState<BikeType>('ebike');
   const [activeTileProvider, setActiveTileProvider] = useState<MapTileProvider>('cyclemap');
 
-  // Mobile layout switcher
+  // Mobile layout switcher & sidebar toggle
   const [mobileTab, setMobileTab] = useState<'map' | 'panel'>('map');
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
 
   // Modals
   const [isStrookjeOpen, setIsStrookjeOpen] = useState(false);
@@ -143,6 +144,8 @@ export default function App() {
 
   const canUndo = undoStack.length > 0 || selectedNodes.length > 0;
   const canRedo = redoStack.length > 0;
+  const nextRedoNodes = redoStack.length > 0 ? redoStack[redoStack.length - 1] : undefined;
+  const redoNodeRef = nextRedoNodes && nextRedoNodes.length > 0 ? nextRedoNodes[nextRedoNodes.length - 1]?.ref : undefined;
 
   // Keyboard shortcut support: Ctrl+Z (Undo) and Ctrl+Y or Ctrl+Shift+Z (Redo)
   useEffect(() => {
@@ -319,7 +322,7 @@ export default function App() {
   return (
     <div className="flex flex-col h-screen w-screen overflow-hidden bg-slate-50 font-sans text-slate-900">
       {/* Top Main Navigation Bar - Professional Polish Theme */}
-      <header className="h-16 bg-slate-900 flex items-center justify-between px-4 sm:px-6 shrink-0 border-b border-slate-800 shadow-sm z-20">
+      <header className="h-16 app-header-responsive bg-slate-900 flex items-center justify-between px-4 sm:px-6 shrink-0 border-b border-slate-800 shadow-sm z-20">
         {/* Brand */}
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 bg-emerald-500 rounded-lg flex items-center justify-center text-white shadow-lg shrink-0">
@@ -339,7 +342,7 @@ export default function App() {
                 NL &amp; BE Knooppunten
               </span>
             </h1>
-            <p className="text-slate-400 text-xs hidden sm:block">Knooppuntennetwerk NL &amp; BE</p>
+            <p className="text-slate-400 text-xs hidden sm:block app-header-subtitle">Knooppuntennetwerk NL &amp; BE</p>
           </div>
         </div>
 
@@ -387,7 +390,7 @@ export default function App() {
           <button
             onClick={handleExportGpx}
             disabled={selectedNodes.length === 0}
-            className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-xs sm:text-sm font-medium px-3 sm:px-3.5 py-2 rounded-md transition-colors shadow-sm cursor-pointer"
+            className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-xs sm:text-sm font-medium px-3 sm:px-3.5 py-2 rounded-md transition-colors shadow-sm cursor-pointer tablet-touch-friendly-btn"
             title="Download GPX bestand"
           >
             Route Opslaan
@@ -395,7 +398,7 @@ export default function App() {
 
           <button
             onClick={() => setIsLaravelModalOpen(true)}
-            className="hidden sm:flex items-center gap-1.5 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-medium rounded-md transition cursor-pointer shadow-xs"
+            className="hidden md:flex hide-on-mobile-or-landscape items-center gap-1.5 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-medium rounded-md transition cursor-pointer shadow-xs tablet-touch-friendly-btn"
             title="Systeem Status & Antagonist / PHP hosting gids"
           >
             <span className="w-2 h-2 rounded-full bg-emerald-400 inline-block animate-pulse" />
@@ -412,12 +415,14 @@ export default function App() {
       </header>
 
       {/* Main Workspace (Map + Sidebar) */}
-      <div className="flex-1 flex flex-col sm:flex-row relative overflow-hidden">
-        {/* Left Sidebar / Panel (Desktop visible, Mobile controlled by tabs) */}
+      <div className="flex-1 flex flex-col sm:flex-row relative overflow-hidden main-workspace-layout">
+        {/* Left Sidebar / Panel (Desktop & Tablet visible, Mobile controlled by tabs or sidebar collapse) */}
         <div
           className={`${
+            isSidebarCollapsed ? '!hidden' : ''
+          } ${
             mobileTab === 'panel' ? 'flex' : 'hidden'
-          } sm:flex w-full sm:w-80 md:w-96 shrink-0 h-full overflow-hidden`}
+          } sm:flex mobile-landscape-show-sidebar w-full sm:w-80 md:w-88 lg:w-96 mobile-landscape-sidebar-width tablet-landscape-sidebar-width shrink-0 h-full overflow-hidden transition-all duration-200`}
         >
           <RoutePanel
             routeName={routeName}
@@ -437,6 +442,7 @@ export default function App() {
             canUndo={canUndo}
             onRedo={handleRedo}
             canRedo={canRedo}
+            redoNodeRef={redoNodeRef}
             onOpenStrookje={() => setIsStrookjeOpen(true)}
             onExportGpx={handleExportGpx}
             onOpenRoundTrip={() => setIsRoundTripOpen(true)}
@@ -450,7 +456,7 @@ export default function App() {
         <div
           className={`${
             mobileTab === 'map' ? 'flex' : 'hidden'
-          } sm:flex flex-1 h-full relative overflow-hidden`}
+          } sm:flex mobile-landscape-show-map flex-1 h-full relative overflow-hidden`}
         >
           <MapPlanner
             availableNodes={availableNodes}
@@ -465,12 +471,15 @@ export default function App() {
             canUndo={canUndo}
             onRedo={handleRedo}
             canRedo={canRedo}
+            redoNodeRef={redoNodeRef}
+            isSidebarCollapsed={isSidebarCollapsed}
+            onToggleSidebar={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
           />
         </div>
       </div>
 
-      {/* Mobile Bottom Navigation Bar (Screens < 640px) */}
-      <div className="sm:hidden h-14 bg-slate-900 border-t border-slate-800 flex items-center justify-around px-2 z-30 shadow-lg">
+      {/* Mobile Bottom Navigation Bar (Screens < 640px, hidden on mobile landscape) */}
+      <div className="sm:hidden mobile-bottom-nav h-14 bg-slate-900 border-t border-slate-800 flex items-center justify-around px-2 z-30 shadow-lg">
         <button
           onClick={() => setMobileTab('map')}
           className={`flex flex-col items-center justify-center w-full py-1 text-xs font-bold transition ${

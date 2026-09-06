@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import L from 'leaflet';
 import { KnooppuntNode, MapTileProvider } from '../types';
 import { fetchKnooppuntenInBBox } from '../services/overpassService';
-import { Search, Loader2, Layers, Crosshair, ZoomIn, ZoomOut, Compass, Sparkles, Undo2, Redo2, X, Info, Check } from 'lucide-react';
+import { Search, Loader2, Layers, Crosshair, ZoomIn, ZoomOut, Compass, Sparkles, Undo2, Redo2, X, Info, Check, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 
 interface MapPlannerProps {
   availableNodes: KnooppuntNode[];
@@ -17,6 +17,9 @@ interface MapPlannerProps {
   canUndo?: boolean;
   onRedo?: () => void;
   canRedo?: boolean;
+  redoNodeRef?: string;
+  isSidebarCollapsed?: boolean;
+  onToggleSidebar?: () => void;
 }
 
 // Calculate bearing angle between two coordinates
@@ -63,6 +66,9 @@ export const MapPlanner: React.FC<MapPlannerProps> = ({
   canUndo,
   onRedo,
   canRedo,
+  redoNodeRef,
+  isSidebarCollapsed,
+  onToggleSidebar,
 }) => {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<L.Map | null>(null);
@@ -640,49 +646,72 @@ export const MapPlanner: React.FC<MapPlannerProps> = ({
   return (
     <div className="relative w-full h-full flex flex-col bg-slate-100 overflow-hidden">
       {/* Top Floating Controls Bar */}
-      <div className="absolute top-4 left-4 right-4 z-[1000] flex flex-wrap items-center justify-between gap-3 pointer-events-none">
-        {/* Search Bar */}
-        <form
-          onSubmit={handleSearchLocation}
-          className="pointer-events-auto flex items-center bg-white/95 backdrop-blur shadow-sm rounded-md border border-slate-200 px-3 py-1.5 max-w-md w-full sm:w-80 transition-all focus-within:ring-2 focus-within:ring-emerald-500 focus-within:border-emerald-500"
-        >
-          <Search className="w-4 h-4 text-slate-400 mr-2 shrink-0" />
-          <input
-            type="text"
-            id="search-input"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Zoek plaats of knooppunt (bijv. Zutendaal, 64, 91)..."
-            className="w-full bg-transparent text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none font-medium"
-          />
-          {isSearchingLocation ? (
-            <Loader2 className="w-4 h-4 text-emerald-600 animate-spin shrink-0" />
-          ) : (
+      <div className="absolute top-4 left-4 right-4 map-floating-controls-compact z-[1000] flex flex-wrap items-center justify-between gap-2.5 pointer-events-none">
+        <div className="flex items-center gap-2 pointer-events-auto max-w-full">
+          {/* Sidebar Toggle button for tablet landscape and desktop */}
+          {onToggleSidebar && (
             <button
-              type="submit"
-              className="text-[11px] font-bold text-emerald-700 hover:text-emerald-800 px-2 py-0.5 rounded hover:bg-emerald-50 shrink-0 cursor-pointer"
+              type="button"
+              onClick={onToggleSidebar}
+              className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 bg-white/95 backdrop-blur shadow-sm rounded-md border border-slate-200 hover:bg-slate-50 text-slate-700 hover:text-emerald-700 transition cursor-pointer shrink-0 tablet-touch-friendly-btn"
+              title={isSidebarCollapsed ? "Routepaneel weergeven" : "Routepaneel verbergen (kaart vergroten)"}
             >
-              Ga
+              {isSidebarCollapsed ? (
+                <>
+                  <PanelLeftOpen className="w-4 h-4 text-emerald-600" />
+                  <span className="hidden md:inline text-xs font-semibold text-slate-800">Routepaneel</span>
+                </>
+              ) : (
+                <>
+                  <PanelLeftClose className="w-4 h-4 text-slate-500" />
+                  <span className="hidden md:inline text-xs font-medium text-slate-600">Volledig scherm</span>
+                </>
+              )}
             </button>
           )}
-        </form>
 
-        {/* Action Pills, Undo Controls & Layer Switcher */}
-        <div className="pointer-events-auto flex items-center gap-2">
+          {/* Search Bar - only shown on mobile where header search is not visible */}
+          <form
+            onSubmit={handleSearchLocation}
+            className="md:hidden flex items-center bg-white/95 backdrop-blur shadow-sm rounded-md border border-slate-200 px-2.5 py-1.5 w-48 sm:w-60 transition-all focus-within:ring-2 focus-within:ring-emerald-500 focus-within:border-emerald-500"
+          >
+            <Search className="w-3.5 h-3.5 text-slate-400 mr-1.5 shrink-0" />
+            <input
+              type="text"
+              id="search-input"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Zoek plaats..."
+              className="w-full bg-transparent text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none font-medium"
+            />
+            {isSearchingLocation ? (
+              <Loader2 className="w-3.5 h-3.5 text-emerald-600 animate-spin shrink-0" />
+            ) : (
+              <button
+                type="submit"
+                className="text-[10px] font-bold text-emerald-700 hover:text-emerald-800 px-1.5 py-0.5 rounded hover:bg-emerald-50 shrink-0 cursor-pointer"
+              >
+                Ga
+              </button>
+            )}
+          </form>
+        </div>
+
+        {/* Action Pills & Undo Controls */}
+        <div className="pointer-events-auto flex items-center gap-1.5">
           {/* Map Undo / Redo buttons right on map for quick planning */}
           {onUndo && (
             <div className="flex items-center gap-1">
               <button
                 onClick={onUndo}
                 disabled={!canUndo && selectedNodes.length === 0}
-                className="flex items-center gap-1.5 px-2.5 py-1.5 bg-white/95 backdrop-blur-sm text-slate-700 hover:text-amber-900 hover:bg-amber-50 border border-slate-200 rounded-md text-xs font-semibold shadow-xs transition active:scale-95 disabled:opacity-40 disabled:pointer-events-none cursor-pointer"
-                title="Laatste knooppunt of wijziging in omgekeerde volgorde ongedaan maken tot en met het startpunt (Ctrl+Z)"
+                className="flex items-center gap-1 px-2 py-1.5 bg-white/95 backdrop-blur-sm text-slate-700 hover:text-amber-900 hover:bg-amber-50 border border-slate-200 rounded-md text-xs font-semibold shadow-xs transition active:scale-95 disabled:opacity-40 disabled:pointer-events-none cursor-pointer"
+                title={selectedNodes.length > 0 ? `Knooppunt ${selectedNodes[selectedNodes.length - 1].ref} ongedaan maken (Ctrl+Z)` : 'Laatste knooppunt ongedaan maken (Ctrl+Z)'}
               >
                 <Undo2 className="w-3.5 h-3.5 text-amber-600" />
-                <span className="hidden sm:inline">Ongedaan</span>
                 {selectedNodes.length > 0 && (
-                  <span className="w-4 h-4 rounded-full bg-slate-800 text-white flex items-center justify-center text-[9px] font-bold">
-                    {selectedNodes[selectedNodes.length - 1].ref}
+                  <span className="font-mono text-[11px] font-bold text-amber-900">
+                    ({selectedNodes[selectedNodes.length - 1].ref})
                   </span>
                 )}
               </button>
@@ -691,10 +720,14 @@ export const MapPlanner: React.FC<MapPlannerProps> = ({
                 <button
                   onClick={onRedo}
                   className="flex items-center gap-1 px-2 py-1.5 bg-white/95 backdrop-blur-sm text-slate-700 hover:text-slate-900 hover:bg-slate-100 border border-slate-200 rounded-md text-xs font-semibold shadow-xs transition active:scale-95 cursor-pointer"
-                  title="Opnieuw uitvoeren (Ctrl+Y)"
+                  title={redoNodeRef ? `Knooppunt ${redoNodeRef} opnieuw toevoegen (Ctrl+Y)` : 'Opnieuw uitvoeren (Ctrl+Y)'}
                 >
                   <Redo2 className="w-3.5 h-3.5 text-slate-600" />
-                  <span className="hidden md:inline">Opnieuw</span>
+                  {redoNodeRef && (
+                    <span className="font-mono text-[11px] font-bold text-slate-800">
+                      ({redoNodeRef})
+                    </span>
+                  )}
                 </button>
               )}
             </div>
@@ -704,70 +737,22 @@ export const MapPlanner: React.FC<MapPlannerProps> = ({
           <button
             onClick={handleScanBBoxForKnooppunten}
             disabled={isSearchingNodes}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-white/95 backdrop-blur hover:bg-emerald-50 text-emerald-800 text-xs font-semibold rounded-md border border-emerald-200 shadow-xs transition active:scale-95 disabled:opacity-60 cursor-pointer"
-            title="Scan dit kaartgebied met Overpass API voor actuele fietsknooppunten"
+            className="flex items-center gap-1.5 px-2.5 py-1.5 bg-white/95 backdrop-blur hover:bg-emerald-50 text-emerald-800 text-xs font-semibold rounded-md border border-emerald-200 shadow-xs transition active:scale-95 disabled:opacity-60 cursor-pointer"
+            title="Scan dit kaartgebied voor fietsknooppunten"
           >
             {isSearchingNodes ? (
               <>
                 <Loader2 className="w-3.5 h-3.5 animate-spin text-emerald-600" />
-                <span>Laden OSM knooppunten...</span>
+                <span className="text-[11px]">Laden...</span>
               </>
             ) : (
               <>
                 <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-                <span className="hidden sm:inline">Scan knooppunten in beeld</span>
-                <span className="sm:hidden">Scan OSM</span>
+                <span className="hidden sm:inline">Scan knooppunten</span>
+                <span className="sm:hidden">Scan</span>
               </>
             )}
           </button>
-
-          {/* Map Layers Quick Selector & Modal Trigger */}
-          <div className="bg-white/90 backdrop-blur-sm p-1 rounded-md shadow-sm border border-slate-200 flex items-center gap-1">
-            <button
-              onClick={() => onChangeTileProvider('cyclemap')}
-              className={`px-2.5 py-1 text-xs rounded transition cursor-pointer flex items-center gap-1 ${
-                activeTileProvider === 'cyclemap'
-                  ? 'bg-blue-600 text-white font-bold shadow-xs'
-                  : 'text-slate-600 hover:bg-slate-100 font-medium'
-              }`}
-              title="OpenStreetMap Cycle Map (Officiële fietsknooppunten & reliëf)"
-            >
-              <span>Cycle Map</span>
-              {activeTileProvider === 'cyclemap' && <Check className="w-3 h-3 text-white" />}
-            </button>
-            <button
-              onClick={() => onChangeTileProvider('standard')}
-              className={`px-2 py-1 text-xs rounded transition cursor-pointer ${
-                activeTileProvider === 'standard'
-                  ? 'bg-slate-800 text-white font-bold'
-                  : 'text-slate-600 hover:bg-slate-100 font-medium'
-              }`}
-              title="OpenStreetMap Standaard"
-            >
-              Standard
-            </button>
-            <button
-              onClick={() => onChangeTileProvider('cyclosm')}
-              className={`px-2 py-1 text-xs rounded transition cursor-pointer ${
-                activeTileProvider === 'cyclosm'
-                  ? 'bg-slate-800 text-white font-bold'
-                  : 'text-slate-600 hover:bg-slate-100 font-medium'
-              }`}
-              title="CyclOSM fietsinfrastructuur"
-            >
-              CyclOSM
-            </button>
-            <button
-              onClick={() => setShowLayerMenu(!showLayerMenu)}
-              className={`flex items-center gap-1 px-2 py-1 text-xs rounded transition cursor-pointer border-l border-slate-200 pl-1.5 ml-0.5 ${
-                showLayerMenu ? 'text-blue-600 bg-blue-50 font-bold' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-              }`}
-              title="Open Kaartlagen paneel (Map Layers)"
-            >
-              <Layers className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Lagen</span>
-            </button>
-          </div>
         </div>
       </div>
 
@@ -946,11 +931,11 @@ export const MapPlanner: React.FC<MapPlannerProps> = ({
       <div ref={mapContainerRef} className="w-full h-full z-0" />
 
       {/* Map Floating Right Navigation Buttons - Professional Polish Theme */}
-      <div className="absolute bottom-6 right-6 z-[1000] flex flex-col gap-2 pointer-events-auto">
+      <div className="absolute bottom-6 right-6 map-floating-actions-compact z-[1000] flex flex-col gap-2 pointer-events-auto">
         {/* Map Layers toggle button */}
         <button
           onClick={() => setShowLayerMenu(!showLayerMenu)}
-          className={`w-11 h-11 bg-white shadow-xl rounded-full border flex items-center justify-center transition cursor-pointer ${
+          className={`w-11 h-11 bg-white shadow-xl rounded-full border flex items-center justify-center transition cursor-pointer tablet-touch-friendly-btn ${
             showLayerMenu
               ? 'text-blue-600 bg-blue-50 border-blue-400 ring-2 ring-blue-400/30'
               : 'text-slate-700 hover:text-blue-600 border-slate-200 hover:border-slate-300'
@@ -964,14 +949,14 @@ export const MapPlanner: React.FC<MapPlannerProps> = ({
         <div className="bg-white shadow-xl rounded-lg p-1 border border-slate-200 flex flex-col">
           <button
             onClick={() => mapInstanceRef.current?.zoomIn()}
-            className="w-9 h-9 border-b border-slate-100 flex items-center justify-center hover:bg-slate-50 text-slate-600 hover:text-emerald-600 transition cursor-pointer"
+            className="w-9 h-9 border-b border-slate-100 flex items-center justify-center hover:bg-slate-50 text-slate-600 hover:text-emerald-600 transition cursor-pointer tablet-touch-friendly-btn"
             title="Zoom in"
           >
             <ZoomIn className="w-4 h-4" />
           </button>
           <button
             onClick={() => mapInstanceRef.current?.zoomOut()}
-            className="w-9 h-9 flex items-center justify-center hover:bg-slate-50 text-slate-600 hover:text-emerald-600 transition cursor-pointer"
+            className="w-9 h-9 flex items-center justify-center hover:bg-slate-50 text-slate-600 hover:text-emerald-600 transition cursor-pointer tablet-touch-friendly-btn"
             title="Zoom uit"
           >
             <ZoomOut className="w-4 h-4" />
@@ -981,7 +966,7 @@ export const MapPlanner: React.FC<MapPlannerProps> = ({
         {/* Locate me button */}
         <button
           onClick={handleLocateMe}
-          className="w-11 h-11 bg-white shadow-xl rounded-full border border-slate-200 flex items-center justify-center text-slate-600 hover:text-emerald-600 transition cursor-pointer"
+          className="w-11 h-11 bg-white shadow-xl rounded-full border border-slate-200 flex items-center justify-center text-slate-600 hover:text-emerald-600 transition cursor-pointer tablet-touch-friendly-btn"
           title="Mijn huidige locatie"
         >
           <Crosshair className="w-5 h-5" />
@@ -991,29 +976,12 @@ export const MapPlanner: React.FC<MapPlannerProps> = ({
         {selectedNodes.length > 0 && (
           <button
             onClick={handleFitRoute}
-            className="w-11 h-11 bg-white shadow-xl rounded-full border border-slate-200 flex items-center justify-center text-emerald-600 hover:text-emerald-700 transition cursor-pointer font-bold"
+            className="w-11 h-11 bg-white shadow-xl rounded-full border border-slate-200 flex items-center justify-center text-emerald-600 hover:text-emerald-700 transition cursor-pointer font-bold tablet-touch-friendly-btn"
             title="Toon volledige route op kaart"
           >
             <Compass className="w-5 h-5" />
           </button>
         )}
-      </div>
-
-      {/* Map Bottom-Left Attribution & Helper Badge */}
-      <div className="hidden sm:flex absolute bottom-6 left-6 z-[1000] flex-col sm:flex-row items-start sm:items-center gap-2 pointer-events-none">
-        <div className="bg-white/90 backdrop-blur-md px-3 py-1.5 text-[11px] text-slate-700 rounded-md border border-slate-200 shadow-xs flex items-center gap-3">
-          <div className="flex items-center gap-1.5" title="Jouw geplande route">
-            <span className="w-3.5 h-1 bg-red-600 rounded-full inline-block"></span>
-            <span className="font-semibold text-red-900">Geplande route</span>
-          </div>
-          <div className="text-[10px] text-slate-500 font-medium">
-            OpenCycleMap toont alle officiële fietsknooppunten en verbindingen
-          </div>
-        </div>
-        <div className="hidden sm:flex items-center gap-2 bg-white/90 backdrop-blur px-3 py-1.5 rounded-md border border-slate-200 text-[11px] font-medium text-slate-600 shadow-xs">
-          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-          <span>Klik op knooppunten om je route op te bouwen</span>
-        </div>
       </div>
     </div>
   );

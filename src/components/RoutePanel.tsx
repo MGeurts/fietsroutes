@@ -39,6 +39,7 @@ interface RoutePanelProps {
   canUndo: boolean;
   onRedo?: () => void;
   canRedo?: boolean;
+  redoNodeRef?: string;
   onOpenStrookje: () => void;
   onExportGpx: () => void;
   onOpenRoundTrip: () => void;
@@ -71,14 +72,15 @@ export const RoutePanel: React.FC<RoutePanelProps> = ({
   canUndo,
   onRedo,
   canRedo,
+  redoNodeRef,
   onOpenStrookje,
   onExportGpx,
   onOpenRoundTrip,
   onOpenGpxImport,
 }) => {
   const [showClearConfirm, setShowClearConfirm] = useState(false);
-  const [isMobileOptionsOpen, setIsMobileOptionsOpen] = useState(false);
-  const [showMobileElevation, setShowMobileElevation] = useState(false);
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState<'nodes' | 'elevation'>('nodes');
 
   // Cumulative distances up to each node (except node 0 which is the start)
   const cumulativeDistances = useMemo(() => {
@@ -97,482 +99,409 @@ export const RoutePanel: React.FC<RoutePanelProps> = ({
 
   return (
     <div className="h-full flex flex-col bg-white border-r border-slate-200 w-full shrink-0 shadow-sm z-10 overflow-hidden font-sans">
-      {/* Desktop Header & Details (Hidden on Mobile to preserve vertical room) */}
-      <div className="hidden sm:block shrink-0">
-        {/* Route Planning Header */}
-        <div className="p-4 border-b border-slate-100 bg-slate-50">
-          <div className="flex items-center justify-between mb-2">
-            <h2 className="text-xs font-bold text-slate-800 uppercase tracking-wider">
-              Route Planning
-            </h2>
-            <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 flex items-center gap-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping" />
-              Live Netwerk
-            </span>
-          </div>
-
-          {/* Route Name Input */}
+      {/* Streamlined Unified Header (Clean & compact across Mobile, Tablet, and Desktop) */}
+      <div className="shrink-0 bg-white border-b border-slate-200">
+        {/* Row 1: Route Name Input + Live indicator */}
+        <div className="p-2 bg-slate-50/90 border-b border-slate-100 flex items-center justify-between gap-2">
           <input
             type="text"
             value={routeName}
             onChange={(e) => onChangeRouteName(e.target.value)}
             placeholder="Naam van je fietsroute..."
-            className="w-full text-xs font-semibold text-slate-800 bg-white border border-slate-200 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500 shadow-xs"
+            className="flex-1 min-w-0 text-xs font-bold text-slate-800 bg-white border border-slate-200 rounded-md px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-emerald-500 shadow-2xs"
           />
+          <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 flex items-center gap-1 shrink-0">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+            <span className="hidden sm:inline">Live Netwerk</span>
+            <span className="sm:hidden">Live</span>
+          </span>
         </div>
 
-        {/* Route Statistieken Grid - Professional Polish Theme */}
-        <div className="p-4 border-b border-slate-100 bg-white">
-          <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">
-            Route Statistieken
-          </h3>
-          <div className="grid grid-cols-2 gap-2.5">
-            <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-100">
-              <span className="text-[10px] text-slate-500 uppercase font-bold block">Afstand</span>
-              <span className="text-lg font-bold text-slate-800">{totalDistanceKm} km</span>
+        {/* Row 2: Compact Metrics Bar */}
+        <div className="px-3 py-1.5 flex items-center justify-between text-xs bg-white border-b border-slate-100">
+          <div className="flex items-center gap-2 sm:gap-3 text-slate-700">
+            <div title="Totale afstand">
+              <span className="text-[9px] text-slate-400 block uppercase font-bold leading-tight">Afstand</span>
+              <span className="font-extrabold text-slate-900 text-xs sm:text-sm">{totalDistanceKm} km</span>
             </div>
-
-            <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-100">
-              <span className="text-[10px] text-slate-500 uppercase font-bold block flex items-center gap-1">
-                Duur ({currentProfile.averageSpeedKmH} km/u)
+            <div className="h-5 w-px bg-slate-200" />
+            <div title={`Geschatte duur bij ${currentProfile.averageSpeedKmH} km/u`}>
+              <span className="text-[9px] text-slate-400 block uppercase font-bold leading-tight">Duur</span>
+              <span className="font-bold text-slate-700 text-xs sm:text-sm">{hours > 0 ? `${hours}u ` : ''}{minutes}m</span>
+            </div>
+            <div className="h-5 w-px bg-slate-200" />
+            <div title="Hoogtemeters klimmen">
+              <span className="text-[9px] text-slate-400 block uppercase font-bold leading-tight">Hoogte</span>
+              <span className="font-bold text-slate-700 text-xs sm:text-sm">+{elevationGainM}m</span>
+            </div>
+            <div className="h-5 w-px bg-slate-200" />
+            <div title="Aantal knooppunten">
+              <span className="text-[9px] text-slate-400 block uppercase font-bold leading-tight">KP</span>
+              <span className="font-extrabold text-emerald-800 bg-emerald-50 border border-emerald-200 px-1.5 py-0.2 rounded text-[11px]">
+                {selectedNodes.length}
               </span>
-              <span className="text-lg font-bold text-slate-800">
-                {hours > 0 ? `${hours}u ` : ''}{minutes}m
-              </span>
-            </div>
-
-            <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-100">
-              <span className="text-[10px] text-slate-500 uppercase font-bold block">Hoogte</span>
-              <span className="text-lg font-bold text-slate-800">+{elevationGainM} m</span>
-            </div>
-
-            <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-100">
-              <span className="text-[10px] text-slate-500 uppercase font-bold block">Knooppunten</span>
-              <span className="text-lg font-bold text-slate-800">{selectedNodes.length}</span>
             </div>
           </div>
 
-          {/* Ondergrond / Wegtype Progress */}
-          <div className="mt-3 space-y-1.5">
-            <div className="flex justify-between items-center text-[11px]">
-              <span className="text-slate-600 font-medium">Verhard / Fietspad</span>
-              <span className="font-bold text-slate-800">92%</span>
-            </div>
-            <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
-              <div className="bg-emerald-500 h-full rounded-full" style={{ width: '92%' }} />
-            </div>
-          </div>
+          {/* Bike profile toggle */}
+          <button
+            onClick={() => setIsProfileOpen(!isProfileOpen)}
+            className="text-[11px] font-semibold text-slate-600 hover:text-emerald-700 bg-slate-50 hover:bg-slate-100 border border-slate-200 px-2 py-0.5 rounded flex items-center gap-1 cursor-pointer transition shrink-0"
+            title="Kies fiets type en snelheid"
+          >
+            <span>{currentProfile.label.split(' ')[0]}</span>
+            <ChevronDown className={`w-3 h-3 text-slate-400 transition-transform ${isProfileOpen ? 'rotate-180' : ''}`} />
+          </button>
         </div>
 
-        {/* Bike Type Selector */}
-        <div className="px-4 py-2 bg-slate-50 border-b border-slate-100 flex items-center justify-between text-xs">
-          <span className="text-[11px] font-semibold text-slate-500">Profiel:</span>
-          <div className="flex gap-1">
-            {BIKE_PROFILES.map((p) => (
-              <button
-                key={p.id}
-                onClick={() => onChangeBike(p.id)}
-                className={`px-2 py-1 rounded text-[11px] font-medium transition cursor-pointer ${
-                  selectedBike === p.id
-                    ? 'bg-white text-emerald-700 font-bold shadow-xs border border-slate-200'
-                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-                }`}
-                title={`${p.label} (~${p.averageSpeedKmH} km/u)`}
-              >
-                {p.label.split(' ')[0]}
-              </button>
-            ))}
+        {/* Expandable Bike Profile selector */}
+        {isProfileOpen && (
+          <div className="px-3 py-2 bg-slate-50 border-b border-slate-200 flex items-center justify-between text-xs animate-in fade-in slide-in-from-top-1">
+            <span className="text-[11px] font-semibold text-slate-500">Profiel:</span>
+            <div className="flex gap-1">
+              {BIKE_PROFILES.map((p) => (
+                <button
+                  key={p.id}
+                  onClick={() => {
+                    onChangeBike(p.id);
+                    setIsProfileOpen(false);
+                  }}
+                  className={`px-2 py-1 rounded text-[10px] sm:text-[11px] font-medium transition cursor-pointer ${
+                    selectedBike === p.id
+                      ? 'bg-white text-emerald-700 font-bold shadow-xs border border-slate-200'
+                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
+                  }`}
+                >
+                  {p.label.split(' ')[0]} ({p.averageSpeedKmH} km/u)
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
+        )}
 
-        {/* Primary Action Buttons */}
-        <div className="p-3 bg-white border-b border-slate-200 grid grid-cols-2 gap-2">
+        {/* Row 3: Quick Action Buttons */}
+        <div className="p-2 bg-slate-50/60 flex items-center gap-1.5">
           <button
             onClick={onOpenStrookje}
             disabled={selectedNodes.length === 0}
-            className="flex items-center justify-center gap-1.5 py-2 px-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-md text-xs font-medium shadow-xs transition active:scale-95 disabled:opacity-50 cursor-pointer"
+            className="flex-1 flex items-center justify-center gap-1 py-1.5 px-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-md text-xs font-semibold shadow-2xs transition active:scale-95 disabled:opacity-40 cursor-pointer"
+            title="Print strookje voor stuur"
           >
             <Printer className="w-3.5 h-3.5" />
-            <span>Print strookje</span>
+            <span>Strookje</span>
           </button>
 
           <button
             onClick={onExportGpx}
             disabled={selectedNodes.length === 0}
-            className="flex items-center justify-center gap-1.5 py-2 px-3 bg-slate-900 hover:bg-slate-800 text-white rounded-md text-xs font-medium shadow-xs transition active:scale-95 disabled:opacity-50 cursor-pointer"
+            className="flex-1 flex items-center justify-center gap-1 py-1.5 px-2 bg-slate-900 hover:bg-slate-800 text-white rounded-md text-xs font-semibold shadow-2xs transition active:scale-95 disabled:opacity-40 cursor-pointer"
+            title="Download GPX bestand"
           >
             <Download className="w-3.5 h-3.5 text-emerald-400" />
-            <span>Download GPX</span>
+            <span>GPX</span>
           </button>
 
           <button
             onClick={onOpenRoundTrip}
-            className="flex items-center justify-center gap-1.5 py-1.5 px-3 bg-slate-50 hover:bg-slate-100 text-slate-700 rounded-md text-xs font-medium border border-slate-200 transition active:scale-95 cursor-pointer"
+            className="flex items-center justify-center gap-1 py-1.5 px-2 bg-white hover:bg-slate-100 text-slate-700 rounded-md text-xs font-medium border border-slate-200 shadow-2xs transition active:scale-95 cursor-pointer"
+            title="Automatische rondrit generator"
           >
             <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-            <span>Rondrit generator</span>
+            <span className="hidden sm:inline text-[11px]">Rondrit</span>
           </button>
 
           <button
             onClick={onOpenGpxImport}
-            className="flex items-center justify-center gap-1.5 py-1.5 px-3 bg-slate-50 hover:bg-slate-100 text-slate-700 rounded-md text-xs font-medium border border-slate-200 transition active:scale-95 cursor-pointer"
+            className="flex items-center justify-center gap-1 py-1.5 px-2 bg-white hover:bg-slate-100 text-slate-700 rounded-md text-xs font-medium border border-slate-200 shadow-2xs transition active:scale-95 cursor-pointer"
+            title="Importeer GPX bestand"
           >
             <Upload className="w-3.5 h-3.5 text-slate-500" />
-            <span>Importeer GPX</span>
+            <span className="hidden sm:inline text-[11px]">Import</span>
           </button>
         </div>
-      </div>
-
-      {/* Mobile Streamlined Header (Compact so node list has maximum room) */}
-      <div className="sm:hidden border-b border-slate-200 bg-white shrink-0">
-        {/* Row 1: Route Name + Print & GPX quick buttons */}
-        <div className="p-2 bg-slate-50/90 border-b border-slate-100 flex items-center gap-1.5">
-          <input
-            type="text"
-            value={routeName}
-            onChange={(e) => onChangeRouteName(e.target.value)}
-            placeholder="Naam fietsroute..."
-            className="flex-1 min-w-0 text-xs font-semibold text-slate-800 bg-white border border-slate-200 rounded-md px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-emerald-500 shadow-2xs"
-          />
-          <button
-            onClick={onOpenStrookje}
-            disabled={selectedNodes.length === 0}
-            className="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-md text-xs font-medium shadow-2xs disabled:opacity-40 flex items-center gap-1 shrink-0 cursor-pointer"
-            title="Print strookje"
-          >
-            <Printer className="w-3.5 h-3.5" />
-            <span className="text-[11px]">Strookje</span>
-          </button>
-          <button
-            onClick={onExportGpx}
-            disabled={selectedNodes.length === 0}
-            className="p-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-md text-xs font-medium shadow-2xs disabled:opacity-40 shrink-0 cursor-pointer"
-            title="Download GPX"
-          >
-            <Download className="w-3.5 h-3.5 text-emerald-400" />
-          </button>
-        </div>
-
-        {/* Row 2: 1-line Stat summary with Expandable Options Toggle */}
-        <div className="px-3 py-1.5 flex items-center justify-between text-xs bg-white">
-          <div className="flex items-center gap-2 text-slate-700">
-            <span className="font-bold text-slate-900">{totalDistanceKm} km</span>
-            <span className="text-slate-300">·</span>
-            <span className="font-semibold text-slate-600">{hours > 0 ? `${hours}u ` : ''}{minutes}m</span>
-            <span className="text-slate-300">·</span>
-            <span className="text-slate-500">+{elevationGainM}m</span>
-            <span className="text-slate-300">·</span>
-            <span className="font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded text-[10px]">
-              {selectedNodes.length} KP
-            </span>
-          </div>
-
-          <button
-            onClick={() => setIsMobileOptionsOpen(!isMobileOptionsOpen)}
-            className="text-[11px] font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-200 px-2 py-0.5 rounded flex items-center gap-1 cursor-pointer transition"
-          >
-            <span>{isMobileOptionsOpen ? 'Minder' : 'Opties'}</span>
-            <ChevronDown className={`w-3 h-3 text-slate-500 transition-transform duration-200 ${isMobileOptionsOpen ? 'rotate-180' : ''}`} />
-          </button>
-        </div>
-
-        {/* Expandable Mobile Options Drawer */}
-        {isMobileOptionsOpen && (
-          <div className="p-2.5 bg-slate-50 border-t border-slate-200 space-y-2 animate-in fade-in slide-in-from-top-1">
-            <div className="flex items-center justify-between text-[11px]">
-              <span className="font-semibold text-slate-500">Profiel:</span>
-              <div className="flex gap-1">
-                {BIKE_PROFILES.map((p) => (
-                  <button
-                    key={p.id}
-                    onClick={() => onChangeBike(p.id)}
-                    className={`px-2 py-1 rounded text-[10px] font-medium transition cursor-pointer ${
-                      selectedBike === p.id
-                        ? 'bg-white text-emerald-700 font-bold shadow-xs border border-slate-200'
-                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-                    }`}
-                  >
-                    {p.label.split(' ')[0]}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-2 pt-1">
-              <button
-                onClick={onOpenRoundTrip}
-                className="flex items-center justify-center gap-1.5 py-1.5 px-2 bg-white hover:bg-slate-50 text-slate-700 rounded text-xs font-medium border border-slate-200 shadow-2xs cursor-pointer"
-              >
-                <Sparkles className="w-3 h-3 text-amber-500" />
-                <span>Rondrit</span>
-              </button>
-              <button
-                onClick={onOpenGpxImport}
-                className="flex items-center justify-center gap-1.5 py-1.5 px-2 bg-white hover:bg-slate-50 text-slate-700 rounded text-xs font-medium border border-slate-200 shadow-2xs cursor-pointer"
-              >
-                <Upload className="w-3 h-3 text-slate-500" />
-                <span>Importeer GPX</span>
-              </button>
-            </div>
-          </div>
-        )}
       </div>
 
       {/* Scrollable Middle Content: Nodes Sequence & Elevation */}
-      <div className="flex-1 min-h-0 overflow-y-auto p-3 space-y-3 bg-slate-50/50">
-        {/* Elevation Profile widget on desktop */}
-        {totalDistanceKm > 0 && (
-          <div className="hidden sm:block">
+      <div className="flex-1 min-h-0 overflow-y-auto p-2.5 space-y-2 bg-slate-50/50">
+        {/* Lijn 1: Knooppunten / Hoogte Toggle (steeds op de eerste lijn) */}
+        <div className="w-full">
+          <div className="w-full grid grid-cols-2 gap-1 bg-slate-200/70 p-0.5 rounded-lg border border-slate-200">
+            <button
+              type="button"
+              onClick={() => setActiveTab('nodes')}
+              className={`py-1 rounded-md text-[11px] font-bold transition cursor-pointer flex flex-col items-center justify-center leading-tight ${
+                activeTab === 'nodes'
+                  ? 'bg-white text-emerald-800 shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+              title="Toon lijst van gekozen knooppunten"
+            >
+              <span>Knooppunten</span>
+              <span className={`text-[10px] ${activeTab === 'nodes' ? 'text-emerald-700 font-semibold' : 'text-slate-400 font-normal'}`}>
+                ({selectedNodes.length})
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab('elevation')}
+              disabled={totalDistanceKm <= 0}
+              className={`py-1 rounded-md text-[11px] font-bold transition cursor-pointer flex flex-col items-center justify-center leading-tight disabled:opacity-40 disabled:cursor-not-allowed ${
+                activeTab === 'elevation'
+                  ? 'bg-white text-emerald-800 shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+              title={totalDistanceKm > 0 ? "Toon interactief hoogteprofiel" : "Plan eerst knooppunten om hoogteprofiel te bekijken"}
+            >
+              <span>Hoogte</span>
+              <span className={`text-[10px] ${activeTab === 'elevation' ? 'text-emerald-700 font-semibold' : 'text-slate-400 font-normal'}`}>
+                {totalDistanceKm > 0 ? `(+${elevationGainM}m)` : '(0m)'}
+              </span>
+            </button>
+          </div>
+        </div>
+
+        {/* Lijn 2: Rest van de acties (Ongedaan, Opnieuw, Omdraaien, Verwijderen steeds op de 2e lijn) */}
+        <div className="flex items-center justify-between text-xs px-0.5 pt-0.5 pb-0.5">
+          <div className="flex items-center gap-1">
+            <button
+              onClick={onUndo}
+              disabled={!canUndo && selectedNodes.length === 0}
+              className="flex items-center gap-1 text-xs font-semibold px-2 py-1 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 rounded-md transition active:scale-95 disabled:opacity-40 disabled:pointer-events-none cursor-pointer"
+              title={selectedNodes.length > 0 ? `Knooppunt ${selectedNodes[selectedNodes.length - 1].ref} ongedaan maken (Ctrl+Z)` : 'Ongedaan maken (Ctrl+Z)'}
+            >
+              <Undo2 className="w-3.5 h-3.5 text-amber-700" />
+              {selectedNodes.length > 0 && (
+                <span className="font-mono text-[11px] font-bold text-amber-800">
+                  ({selectedNodes[selectedNodes.length - 1].ref})
+                </span>
+              )}
+            </button>
+
+            {canRedo && onRedo && (
+              <button
+                onClick={onRedo}
+                className="flex items-center gap-1 text-xs font-semibold px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 rounded-md transition active:scale-95 cursor-pointer"
+                title={redoNodeRef ? `Knooppunt ${redoNodeRef} opnieuw toevoegen (Ctrl+Y)` : 'Opnieuw uitvoeren (Ctrl+Y)'}
+              >
+                <Redo2 className="w-3.5 h-3.5 text-slate-600" />
+                {redoNodeRef && (
+                  <span className="font-mono text-[11px] font-bold text-slate-800">
+                    ({redoNodeRef})
+                  </span>
+                )}
+              </button>
+            )}
+          </div>
+
+          {selectedNodes.length > 1 && (
+            <div className="flex items-center gap-1">
+              <button
+                onClick={onReverseRoute}
+                className="p-1 text-slate-500 hover:text-emerald-700 hover:bg-slate-100 rounded cursor-pointer transition"
+                title="Draai rijrichting om"
+              >
+                <ArrowUpDown className="w-3.5 h-3.5" />
+              </button>
+              <button
+                onClick={() => setShowClearConfirm(true)}
+                className="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded cursor-pointer transition"
+                title="Verwijder alle knooppunten"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Tab 2: Hoogteprofiel view */}
+        {activeTab === 'elevation' && totalDistanceKm > 0 ? (
+          <div className="bg-white p-3 rounded-lg border border-slate-200 shadow-xs space-y-2">
+            <div className="flex items-center justify-between pb-1 border-b border-slate-100 text-xs">
+              <span className="font-bold text-slate-800">Hoogteprofiel van route</span>
+              <span className="text-[11px] text-emerald-700 font-semibold">+{elevationGainM}m klimmen</span>
+            </div>
             <ElevationProfile
               elevationPoints={elevationPoints}
               totalDistanceKm={totalDistanceKm}
               totalAscentM={elevationGainM}
             />
-          </div>
-        )}
-
-        {/* Selected Knooppunten List */}
-        <div className="space-y-2">
-          <div className="flex items-center justify-between text-xs px-1">
-            <span className="font-bold text-slate-500 uppercase tracking-wider text-[10px]">
-              Knooppunten ({selectedNodes.length})
-            </span>
-            <div className="flex items-center gap-1">
-              <button
-                onClick={onUndo}
-                disabled={!canUndo && selectedNodes.length === 0}
-                className="flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 rounded transition active:scale-95 disabled:opacity-40 disabled:pointer-events-none cursor-pointer"
-                title="Laatste wijziging in omgekeerde volgorde ongedaan maken tot en met het startpunt (Ctrl+Z)"
-              >
-                <Undo2 className="w-3 h-3 text-amber-700" />
-                <span>Ongedaan</span>
-                {selectedNodes.length > 0 && (
-                  <span className="text-[10px] text-amber-700 font-normal">
-                    ({selectedNodes[selectedNodes.length - 1].ref})
-                  </span>
-                )}
-              </button>
-
-              {canRedo && onRedo && (
-                <button
-                  onClick={onRedo}
-                  className="flex items-center gap-1 text-[11px] font-semibold px-1.5 py-0.5 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 rounded transition active:scale-95 cursor-pointer"
-                  title="Opnieuw uitvoeren (Ctrl+Y)"
-                >
-                  <Redo2 className="w-3 h-3 text-slate-600" />
-                  <span className="hidden sm:inline">Opnieuw</span>
-                </button>
-              )}
-
-              {selectedNodes.length > 1 && (
-                <>
-                  <button
-                    onClick={onReverseRoute}
-                    className="flex items-center gap-1 text-[11px] text-slate-600 hover:text-emerald-700 font-semibold p-1 hover:bg-slate-100 rounded cursor-pointer"
-                    title="Draai rijrichting om"
-                  >
-                    <ArrowUpDown className="w-3 h-3" />
-                  </button>
-                  <button
-                    onClick={() => setShowClearConfirm(true)}
-                    className="text-[11px] text-red-500 hover:text-red-700 font-semibold p-1 hover:bg-red-50 rounded cursor-pointer"
-                    title="Verwijder alle knooppunten"
-                  >
-                    <Trash2 className="w-3 h-3" />
-                  </button>
-                </>
-              )}
-            </div>
-          </div>
-
-          {/* Confirm Clear Route Dialog */}
-          {showClearConfirm && (
-            <div className="fixed inset-0 z-[1600] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in">
-              <div className="bg-white rounded-xl shadow-2xl border border-slate-200 max-w-sm w-full p-5 space-y-4">
-                <div className="flex items-start gap-3">
-                  <div className="w-10 h-10 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center shrink-0">
-                    <Trash2 className="w-5 h-5" />
-                  </div>
-                  <div className="space-y-1">
-                    <h3 className="text-sm font-bold text-slate-900">Route verwijderen?</h3>
-                    <p className="text-xs text-slate-600 leading-relaxed">
-                      Weet je zeker dat je de volledige route met <strong>{selectedNodes.length} knooppunten</strong> ({totalDistanceKm} km) wilt verwijderen?
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
-                  <button
-                    onClick={() => setShowClearConfirm(false)}
-                    className="px-3.5 py-1.5 rounded-lg text-xs font-semibold text-slate-700 hover:bg-slate-100 transition cursor-pointer"
-                  >
-                    Annuleren
-                  </button>
-                  <button
-                    onClick={() => {
-                      onClearRoute();
-                      setShowClearConfirm(false);
-                    }}
-                    className="px-3.5 py-1.5 rounded-lg text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 transition shadow-xs cursor-pointer"
-                  >
-                    Ja, route verwijderen
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {selectedNodes.length === 0 ? (
-            <div className="p-6 bg-white rounded-xl border border-dashed border-slate-300 text-center space-y-2 shadow-xs">
-              <div className="w-10 h-10 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center mx-auto">
-                <Compass className="w-5 h-5 animate-spin-slow" />
-              </div>
-              <h4 className="text-xs font-bold text-slate-800">Nog geen knooppunten gekozen</h4>
-              <p className="text-[11px] text-slate-500 leading-relaxed">
-                Klik op de knooppunten op de kaart om je route op te bouwen, of gebruik de knop <strong>Rondrit generator</strong>.
-              </p>
-              {canRedo && onRedo && (
-                <div className="pt-1">
-                  <button
-                    onClick={onRedo}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 rounded-md text-xs font-semibold shadow-xs transition active:scale-95 cursor-pointer"
-                  >
-                    <Redo2 className="w-3.5 h-3.5 text-amber-700" />
-                    <span>Herstel verwijderde route</span>
-                  </button>
-                </div>
-              )}
-            </div>
-          ) : (
-            <div className="space-y-1.5">
-              {selectedNodes.map((node, index) => {
-                const nextLeg = routeLegs[index];
-                const isStart = index === 0;
-                const isEnd = index === selectedNodes.length - 1;
-                const isInBetween = !isStart && !isEnd;
-
-                return (
-                  <div key={`${node.ref}-${index}`} className="flex flex-col">
-                    <div className="flex items-center gap-3 bg-white p-2.5 border border-slate-200 rounded-md shadow-xs hover:border-slate-300 transition group">
-                      <div className="relative shrink-0 flex items-center justify-center">
-                        <div className={`w-8 h-8 rounded-full border-2 flex items-center justify-center font-black text-xs bg-white ${
-                          isStart
-                            ? 'border-lime-500 text-stone-900 ring-2 ring-lime-400/40'
-                            : isEnd
-                            ? 'border-rose-500 text-stone-900 ring-2 ring-rose-400/40'
-                            : 'border-slate-400 text-stone-800'
-                        }`}>
-                          {node.ref}
-                        </div>
-                        {isStart && (
-                          <span className="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full bg-lime-500 text-white flex items-center justify-center text-[8px] font-bold shadow-xs" title="Start">
-                            ▶
-                          </span>
-                        )}
-                        {isEnd && (
-                          <span className="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full bg-rose-600 text-white flex items-center justify-center text-[7px] font-bold shadow-xs" title="Einde">
-                            ■
-                          </span>
-                        )}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="text-xs font-semibold text-slate-800 truncate flex items-center gap-1.5">
-                          {isStart && (
-                            <span className="text-[10px] uppercase font-bold text-lime-700 bg-lime-50 px-1.5 py-0.5 rounded border border-lime-200">
-                              Start
-                            </span>
-                          )}
-                          {isEnd && (
-                            <span className="text-[10px] uppercase font-bold text-rose-700 bg-rose-50 px-1.5 py-0.5 rounded border border-rose-200">
-                              Eind
-                            </span>
-                          )}
-                          {isInBetween && (
-                            <span className="text-[10px] font-medium text-slate-500">
-                              Via
-                            </span>
-                          )}
-                          <span>Knooppunt {node.ref}</span>
-                        </div>
-                        <div className="flex items-center justify-between gap-1.5 text-[11px] mt-0.5">
-                          <span className="text-slate-500 truncate">
-                            {node.name || node.municipality || node.region || 'Fietsnetwerk'}
-                          </span>
-                          {index > 0 && (
-                            <span
-                              className="shrink-0 font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded-full text-[10px]"
-                              title={`Gereden afstand vanaf het startpunt tot knooppunt ${node.ref}`}
-                            >
-                              {cumulativeDistances[index]} km gereden
-                            </span>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Item remove control (omhoog/omlaag knoppen verwijderd) */}
-                      <div className="flex items-center shrink-0 opacity-70 group-hover:opacity-100">
-                        <button
-                          onClick={() => onRemoveNode(index)}
-                          className="p-1 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded cursor-pointer"
-                          title="Verwijder knooppunt uit route"
-                        >
-                          <X className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Distance connector badge between nodes */}
-                    {nextLeg && (
-                      <div className="flex items-center gap-2 pl-6 py-0.5 text-[10px] font-semibold text-emerald-700">
-                        <div className="w-0.5 h-2.5 bg-emerald-300 ml-3" />
-                        <span className="bg-emerald-50 px-2 py-0.5 rounded text-[10px] border border-emerald-100 flex items-center gap-1.5">
-                          <span>+ {nextLeg.distanceKm} km naar KP {selectedNodes[index + 1]?.ref}</span>
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-
-        {/* Mobile Collapsible Elevation Profile below the nodes list */}
-        {totalDistanceKm > 0 && (
-          <div className="sm:hidden pt-1 pb-4">
             <button
-              onClick={() => setShowMobileElevation(!showMobileElevation)}
-              className="w-full text-[11px] font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-lg py-2 px-3 flex items-center justify-between shadow-2xs cursor-pointer"
+              onClick={() => setActiveTab('nodes')}
+              className="w-full py-1.5 text-xs text-center text-emerald-700 hover:text-emerald-800 hover:bg-emerald-50 rounded border border-emerald-200 font-medium transition cursor-pointer"
             >
-              <span className="flex items-center gap-1.5">
-                <span>Hoogteprofiel</span>
-                <span className="text-slate-400 font-normal">(+{elevationGainM}m klimmen)</span>
-              </span>
-              <ChevronDown className={`w-3.5 h-3.5 text-slate-500 transition-transform duration-200 ${showMobileElevation ? 'rotate-180' : ''}`} />
+              ← Terug naar knooppuntenlijst
             </button>
-            {showMobileElevation && (
-              <div className="mt-2">
-                <ElevationProfile
-                  elevationPoints={elevationPoints}
-                  totalDistanceKm={totalDistanceKm}
-                  totalAscentM={elevationGainM}
-                />
+          </div>
+        ) : (
+          /* Tab 1: Knooppunten Sequence */
+          <div className="space-y-1.5">
+            {/* Confirm Clear Route Dialog */}
+            {showClearConfirm && (
+              <div className="fixed inset-0 z-[1600] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in">
+                <div className="bg-white rounded-xl shadow-2xl border border-slate-200 max-w-sm w-full p-5 space-y-4">
+                  <div className="flex items-start gap-3">
+                    <div className="w-10 h-10 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center shrink-0">
+                      <Trash2 className="w-5 h-5" />
+                    </div>
+                    <div className="space-y-1">
+                      <h3 className="text-sm font-bold text-slate-900">Route verwijderen?</h3>
+                      <p className="text-xs text-slate-600 leading-relaxed">
+                        Weet je zeker dat je de volledige route met <strong>{selectedNodes.length} knooppunten</strong> ({totalDistanceKm} km) wilt verwijderen?
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+                    <button
+                      onClick={() => setShowClearConfirm(false)}
+                      className="px-3.5 py-1.5 rounded-lg text-xs font-semibold text-slate-700 hover:bg-slate-100 transition cursor-pointer"
+                    >
+                      Annuleren
+                    </button>
+                    <button
+                      onClick={() => {
+                        onClearRoute();
+                        setShowClearConfirm(false);
+                      }}
+                      className="px-3.5 py-1.5 rounded-lg text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 transition shadow-xs cursor-pointer"
+                    >
+                      Ja, route verwijderen
+                    </button>
+                  </div>
+                </div>
               </div>
+            )}
+
+            {selectedNodes.length === 0 ? (
+              <div className="p-6 bg-white rounded-xl border border-dashed border-slate-300 text-center space-y-2 shadow-xs">
+                <div className="w-10 h-10 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center mx-auto">
+                  <Compass className="w-5 h-5 animate-spin-slow" />
+                </div>
+                <h4 className="text-xs font-bold text-slate-800">Nog geen knooppunten gekozen</h4>
+                <p className="text-[11px] text-slate-500 leading-relaxed">
+                  Klik op knooppunten op de kaart om je route op te bouwen, of gebruik de <strong>Rondrit generator</strong>.
+                </p>
+                {canRedo && onRedo && (
+                  <div className="pt-1">
+                    <button
+                      onClick={onRedo}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 rounded-md text-xs font-semibold shadow-xs transition active:scale-95 cursor-pointer"
+                    >
+                      <Redo2 className="w-3.5 h-3.5 text-amber-700" />
+                      <span>Herstel verwijderde route</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <>
+                <div className="space-y-1.5">
+                  {selectedNodes.map((node, index) => {
+                    const nextLeg = routeLegs[index];
+                    const isStart = index === 0;
+                    const isEnd = index === selectedNodes.length - 1;
+                    const isInBetween = !isStart && !isEnd;
+
+                    return (
+                      <div key={`${node.ref}-${index}`} className="flex flex-col">
+                        <div className="flex items-center gap-2.5 bg-white p-2 mobile-landscape-compact-card border border-slate-200 rounded-md shadow-xs hover:border-slate-300 transition group">
+                          <div className="relative shrink-0 flex items-center justify-center">
+                            <div className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full border-2 flex items-center justify-center font-black text-xs bg-white ${
+                              isStart
+                                ? 'border-lime-500 text-stone-900 ring-2 ring-lime-400/40'
+                                : isEnd
+                                ? 'border-rose-500 text-stone-900 ring-2 ring-rose-400/40'
+                                : 'border-slate-400 text-stone-800'
+                            }`}>
+                              {node.ref}
+                            </div>
+                            {isStart && (
+                              <span className="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full bg-lime-500 text-white flex items-center justify-center text-[8px] font-bold shadow-xs" title="Start">
+                                ▶
+                              </span>
+                            )}
+                            {isEnd && (
+                              <span className="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full bg-rose-600 text-white flex items-center justify-center text-[7px] font-bold shadow-xs" title="Einde">
+                                ■
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="text-xs font-semibold text-slate-800 truncate flex items-center gap-1.5">
+                              {isStart && (
+                                <span className="text-[10px] uppercase font-bold text-lime-700 bg-lime-50 px-1.5 py-0.2 rounded border border-lime-200">
+                                  Start
+                                </span>
+                              )}
+                              {isEnd && (
+                                <span className="text-[10px] uppercase font-bold text-rose-700 bg-rose-50 px-1.5 py-0.2 rounded border border-rose-200">
+                                  Eind
+                                </span>
+                              )}
+                              {isInBetween && (
+                                <span className="text-[10px] font-medium text-slate-400">
+                                  Via
+                                </span>
+                              )}
+                              <span>Knooppunt {node.ref}</span>
+                            </div>
+                            <div className="flex items-center justify-between gap-1 text-[11px] mt-0.5">
+                              <span className="text-slate-500 truncate text-[11px]">
+                                {node.name || node.municipality || node.region || 'Fietsnetwerk'}
+                              </span>
+                              {index > 0 && (
+                                <span
+                                  className="shrink-0 font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 px-1.5 py-0.2 rounded-full text-[10px]"
+                                  title={`Gereden afstand vanaf het startpunt tot knooppunt ${node.ref}`}
+                                >
+                                  {cumulativeDistances[index]} km
+                                </span>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Item remove control */}
+                          <div className="flex items-center shrink-0 opacity-70 group-hover:opacity-100">
+                            <button
+                              onClick={() => onRemoveNode(index)}
+                              className="p-1 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded cursor-pointer"
+                              title="Verwijder knooppunt uit route"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Distance connector badge between nodes */}
+                        {nextLeg && (
+                          <div className="flex items-center gap-2 pl-4 py-0.5 text-[10px] font-semibold text-emerald-700">
+                            <div className="w-0.5 h-2 bg-emerald-300 ml-3" />
+                            <span className="bg-emerald-50 px-1.5 py-0.2 rounded text-[10px] border border-emerald-100">
+                              + {nextLeg.distanceKm} km naar KP {selectedNodes[index + 1]?.ref}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Bottom link to view elevation profile */}
+                {totalDistanceKm > 0 && (
+                  <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500 px-1">
+                    <span>92% verhard fietspad</span>
+                    <button
+                      onClick={() => setActiveTab('elevation')}
+                      className="text-emerald-700 hover:text-emerald-800 font-semibold cursor-pointer flex items-center gap-1 hover:underline"
+                    >
+                      Bekijk hoogteprofiel (+{elevationGainM}m) →
+                    </button>
+                  </div>
+                )}
+              </>
             )}
           </div>
         )}
-      </div>
-
-      {/* Footer Info (Desktop only to maximize mobile scroll height) */}
-      <div className="hidden sm:flex p-2.5 bg-slate-50 border-t border-slate-200 text-[10px] text-slate-500 items-center justify-between shrink-0">
-        <span>© OpenStreetMap contributors | Knooppuntdata NL/BE</span>
-        <a
-          href="https://github.com/MGeurts/fietsroute"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-slate-600 hover:text-emerald-700 font-medium"
-        >
-          MGeurts/fietsroute
-        </a>
       </div>
     </div>
   );

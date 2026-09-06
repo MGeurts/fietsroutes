@@ -43,3 +43,88 @@
     border: 1px solid #059669 !important;
   }
 }
+
+/* ==========================================================================
+   Responsive Adaptations: Mobile Portrait, Mobile Landscape, Tablet Landscape
+   ========================================================================== */
+
+/* Mobile Portrait (<640px) OR any short landscape (height <= 550px) */
+@media (max-width: 639px), (max-height: 550px) {
+  .app-header-responsive {
+    height: 3rem !important; /* 48px */
+    padding-left: 0.75rem !important;
+    padding-right: 0.75rem !important;
+  }
+  .app-header-subtitle {
+    display: none !important;
+  }
+  .hide-on-mobile-or-landscape {
+    display: none !important;
+  }
+  .show-on-compact-mobile {
+    display: block !important;
+  }
+  .show-on-desktop-only {
+    display: none !important;
+  }
+  /* Compact map floating controls for mobile landscape */
+  .map-floating-controls-compact {
+    top: 0.5rem !important;
+    left: 0.5rem !important;
+    right: 0.5rem !important;
+    gap: 0.375rem !important;
+  }
+  .map-floating-actions-compact {
+    bottom: 0.5rem !important;
+    right: 0.5rem !important;
+    gap: 0.375rem !important;
+  }
+}
+
+/* Specific Mobile Landscape (phones sideways, height <= 550px) */
+@media (orientation: landscape) and (max-height: 550px) {
+  .main-workspace-layout {
+    flex-direction: row !important;
+  }
+  .mobile-landscape-show-sidebar {
+    display: flex !important;
+  }
+  .mobile-landscape-show-map {
+    display: flex !important;
+  }
+  .mobile-landscape-sidebar-width {
+    width: 290px !important;
+    max-width: 44vw !important;
+  }
+  .mobile-landscape-compact-card {
+    padding-top: 0.375rem !important;
+    padding-bottom: 0.375rem !important;
+    padding-left: 0.5rem !important;
+    padding-right: 0.5rem !important;
+  }
+  /* Hide the bottom navigation bar on mobile landscape since side-by-side or toggle is active */
+  .mobile-bottom-nav {
+    display: none !important;
+  }
+}
+
+/* Tablet & Desktop (width >= 640px and height > 550px) */
+@media (min-width: 640px) and (min-height: 551px) {
+  .show-on-compact-mobile {
+    display: none !important;
+  }
+  .show-on-desktop-only {
+    display: block !important;
+  }
+}
+
+/* Tablet in Landscape (iPads, Android tablets: width >= 768px and height >= 551px) */
+@media (min-width: 768px) and (min-height: 551px) {
+  .tablet-landscape-sidebar-width {
+    width: 350px !important;
+  }
+  .tablet-touch-friendly-btn {
+    min-height: 38px;
+  }
+}
+
