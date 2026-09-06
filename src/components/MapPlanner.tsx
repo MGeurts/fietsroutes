@@ -1000,7 +1000,7 @@ export const MapPlanner: React.FC<MapPlannerProps> = ({
       </div>
 
       {/* Map Bottom-Left Attribution & Helper Badge */}
-      <div className="absolute bottom-6 left-6 z-[1000] flex flex-col sm:flex-row items-start sm:items-center gap-2 pointer-events-none">
+      <div className="hidden sm:flex absolute bottom-6 left-6 z-[1000] flex-col sm:flex-row items-start sm:items-center gap-2 pointer-events-none">
         <div className="bg-white/90 backdrop-blur-md px-3 py-1.5 text-[11px] text-slate-700 rounded-md border border-slate-200 shadow-xs flex items-center gap-3">
           <div className="flex items-center gap-1.5" title="Jouw geplande route">
             <span className="w-3.5 h-1 bg-red-600 rounded-full inline-block"></span>

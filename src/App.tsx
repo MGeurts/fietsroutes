@@ -395,7 +395,7 @@ export default function App() {
 
           <button
             onClick={() => setIsLaravelModalOpen(true)}
-            className="flex items-center gap-1.5 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-medium rounded-md transition cursor-pointer shadow-xs"
+            className="hidden sm:flex items-center gap-1.5 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-medium rounded-md transition cursor-pointer shadow-xs"
             title="Systeem Status & Antagonist / PHP hosting gids"
           >
             <span className="w-2 h-2 rounded-full bg-emerald-400 inline-block animate-pulse" />
