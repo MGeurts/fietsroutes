@@ -19,13 +19,16 @@ export const RoundTripModal: React.FC<RoundTripModalProps> = ({
   onApplyRoute,
 }) => {
   const defaultStart = currentNodes[0] || availableNodes[0];
-  const [startNodeRef, setStartNodeRef] = useState(defaultStart?.ref || '64');
+  const [startNodeId, setStartNodeId] = useState(defaultStart?.id || availableNodes[0]?.id || '');
   const [targetKm, setTargetKm] = useState<number>(35);
 
   if (!isOpen) return null;
 
   const handleGenerate = () => {
-    const startNode = availableNodes.find(n => n.ref === startNodeRef) || availableNodes[0];
+    const startNode =
+      availableNodes.find((n) => n.id === startNodeId) ||
+      availableNodes.find((n) => n.ref === startNodeId) ||
+      availableNodes[0];
     if (!startNode) return;
 
     // Approximate circuit: find 4-7 nearby nodes forming a loop
@@ -106,12 +109,12 @@ export const RoundTripModal: React.FC<RoundTripModalProps> = ({
               Start- en eindknooppunt:
             </label>
             <select
-              value={startNodeRef}
-              onChange={(e) => setStartNodeRef(e.target.value)}
+              value={startNodeId}
+              onChange={(e) => setStartNodeId(e.target.value)}
               className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-800 font-medium focus:ring-2 focus:ring-emerald-500 focus:outline-none"
             >
-              {availableNodes.map(n => (
-                <option key={n.ref} value={n.ref}>
+              {availableNodes.map((n) => (
+                <option key={n.id || `${n.ref}-${n.lat}-${n.lng}`} value={n.id}>
                   KP {n.ref} - {n.name || 'Knooppunt'} ({n.region || n.municipality || 'Limburg/BE/NL'})
                 </option>
               ))}

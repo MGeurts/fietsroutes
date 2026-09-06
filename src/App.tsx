@@ -8,7 +8,7 @@ import { StrookjePrintModal } from './components/StrookjePrintModal';
 import { RoundTripModal } from './components/RoundTripModal';
 import { LaravelAntagonistModal } from './components/LaravelAntagonistModal';
 import { GpxImportModal } from './components/GpxImportModal';
-import { Map, List, Bike, Sparkles, Navigation } from 'lucide-react';
+import { Map, List, Bike, Sparkles, Navigation, Undo2, Redo2 } from 'lucide-react';
 
 export default function App() {
   // Available nodes in current state (preloaded + Overpass queried)
@@ -34,7 +34,7 @@ export default function App() {
   const [elevationGainM, setElevationGainM] = useState<number>(0);
   const [elevationPoints, setElevationPoints] = useState<ElevationPoint[]>([]);
   const [selectedBike, setSelectedBike] = useState<BikeType>('ebike');
-  const [activeTileProvider, setActiveTileProvider] = useState<MapTileProvider>('cyclosm');
+  const [activeTileProvider, setActiveTileProvider] = useState<MapTileProvider>('cyclemap');
 
   // Mobile layout switcher
   const [mobileTab, setMobileTab] = useState<'map' | 'panel'>('map');
@@ -93,16 +93,91 @@ export default function App() {
     };
   }, [selectedNodes]);
 
+  // Undo / Redo History Stacks
+  const [undoStack, setUndoStack] = useState<KnooppuntNode[][]>([]);
+  const [redoStack, setRedoStack] = useState<KnooppuntNode[][]>([]);
+
+  // Function to apply route changes with history preservation
+  const applyRouteUpdate = useCallback((
+    updater: KnooppuntNode[] | ((prev: KnooppuntNode[]) => KnooppuntNode[]),
+    newRouteName?: string
+  ) => {
+    setSelectedNodes((current) => {
+      const next = typeof updater === 'function' ? updater(current) : updater;
+      // Do not push identical state
+      if (current.length === next.length && current.every((n, i) => n.ref === next[i]?.ref)) {
+        return current;
+      }
+      setUndoStack((prev) => [...prev, current]);
+      setRedoStack([]); // New modification clears the redo tree
+      return next;
+    });
+    if (newRouteName !== undefined) {
+      setRouteName(newRouteName);
+    }
+  }, []);
+
+  // Sequential undo in reverse order, down to and including removing the start point
+  const handleUndo = useCallback(() => {
+    if (undoStack.length > 0) {
+      const prevNodes = undoStack[undoStack.length - 1];
+      setUndoStack((prev) => prev.slice(0, -1));
+      setRedoStack((prev) => [...prev, selectedNodes]);
+      setSelectedNodes(prevNodes);
+    } else if (selectedNodes.length > 0) {
+      // Step backwards by popping the last node in reverse order,
+      // all the way down to removing the start point (empty route)
+      setRedoStack((prev) => [...prev, selectedNodes]);
+      setSelectedNodes((prev) => prev.slice(0, -1));
+    }
+  }, [undoStack, selectedNodes]);
+
+  // Redo operation
+  const handleRedo = useCallback(() => {
+    if (redoStack.length === 0) return;
+    const nextNodes = redoStack[redoStack.length - 1];
+    setRedoStack((prev) => prev.slice(0, -1));
+    setUndoStack((prev) => [...prev, selectedNodes]);
+    setSelectedNodes(nextNodes);
+  }, [redoStack, selectedNodes]);
+
+  const canUndo = undoStack.length > 0 || selectedNodes.length > 0;
+  const canRedo = redoStack.length > 0;
+
+  // Keyboard shortcut support: Ctrl+Z (Undo) and Ctrl+Y or Ctrl+Shift+Z (Redo)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement;
+      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) {
+        return;
+      }
+
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && !e.shiftKey) {
+        e.preventDefault();
+        handleUndo();
+      } else if (
+        ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') ||
+        ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'z')
+      ) {
+        e.preventDefault();
+        handleRedo();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [handleUndo, handleRedo]);
+
   // Click on a node: append to route
   const handleNodeClick = useCallback((node: KnooppuntNode) => {
-    setSelectedNodes((prev) => {
+    applyRouteUpdate((prev) => {
       // Don't add same node twice consecutively
       if (prev.length > 0 && prev[prev.length - 1].ref === node.ref) {
         return prev;
       }
       return [...prev, node];
     });
-  }, []);
+  }, [applyRouteUpdate]);
 
   // Add dynamically discovered node from Overpass
   const handleAddNewNode = useCallback((node: KnooppuntNode) => {
@@ -151,13 +226,13 @@ export default function App() {
     });
   }, []);
 
-  // Reordering and removing nodes
+  // Reordering and removing nodes with history tracking
   const handleRemoveNode = (index: number) => {
-    setSelectedNodes((prev) => prev.filter((_, i) => i !== index));
+    applyRouteUpdate((prev) => prev.filter((_, i) => i !== index));
   };
 
   const handleMoveNode = (index: number, direction: 'up' | 'down') => {
-    setSelectedNodes((prev) => {
+    applyRouteUpdate((prev) => {
       const next = [...prev];
       const target = direction === 'up' ? index - 1 : index + 1;
       if (target < 0 || target >= next.length) return prev;
@@ -169,15 +244,12 @@ export default function App() {
   };
 
   const handleReverseRoute = () => {
-    setSelectedNodes((prev) => [...prev].reverse());
+    applyRouteUpdate((prev) => [...prev].reverse());
   };
 
   const handleClearRoute = () => {
-    setSelectedNodes([]);
-    setRouteLegs([]);
-    setFullCoordinates([]);
-    setTotalDistanceKm(0);
-    setElevationGainM(0);
+    if (selectedNodes.length === 0) return;
+    applyRouteUpdate([]);
   };
 
   // GPX Export
@@ -216,13 +288,12 @@ export default function App() {
         name: wpt.name,
       }));
       setAvailableNodes((prev) => [...prev, ...importedNodes]);
-      setSelectedNodes(importedNodes);
+      applyRouteUpdate(importedNodes, routeData.name);
     }
   };
 
   const handleApplyRoundTrip = (nodes: KnooppuntNode[], name: string) => {
-    setSelectedNodes(nodes);
-    setRouteName(name);
+    applyRouteUpdate(nodes, name);
   };
 
   const currentRouteObject: PlannedRoute = {
@@ -312,11 +383,11 @@ export default function App() {
         </div>
 
         {/* Header Right Actions */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 sm:gap-3">
           <button
             onClick={handleExportGpx}
             disabled={selectedNodes.length === 0}
-            className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-xs sm:text-sm font-medium px-3.5 py-2 rounded-md transition-colors shadow-sm cursor-pointer"
+            className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-xs sm:text-sm font-medium px-3 sm:px-3.5 py-2 rounded-md transition-colors shadow-sm cursor-pointer"
             title="Download GPX bestand"
           >
             Route Opslaan
@@ -324,10 +395,10 @@ export default function App() {
 
           <button
             onClick={() => setIsLaravelModalOpen(true)}
-            className="hidden sm:flex items-center gap-1.5 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-medium rounded-md transition cursor-pointer"
-            title="Antagonist hosting & Laravel broncode"
+            className="flex items-center gap-1.5 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-medium rounded-md transition cursor-pointer shadow-xs"
+            title="Systeem Status & Antagonist / PHP hosting gids"
           >
-            <span className="w-2 h-2 rounded-full bg-emerald-400 inline-block" />
+            <span className="w-2 h-2 rounded-full bg-emerald-400 inline-block animate-pulse" />
             <span>Antagonist / PHP</span>
           </button>
 
@@ -362,6 +433,10 @@ export default function App() {
             onMoveNode={handleMoveNode}
             onReverseRoute={handleReverseRoute}
             onClearRoute={handleClearRoute}
+            onUndo={handleUndo}
+            canUndo={canUndo}
+            onRedo={handleRedo}
+            canRedo={canRedo}
             onOpenStrookje={() => setIsStrookjeOpen(true)}
             onExportGpx={handleExportGpx}
             onOpenRoundTrip={() => setIsRoundTripOpen(true)}
@@ -386,6 +461,10 @@ export default function App() {
             onAddNewNodes={handleAddNewNodes}
             activeTileProvider={activeTileProvider}
             onChangeTileProvider={setActiveTileProvider}
+            onUndo={handleUndo}
+            canUndo={canUndo}
+            onRedo={handleRedo}
+            canRedo={canRedo}
           />
         </div>
       </div>

@@ -44,7 +44,7 @@ export interface BikeProfile {
   iconName: string;
 }
 
-export type MapTileProvider = 'cyclosm' | 'osm_waymarked' | 'voyager_waymarked' | 'topo';
+export type MapTileProvider = 'cyclemap' | 'standard' | 'cyclosm' | 'osm_waymarked' | 'voyager_waymarked' | 'topo';
 
 export interface MapLayerOption {
   id: MapTileProvider;

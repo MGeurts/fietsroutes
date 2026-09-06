@@ -2,8 +2,7 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import L from 'leaflet';
 import { KnooppuntNode, MapTileProvider } from '../types';
 import { fetchKnooppuntenInBBox } from '../services/overpassService';
-import { getAllOfficialCorridors } from '../data/officialGisCorridors';
-import { Search, Loader2, Layers, Crosshair, ZoomIn, ZoomOut, Compass, Sparkles, Route } from 'lucide-react';
+import { Search, Loader2, Layers, Crosshair, ZoomIn, ZoomOut, Compass, Sparkles, Undo2, Redo2, X, Info, Check } from 'lucide-react';
 
 interface MapPlannerProps {
   availableNodes: KnooppuntNode[];
@@ -14,6 +13,10 @@ interface MapPlannerProps {
   onAddNewNodes?: (nodes: KnooppuntNode[]) => void;
   activeTileProvider: MapTileProvider;
   onChangeTileProvider: (provider: MapTileProvider) => void;
+  onUndo?: () => void;
+  canUndo?: boolean;
+  onRedo?: () => void;
+  canRedo?: boolean;
 }
 
 // Calculate bearing angle between two coordinates
@@ -56,12 +59,15 @@ export const MapPlanner: React.FC<MapPlannerProps> = ({
   onAddNewNodes,
   activeTileProvider,
   onChangeTileProvider,
+  onUndo,
+  canUndo,
+  onRedo,
+  canRedo,
 }) => {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<L.Map | null>(null);
   const baseTileLayerRef = useRef<L.TileLayer | null>(null);
   const overlayTileLayerRef = useRef<L.TileLayer | null>(null);
-  const networkLayerGroupRef = useRef<L.LayerGroup | null>(null);
   const markersLayerGroupRef = useRef<L.LayerGroup | null>(null);
   const routePolylineRef = useRef<L.Polyline | null>(null);
   const routeDecoratorsLayerRef = useRef<L.LayerGroup | null>(null);
@@ -73,7 +79,7 @@ export const MapPlanner: React.FC<MapPlannerProps> = ({
   const [isSearchingLocation, setIsSearchingLocation] = useState(false);
   const [searchMessage, setSearchMessage] = useState<string | null>(null);
   const [showLayerMenu, setShowLayerMenu] = useState(false);
-  const [showNetworkLines, setShowNetworkLines] = useState(true);
+  const [activeInfoLayer, setActiveInfoLayer] = useState<string | null>(null);
   const [currentZoom, setCurrentZoom] = useState(13);
 
   // Initialize Leaflet Map
@@ -89,20 +95,14 @@ export const MapPlanner: React.FC<MapPlannerProps> = ({
 
     // Explicit custom panes for strict layering:
     // 1. Base tiles: zIndex 200 (default tilePane)
-    // 2. Official Network connections (blue): zIndex 350
-    // 3. Active user route (red): zIndex 450
-    // 4. Markers & Knooppunten badges: zIndex 600 (default markerPane)
-    if (!map.getPane('networkPane')) {
-      const networkPane = map.createPane('networkPane');
-      networkPane.style.zIndex = '350';
-    }
+    // 2. Active user route (red): zIndex 450
+    // 3. Markers & Knooppunten badges: zIndex 600 (default markerPane)
     if (!map.getPane('activeRoutePane')) {
       const activeRoutePane = map.createPane('activeRoutePane');
       activeRoutePane.style.zIndex = '450';
     }
 
     mapInstanceRef.current = map;
-    networkLayerGroupRef.current = L.layerGroup().addTo(map);
     markersLayerGroupRef.current = L.layerGroup().addTo(map);
 
     map.on('zoomend', () => {
@@ -112,7 +112,6 @@ export const MapPlanner: React.FC<MapPlannerProps> = ({
     return () => {
       map.remove();
       mapInstanceRef.current = null;
-      networkLayerGroupRef.current = null;
       markersLayerGroupRef.current = null;
     };
   }, []);
@@ -131,15 +130,26 @@ export const MapPlanner: React.FC<MapPlannerProps> = ({
       overlayTileLayerRef.current = null;
     }
 
-    let tileUrl = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
-    let attribution = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>';
-    let maxZoom = 19;
+    let tileUrl = 'https://{s}.tile.thunderforest.com/cycle/{z}/{x}/{y}.png';
+    let attribution = '&copy; <a href="https://www.opencyclemap.org" target="_blank" rel="noreferrer">OpenCycleMap</a> &bull; &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap</a>';
+    let maxZoom = 18;
     let subdomains = 'abc';
 
-    if (activeTileProvider === 'cyclosm') {
-      tileUrl = 'https://{s}.tile-cyclosm.openstreetmap.fr/cyclosm/{z}/{x}/{y}.png';
-      attribution = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &bull; CyclOSM';
+    if (activeTileProvider === 'cyclemap') {
+      tileUrl = 'https://{s}.tile.thunderforest.com/cycle/{z}/{x}/{y}.png';
+      attribution = '&copy; <a href="https://www.opencyclemap.org" target="_blank" rel="noreferrer">OpenCycleMap</a> &bull; &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap</a>';
       maxZoom = 18;
+      subdomains = 'abc';
+    } else if (activeTileProvider === 'standard') {
+      tileUrl = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
+      attribution = '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap contributors</a>';
+      maxZoom = 19;
+      subdomains = 'abc';
+    } else if (activeTileProvider === 'cyclosm') {
+      tileUrl = 'https://{s}.tile-cyclosm.openstreetmap.fr/cyclosm/{z}/{x}/{y}.png';
+      attribution = '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap</a> &bull; CyclOSM';
+      maxZoom = 18;
+      subdomains = 'abc';
     } else if (activeTileProvider === 'voyager_waymarked') {
       tileUrl = 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
       attribution = '&copy; OpenStreetMap &copy; CARTO';
@@ -301,88 +311,6 @@ export const MapPlanner: React.FC<MapPlannerProps> = ({
       markersGroup.addLayer(marker);
     });
   }, [availableNodes, selectedNodes, onNodeClick]);
-
-  // Render Official Blue Network Connections (OSM RCN Corridors)
-  useEffect(() => {
-    const map = mapInstanceRef.current;
-    const networkGroup = networkLayerGroupRef.current;
-    if (!map || !networkGroup) return;
-
-    networkGroup.clearLayers();
-    if (!showNetworkLines) return;
-
-    const corridors = getAllOfficialCorridors();
-
-    corridors.forEach((corridor) => {
-      if (!corridor.coordinates || corridor.coordinates.length < 2) return;
-
-      // Clean blue line as seen in official OpenStreetMap Cycle map
-      const polyline = L.polyline(corridor.coordinates, {
-        color: '#2563eb', // Authentic cycling network blue
-        weight: 3.5,
-        opacity: 0.8,
-        lineCap: 'round',
-        lineJoin: 'round',
-        pane: 'networkPane',
-      });
-
-      // Hover feedback
-      polyline.on('mouseover', () => {
-        polyline.setStyle({
-          color: '#1d4ed8',
-          weight: 5.5,
-          opacity: 1,
-        });
-      });
-
-      polyline.on('mouseout', () => {
-        polyline.setStyle({
-          color: '#2563eb',
-          weight: 3.5,
-          opacity: 0.8,
-        });
-      });
-
-      // Detailed tooltip
-      polyline.bindTooltip(
-        `<div class="p-1 font-sans text-slate-900">
-           <div class="flex items-center gap-1.5 font-bold text-xs text-blue-900">
-             <span class="w-2.5 h-2.5 rounded-full bg-blue-600 inline-block"></span>
-             <span>Verbinding ${corridor.from} ↔ ${corridor.to}</span>
-           </div>
-           <div class="text-[11px] text-slate-600 mt-0.5">
-             <span class="font-semibold text-slate-800">${corridor.distanceKm} km</span> &bull; Officieel Fietsnetwerk
-           </div>
-           <div class="text-[10px] text-emerald-700 font-medium mt-1">
-             Klik om toe te voegen aan route
-           </div>
-         </div>`,
-        {
-          sticky: true,
-          opacity: 0.95,
-        }
-      );
-
-      // On click: append node to route
-      polyline.on('click', () => {
-        const nodeA = availableNodes.find((n) => n.ref === corridor.from);
-        const nodeB = availableNodes.find((n) => n.ref === corridor.to);
-        if (!nodeA && !nodeB) return;
-
-        const lastSelected = selectedNodes[selectedNodes.length - 1];
-        if (lastSelected?.ref === corridor.from && nodeB) {
-          onNodeClick(nodeB);
-        } else if (lastSelected?.ref === corridor.to && nodeA) {
-          onNodeClick(nodeA);
-        } else if (nodeA && nodeB) {
-          onNodeClick(nodeA);
-          onNodeClick(nodeB);
-        }
-      });
-
-      networkGroup.addLayer(polyline);
-    });
-  }, [showNetworkLines, availableNodes, selectedNodes, onNodeClick]);
 
   // Update Route Polyline and Directional Markers
   useEffect(() => {
@@ -739,24 +667,38 @@ export const MapPlanner: React.FC<MapPlannerProps> = ({
           )}
         </form>
 
-        {/* Action Pills & Layer Switcher */}
+        {/* Action Pills, Undo Controls & Layer Switcher */}
         <div className="pointer-events-auto flex items-center gap-2">
-          {/* Toggle Official Blue Network Lines */}
-          <button
-            onClick={() => setShowNetworkLines(!showNetworkLines)}
-            className={`flex items-center gap-1.5 px-3 py-1.5 backdrop-blur text-xs font-semibold rounded-md border shadow-xs transition active:scale-95 cursor-pointer ${
-              showNetworkLines
-                ? 'bg-blue-50/95 border-blue-300 text-blue-700 ring-1 ring-blue-400/30'
-                : 'bg-white/95 border-slate-200 text-slate-600 hover:bg-slate-50'
-            }`}
-            title="Schakel weergave van officiële knooppuntverbindingen (blauwe lijnen) in/uit"
-          >
+          {/* Map Undo / Redo buttons right on map for quick planning */}
+          {onUndo && (
             <div className="flex items-center gap-1">
-              <span className={`w-3 h-1 rounded-full ${showNetworkLines ? 'bg-blue-600' : 'bg-slate-300'}`} />
-              <Route className={`w-3.5 h-3.5 ${showNetworkLines ? 'text-blue-600' : 'text-slate-400'}`} />
+              <button
+                onClick={onUndo}
+                disabled={!canUndo && selectedNodes.length === 0}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 bg-white/95 backdrop-blur-sm text-slate-700 hover:text-amber-900 hover:bg-amber-50 border border-slate-200 rounded-md text-xs font-semibold shadow-xs transition active:scale-95 disabled:opacity-40 disabled:pointer-events-none cursor-pointer"
+                title="Laatste knooppunt of wijziging in omgekeerde volgorde ongedaan maken tot en met het startpunt (Ctrl+Z)"
+              >
+                <Undo2 className="w-3.5 h-3.5 text-amber-600" />
+                <span className="hidden sm:inline">Ongedaan</span>
+                {selectedNodes.length > 0 && (
+                  <span className="w-4 h-4 rounded-full bg-slate-800 text-white flex items-center justify-center text-[9px] font-bold">
+                    {selectedNodes[selectedNodes.length - 1].ref}
+                  </span>
+                )}
+              </button>
+
+              {canRedo && onRedo && (
+                <button
+                  onClick={onRedo}
+                  className="flex items-center gap-1 px-2 py-1.5 bg-white/95 backdrop-blur-sm text-slate-700 hover:text-slate-900 hover:bg-slate-100 border border-slate-200 rounded-md text-xs font-semibold shadow-xs transition active:scale-95 cursor-pointer"
+                  title="Opnieuw uitvoeren (Ctrl+Y)"
+                >
+                  <Redo2 className="w-3.5 h-3.5 text-slate-600" />
+                  <span className="hidden md:inline">Opnieuw</span>
+                </button>
+              )}
             </div>
-            <span>Netwerk {showNetworkLines ? 'Aan' : 'Uit'}</span>
-          </button>
+          )}
 
           {/* Overpass Query Trigger */}
           <button
@@ -779,55 +721,219 @@ export const MapPlanner: React.FC<MapPlannerProps> = ({
             )}
           </button>
 
-          {/* Quick Map Tile Style Switcher - Professional Polish Theme */}
-          <div className="bg-white/90 backdrop-blur-sm p-1 rounded-md shadow-sm border border-slate-200 flex gap-1">
+          {/* Map Layers Quick Selector & Modal Trigger */}
+          <div className="bg-white/90 backdrop-blur-sm p-1 rounded-md shadow-sm border border-slate-200 flex items-center gap-1">
+            <button
+              onClick={() => onChangeTileProvider('cyclemap')}
+              className={`px-2.5 py-1 text-xs rounded transition cursor-pointer flex items-center gap-1 ${
+                activeTileProvider === 'cyclemap'
+                  ? 'bg-blue-600 text-white font-bold shadow-xs'
+                  : 'text-slate-600 hover:bg-slate-100 font-medium'
+              }`}
+              title="OpenStreetMap Cycle Map (Officiële fietsknooppunten & reliëf)"
+            >
+              <span>Cycle Map</span>
+              {activeTileProvider === 'cyclemap' && <Check className="w-3 h-3 text-white" />}
+            </button>
+            <button
+              onClick={() => onChangeTileProvider('standard')}
+              className={`px-2 py-1 text-xs rounded transition cursor-pointer ${
+                activeTileProvider === 'standard'
+                  ? 'bg-slate-800 text-white font-bold'
+                  : 'text-slate-600 hover:bg-slate-100 font-medium'
+              }`}
+              title="OpenStreetMap Standaard"
+            >
+              Standard
+            </button>
             <button
               onClick={() => onChangeTileProvider('cyclosm')}
-              className={`px-2.5 py-1 text-xs rounded transition cursor-pointer ${
+              className={`px-2 py-1 text-xs rounded transition cursor-pointer ${
                 activeTileProvider === 'cyclosm'
                   ? 'bg-slate-800 text-white font-bold'
                   : 'text-slate-600 hover:bg-slate-100 font-medium'
               }`}
-              title="CyclOSM fietskaart"
+              title="CyclOSM fietsinfrastructuur"
             >
-              Fiets
+              CyclOSM
             </button>
             <button
-              onClick={() => onChangeTileProvider('osm_waymarked')}
-              className={`px-2.5 py-1 text-xs rounded transition cursor-pointer ${
-                activeTileProvider === 'osm_waymarked'
-                  ? 'bg-slate-800 text-white font-bold'
-                  : 'text-slate-600 hover:bg-slate-100 font-medium'
+              onClick={() => setShowLayerMenu(!showLayerMenu)}
+              className={`flex items-center gap-1 px-2 py-1 text-xs rounded transition cursor-pointer border-l border-slate-200 pl-1.5 ml-0.5 ${
+                showLayerMenu ? 'text-blue-600 bg-blue-50 font-bold' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
               }`}
-              title="OpenStreetMap met knooppuntennetwerk"
+              title="Open Kaartlagen paneel (Map Layers)"
             >
-              OSM
-            </button>
-            <button
-              onClick={() => onChangeTileProvider('voyager_waymarked')}
-              className={`px-2.5 py-1 text-xs rounded transition cursor-pointer hidden md:inline-block ${
-                activeTileProvider === 'voyager_waymarked'
-                  ? 'bg-slate-800 text-white font-bold'
-                  : 'text-slate-600 hover:bg-slate-100 font-medium'
-              }`}
-              title="Carto Voyager strakke kaart"
-            >
-              Rustig
-            </button>
-            <button
-              onClick={() => onChangeTileProvider('topo')}
-              className={`px-2.5 py-1 text-xs rounded transition cursor-pointer ${
-                activeTileProvider === 'topo'
-                  ? 'bg-slate-800 text-white font-bold'
-                  : 'text-slate-600 hover:bg-slate-100 font-medium'
-              }`}
-              title="OpenTopoMap met reliëf & hoogtelijnen"
-            >
-              Reliëf
+              <Layers className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Lagen</span>
             </button>
           </div>
         </div>
       </div>
+
+      {/* Map Layers Modal / Popover (Matching exact OpenStreetMap styling from screenshot) */}
+      {showLayerMenu && (
+        <div className="absolute top-16 right-4 sm:right-6 z-[1200] w-72 sm:w-80 bg-white rounded-2xl shadow-2xl border border-slate-200 p-4 animate-in fade-in slide-in-from-top-2 font-sans select-none">
+          {/* Header */}
+          <div className="flex items-center justify-between pb-3 mb-3 border-b border-slate-100">
+            <h2 className="text-2xl font-bold text-slate-800 tracking-tight">Map Layers</h2>
+            <button
+              onClick={() => setShowLayerMenu(false)}
+              className="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition cursor-pointer"
+              title="Sluiten"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+
+          {/* Layer Options List */}
+          <div className="space-y-3">
+            {/* Standard */}
+            <div
+              onClick={() => onChangeTileProvider('standard')}
+              className={`relative h-16 rounded-xl overflow-hidden cursor-pointer transition border ${
+                activeTileProvider === 'standard'
+                  ? 'border-2 border-blue-500 ring-2 ring-blue-500/20 shadow-md'
+                  : 'border-slate-200 hover:border-slate-300'
+              }`}
+            >
+              {/* Thumbnail SVG */}
+              <div className="absolute inset-0 bg-[#e8ece9]">
+                <svg className="w-full h-full object-cover" viewBox="0 0 240 60" preserveAspectRatio="none">
+                  <path d="M0,0 Q60,30 120,10 T240,40 L240,60 L0,60 Z" fill="#cbe3bb" opacity="0.85" />
+                  <path d="M40,0 Q90,50 160,20 T240,10" fill="none" stroke="#ffffff" strokeWidth="4" />
+                  <path d="M0,45 Q100,20 200,55" fill="none" stroke="#fcd6a4" strokeWidth="3" />
+                  <path d="M80,0 L120,60" fill="none" stroke="#ffffff" strokeWidth="2.5" />
+                </svg>
+              </div>
+
+              {/* Title Badge on the left */}
+              <div className="absolute top-2 left-0 bg-white/90 backdrop-blur-xs px-3 py-1 rounded-r-lg shadow-xs border-y border-r border-slate-200/50">
+                <span className="font-bold text-slate-900 text-sm">Standard</span>
+              </div>
+
+              {/* Info icon on the right */}
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setActiveInfoLayer(activeInfoLayer === 'standard' ? null : 'standard');
+                }}
+                className="absolute top-3 right-3 w-6 h-6 rounded-full bg-slate-900/15 hover:bg-slate-900/30 text-slate-800 flex items-center justify-center transition cursor-pointer"
+                title="Info over Standard"
+              >
+                <Info className="w-3.5 h-3.5" />
+              </button>
+            </div>
+
+            {/* CyclOSM */}
+            <div
+              onClick={() => onChangeTileProvider('cyclosm')}
+              className={`relative h-16 rounded-xl overflow-hidden cursor-pointer transition border ${
+                activeTileProvider === 'cyclosm'
+                  ? 'border-2 border-blue-500 ring-2 ring-blue-500/20 shadow-md'
+                  : 'border-slate-200 hover:border-slate-300'
+              }`}
+            >
+              {/* Thumbnail SVG */}
+              <div className="absolute inset-0 bg-[#f0f3f0]">
+                <svg className="w-full h-full object-cover" viewBox="0 0 240 60" preserveAspectRatio="none">
+                  <path d="M0,20 Q80,10 140,40 T240,20" fill="none" stroke="#3b82f6" strokeWidth="3" />
+                  <path d="M30,0 Q70,60 110,30 T180,60" fill="none" stroke="#2563eb" strokeWidth="2.5" />
+                  <path d="M120,10 Q160,35 220,15" fill="none" stroke="#92400e" strokeWidth="2.5" strokeDasharray="3,2" />
+                  <path d="M0,40 Q90,55 190,35" fill="none" stroke="#b45309" strokeWidth="2" strokeDasharray="2,2" />
+                </svg>
+              </div>
+
+              {/* Title Badge on the left */}
+              <div className="absolute top-2 left-0 bg-white/90 backdrop-blur-xs px-3 py-1 rounded-r-lg shadow-xs border-y border-r border-slate-200/50">
+                <span className="font-bold text-slate-900 text-sm">CyclOSM</span>
+              </div>
+
+              {/* Info icon on the right */}
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setActiveInfoLayer(activeInfoLayer === 'cyclosm' ? null : 'cyclosm');
+                }}
+                className="absolute top-3 right-3 w-6 h-6 rounded-full bg-slate-900/15 hover:bg-slate-900/30 text-slate-800 flex items-center justify-center transition cursor-pointer"
+                title="Info over CyclOSM"
+              >
+                <Info className="w-3.5 h-3.5" />
+              </button>
+            </div>
+
+            {/* Cycle Map (OpenCycleMap) - Highlighted Active Option */}
+            <div
+              onClick={() => onChangeTileProvider('cyclemap')}
+              className={`relative h-16 rounded-xl overflow-hidden cursor-pointer transition border ${
+                activeTileProvider === 'cyclemap'
+                  ? 'border-2 border-blue-500 ring-2 ring-blue-500/30 shadow-md'
+                  : 'border-slate-200 hover:border-slate-300'
+              }`}
+            >
+              {/* Thumbnail SVG matching user screenshot */}
+              <div className="absolute inset-0 bg-[#eaf2e8]">
+                <svg className="w-full h-full object-cover" viewBox="0 0 240 60" preserveAspectRatio="none">
+                  {/* Subtle terrain contours */}
+                  <path d="M0,15 Q60,5 120,25 T240,10" fill="none" stroke="#d5dec5" strokeWidth="1" />
+                  <path d="M0,35 Q70,45 150,20 T240,40" fill="none" stroke="#d5dec5" strokeWidth="1" />
+                  {/* National orange cycle route */}
+                  <path d="M110,0 Q130,30 180,15 T240,45" fill="none" stroke="#ea580c" strokeWidth="2" />
+                  {/* Regional purple knooppunten route */}
+                  <path d="M0,40 Q45,25 70,30 T140,15 T220,35" fill="none" stroke="#9333ea" strokeWidth="2.5" />
+                  <path d="M60,50 L70,30 L80,5" fill="none" stroke="#9333ea" strokeWidth="2" />
+                  {/* Purple node circle badges with numbers */}
+                  <circle cx="70" cy="30" r="10" fill="#f3e8ff" stroke="#9333ea" strokeWidth="1.8" />
+                  <text x="70" y="33.5" textAnchor="middle" fontSize="9" fontWeight="bold" fill="#7e22ce" fontFamily="sans-serif">64</text>
+                  <circle cx="140" cy="15" r="10" fill="#f3e8ff" stroke="#9333ea" strokeWidth="1.8" />
+                  <text x="140" y="18.5" textAnchor="middle" fontSize="8" fontWeight="bold" fill="#7e22ce" fontFamily="sans-serif">251</text>
+                  <circle cx="210" cy="40" r="10" fill="#f3e8ff" stroke="#9333ea" strokeWidth="1.8" />
+                  <text x="210" y="43.5" textAnchor="middle" fontSize="8" fontWeight="bold" fill="#7e22ce" fontFamily="sans-serif">532</text>
+                </svg>
+              </div>
+
+              {/* Title Badge on the left */}
+              <div className="absolute top-2 left-0 bg-white/90 backdrop-blur-xs px-3 py-1 rounded-r-lg shadow-xs border-y border-r border-slate-200/50">
+                <span className="font-bold text-slate-900 text-sm">Cycle Map</span>
+              </div>
+
+              {/* Info icon on the right */}
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setActiveInfoLayer(activeInfoLayer === 'cyclemap' ? null : 'cyclemap');
+                }}
+                className="absolute top-3 right-3 w-6 h-6 rounded-full bg-slate-900/15 hover:bg-slate-900/30 text-slate-800 flex items-center justify-center transition cursor-pointer"
+                title="Info over Cycle Map"
+              >
+                <Info className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+
+          {/* Info Card if user clicked (i) */}
+          {activeInfoLayer && (
+            <div className="mt-3 p-2.5 bg-blue-50 rounded-lg text-xs text-blue-900 border border-blue-200 animate-in fade-in">
+              <div className="font-semibold mb-1">
+                {activeInfoLayer === 'cyclemap' && 'Cycle Map (OpenCycleMap)'}
+                {activeInfoLayer === 'standard' && 'Standard (OpenStreetMap)'}
+                {activeInfoLayer === 'cyclosm' && 'CyclOSM (Fietsinfrastructuur)'}
+              </div>
+              <p className="text-[11px] leading-relaxed text-blue-800">
+                {activeInfoLayer === 'cyclemap' &&
+                  'De officiële OpenStreetMap Cycle Map (OpenCycleMap). Toont gemarkeerde fietsknooppunten (paarse cirkels met nummers), genummerde verbindingsroutes en hoogtelijnen.'}
+                {activeInfoLayer === 'standard' &&
+                  'De standaard OpenStreetMap kaartweergave met volledige topografie en straten.'}
+                {activeInfoLayer === 'cyclosm' &&
+                  'Kaartstijl gespecialiseerd in fietsinfrastructuur, fietspaden, gravel- en mountainbiketrails.'}
+              </p>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Floating Status Notification */}
       {searchMessage && (
@@ -841,6 +947,19 @@ export const MapPlanner: React.FC<MapPlannerProps> = ({
 
       {/* Map Floating Right Navigation Buttons - Professional Polish Theme */}
       <div className="absolute bottom-6 right-6 z-[1000] flex flex-col gap-2 pointer-events-auto">
+        {/* Map Layers toggle button */}
+        <button
+          onClick={() => setShowLayerMenu(!showLayerMenu)}
+          className={`w-11 h-11 bg-white shadow-xl rounded-full border flex items-center justify-center transition cursor-pointer ${
+            showLayerMenu
+              ? 'text-blue-600 bg-blue-50 border-blue-400 ring-2 ring-blue-400/30'
+              : 'text-slate-700 hover:text-blue-600 border-slate-200 hover:border-slate-300'
+          }`}
+          title="Kaartlagen kiezen (Map Layers)"
+        >
+          <Layers className="w-5 h-5" />
+        </button>
+
         {/* Zoom controls */}
         <div className="bg-white shadow-xl rounded-lg p-1 border border-slate-200 flex flex-col">
           <button
@@ -883,18 +1002,17 @@ export const MapPlanner: React.FC<MapPlannerProps> = ({
       {/* Map Bottom-Left Attribution & Helper Badge */}
       <div className="absolute bottom-6 left-6 z-[1000] flex flex-col sm:flex-row items-start sm:items-center gap-2 pointer-events-none">
         <div className="bg-white/90 backdrop-blur-md px-3 py-1.5 text-[11px] text-slate-700 rounded-md border border-slate-200 shadow-xs flex items-center gap-3">
-          <div className="flex items-center gap-1.5" title="Officiële verbindingen tussen knooppunten">
-            <span className="w-3.5 h-1 bg-blue-600 rounded-full inline-block"></span>
-            <span className="font-semibold text-blue-900">Fietsnetwerk (OSM)</span>
-          </div>
           <div className="flex items-center gap-1.5" title="Jouw geplande route">
             <span className="w-3.5 h-1 bg-red-600 rounded-full inline-block"></span>
             <span className="font-semibold text-red-900">Geplande route</span>
           </div>
+          <div className="text-[10px] text-slate-500 font-medium">
+            OpenCycleMap toont alle officiële fietsknooppunten en verbindingen
+          </div>
         </div>
         <div className="hidden sm:flex items-center gap-2 bg-white/90 backdrop-blur px-3 py-1.5 rounded-md border border-slate-200 text-[11px] font-medium text-slate-600 shadow-xs">
           <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-          <span>Klik op knooppunten of blauwe lijnen om route uit te breiden</span>
+          <span>Klik op knooppunten om je route op te bouwen</span>
         </div>
       </div>
     </div>

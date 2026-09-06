@@ -1,5 +1,21 @@
 import React, { useState } from 'react';
-import { Server, Code, Copy, Check, X, ShieldCheck, Database, ExternalLink, GitBranch, Zap } from 'lucide-react';
+import {
+  Server,
+  Code,
+  Copy,
+  Check,
+  X,
+  ShieldCheck,
+  Database,
+  ExternalLink,
+  GitBranch,
+  Zap,
+  Activity,
+  CheckCircle2,
+  HardDrive,
+  Cpu,
+  Layers,
+} from 'lucide-react';
 
 interface LaravelAntagonistModalProps {
   isOpen: boolean;
@@ -10,7 +26,9 @@ export const LaravelAntagonistModal: React.FC<LaravelAntagonistModalProps> = ({
   isOpen,
   onClose,
 }) => {
-  const [activeTab, setActiveTab] = useState<'overview' | 'herd' | 'laravel' | 'php_simple' | 'htaccess' | 'github_actions'>('overview');
+  const [activeTab, setActiveTab] = useState<
+    'status' | 'overview' | 'herd' | 'laravel' | 'php_simple' | 'htaccess' | 'github_actions'
+  >('status');
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
   if (!isOpen) return null;
@@ -310,6 +328,19 @@ jobs:
         {/* Tab Navigation */}
         <div className="flex border-b border-slate-200 bg-slate-100/70 px-4 pt-2 gap-1 overflow-x-auto text-xs">
           <button
+            onClick={() => setActiveTab('status')}
+            className={`px-3 py-2 rounded-t-lg font-bold transition flex items-center gap-1.5 cursor-pointer shrink-0 ${
+              activeTab === 'status'
+                ? 'bg-white text-slate-900 border-t-2 border-emerald-600 shadow-xs'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
+            }`}
+          >
+            <Activity className="w-3.5 h-3.5 text-emerald-600" />
+            <span>Systeem Status</span>
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+          </button>
+
+          <button
             onClick={() => setActiveTab('overview')}
             className={`px-3 py-2 rounded-t-lg font-bold transition flex items-center gap-1.5 cursor-pointer shrink-0 ${
               activeTab === 'overview'
@@ -384,6 +415,138 @@ jobs:
 
         {/* Tab Content */}
         <div className="p-6 overflow-y-auto flex-1 space-y-4 text-xs text-slate-700 leading-relaxed">
+          {activeTab === 'status' && (
+            <div className="space-y-4">
+              {/* Primary System Status Banner */}
+              <div className="bg-slate-900 text-white p-4 rounded-xl shadow-lg border border-slate-800 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-3 h-3 rounded-full bg-emerald-400 animate-ping inline-block" />
+                    <span className="text-sm font-bold text-white tracking-wide">
+                      Systeem Status: Operationeel &amp; Actief
+                    </span>
+                  </div>
+                  <span className="text-[11px] bg-emerald-950 text-emerald-300 font-semibold px-2.5 py-1 rounded-full border border-emerald-800">
+                    PHP 8.2 / 8.3 Ready
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2 border-t border-slate-800 text-[11px]">
+                  <div>
+                    <span className="text-slate-400">Hosting:</span>{' '}
+                    <strong className="text-slate-200">Antagonist Standard PHP (8.2/8.3 Apache + FPM)</strong>
+                  </div>
+                  <div>
+                    <span className="text-slate-400">Engine:</span>{' '}
+                    <strong className="text-slate-200">Laravel OSS Core &amp; OpenStreetMap</strong>
+                  </div>
+                  <div>
+                    <span className="text-slate-400">Auteur:</span>{' '}
+                    <strong className="text-slate-200">Marc Geurts (Zutendaal, Limburg)</strong>
+                  </div>
+                  <div>
+                    <span className="text-slate-400">Repository:</span>{' '}
+                    <a
+                      href="https://github.com/MGeurts/fietsroute"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-emerald-400 hover:underline font-mono"
+                    >
+                      MGeurts/fietsroute
+                    </a>
+                  </div>
+                </div>
+              </div>
+
+              {/* Service & Component Monitor */}
+              <div className="space-y-2">
+                <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider">
+                  Live Componenten &amp; Services
+                </h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg flex items-start gap-2.5">
+                    <div className="w-7 h-7 rounded-md bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0 mt-0.5">
+                      <Layers className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-1.5 font-bold text-slate-800">
+                        <span>OpenCycleMap (OSM)</span>
+                        <span className="text-[9px] bg-emerald-100 text-emerald-800 px-1 rounded font-bold">Online</span>
+                      </div>
+                      <p className="text-[11px] text-slate-500">
+                        Fietsknooppuntentegels en hoogteprofielen direct gerenderd in de Leaflet canvas.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg flex items-start gap-2.5">
+                    <div className="w-7 h-7 rounded-md bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0 mt-0.5">
+                      <Cpu className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-1.5 font-bold text-slate-800">
+                        <span>BRouter &amp; Overpass API</span>
+                        <span className="text-[9px] bg-emerald-100 text-emerald-800 px-1 rounded font-bold">Actief</span>
+                      </div>
+                      <p className="text-[11px] text-slate-500">
+                        Dynamische knooppunten &amp; fietspadnavigatie (Stadsfiets, E-bike, Race, Gravel).
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg flex items-start gap-2.5">
+                    <div className="w-7 h-7 rounded-md bg-blue-100 text-blue-700 flex items-center justify-center shrink-0 mt-0.5">
+                      <Database className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-1.5 font-bold text-slate-800">
+                        <span>Antagonist MySQL Opslag</span>
+                        <span className="text-[9px] bg-blue-100 text-blue-800 px-1 rounded font-bold">Gereed</span>
+                      </div>
+                      <p className="text-[11px] text-slate-500">
+                        Routes opslaan en laden via de standalone <code>api.php</code> of Laravel Controller.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg flex items-start gap-2.5">
+                    <div className="w-7 h-7 rounded-md bg-amber-100 text-amber-700 flex items-center justify-center shrink-0 mt-0.5">
+                      <HardDrive className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-1.5 font-bold text-slate-800">
+                        <span>Antagonist Shared Hosting</span>
+                        <span className="text-[9px] bg-emerald-100 text-emerald-800 px-1 rounded font-bold">100% Compatibel</span>
+                      </div>
+                      <p className="text-[11px] text-slate-500">
+                        Geen Node.js daemon vereist; draait als statische geoptimaliseerde bundel onder Apache.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Navigation Shortcuts */}
+              <div className="p-3.5 bg-slate-100 rounded-xl border border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-2">
+                <div className="text-[11px] text-slate-600">
+                  Wil je direct broncode kopiëren of de deploy instellen?
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setActiveTab('overview')}
+                    className="px-2.5 py-1.5 bg-white hover:bg-slate-50 border border-slate-300 rounded text-[11px] font-semibold text-slate-800 cursor-pointer shadow-2xs"
+                  >
+                    Hosting Overzicht
+                  </button>
+                  <button
+                    onClick={() => setActiveTab('laravel')}
+                    className="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-[11px] font-semibold cursor-pointer shadow-xs"
+                  >
+                    Laravel Controller
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
           {activeTab === 'overview' && (
             <div className="space-y-4">
               <div className="p-4 bg-emerald-50 rounded-xl border border-emerald-200 flex items-start gap-3">
