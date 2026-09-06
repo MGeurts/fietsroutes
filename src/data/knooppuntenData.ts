@@ -24,7 +24,7 @@ export const INITIAL_NODES: KnooppuntNode[] = [
     municipality: 'Zutendaal',
     region: 'Belgisch Limburg',
     highlight: 'Kerkplein Zutendaal & Groenste snoepje van Vlaanderen',
-    connections: ['64', '534', '252', '62', '29']
+    connections: ['64', '534', '252']
   },
   {
     id: 'kp-64',
@@ -35,7 +35,7 @@ export const INITIAL_NODES: KnooppuntNode[] = [
     municipality: 'Zutendaal',
     region: 'Belgisch Limburg',
     highlight: 'Toegangspoort Lieteberg, blotevoetenpad & insectenmuseum',
-    connections: ['251', '62', '532', '567']
+    connections: ['251', '532', '567']
   },
   {
     id: 'kp-62',
@@ -45,7 +45,7 @@ export const INITIAL_NODES: KnooppuntNode[] = [
     name: 'Bessemer / N77',
     municipality: 'Zutendaal',
     region: 'Belgisch Limburg',
-    connections: ['64', '251', '63', '550', '252', '65', '532']
+    connections: ['252', '65', '532', '63']
   },
   {
     id: 'kp-65',
@@ -61,8 +61,8 @@ export const INITIAL_NODES: KnooppuntNode[] = [
   {
     id: 'kp-533',
     ref: '533',
-    lat: 50.88941,
-    lng: 5.57699,
+    lat: 50.89328,
+    lng: 5.57250,
     name: 'Eigenbilzen / Albertkanaal',
     municipality: 'Bilzen',
     region: 'Belgisch Limburg',
@@ -87,7 +87,7 @@ export const INITIAL_NODES: KnooppuntNode[] = [
     name: 'Bessemerveld / Gellik',
     municipality: 'Lanaken / Zutendaal',
     region: 'Belgisch Limburg',
-    connections: ['62', '131']
+    connections: ['62', '140', '131']
   },
   {
     id: 'kp-252',
@@ -97,7 +97,7 @@ export const INITIAL_NODES: KnooppuntNode[] = [
     name: 'Wiemesmeer / Trichterweg',
     municipality: 'Zutendaal',
     region: 'Belgisch Limburg',
-    connections: ['251', '534', '550', '62']
+    connections: ['251', '550', '62']
   },
   {
     id: 'kp-534',
@@ -107,7 +107,7 @@ export const INITIAL_NODES: KnooppuntNode[] = [
     name: 'Papendaal / Molenblook',
     municipality: 'Zutendaal',
     region: 'Belgisch Limburg',
-    connections: ['251', '252', '29']
+    connections: ['251', '29', '535']
   },
   {
     id: 'kp-550',
@@ -118,7 +118,7 @@ export const INITIAL_NODES: KnooppuntNode[] = [
     municipality: 'Maasmechelen / Zutendaal',
     region: 'Belgisch Limburg',
     highlight: '★ Iconische houten fietsbrug door de Mechelse Heide',
-    connections: ['252', '62', '60']
+    connections: ['252', '551', '60']
   },
   {
     id: 'kp-567',
@@ -128,7 +128,7 @@ export const INITIAL_NODES: KnooppuntNode[] = [
     name: 'Stalkerbos',
     municipality: 'Zutendaal',
     region: 'Belgisch Limburg',
-    connections: ['64', '69', '29']
+    connections: ['64', '29', '69']
   },
   {
     id: 'kp-69',
@@ -148,7 +148,7 @@ export const INITIAL_NODES: KnooppuntNode[] = [
     name: 'Roelen / Munsterbilzen grens',
     municipality: 'Zutendaal / Bilzen',
     region: 'Belgisch Limburg',
-    connections: ['64', '533', '62', '69']
+    connections: ['64', '533', '62']
   },
   {
     id: 'kp-29',
@@ -158,7 +158,7 @@ export const INITIAL_NODES: KnooppuntNode[] = [
     name: 'Sledderlo / Genk Zuid',
     municipality: 'Genk / Zutendaal',
     region: 'Belgisch Limburg',
-    connections: ['251', '534', '567', '30']
+    connections: ['534', '567', '30', '560']
   },
   {
     id: 'kp-30',
@@ -233,7 +233,7 @@ export const INITIAL_NODES: KnooppuntNode[] = [
     name: 'Kruisberg & RivierPark Maasvallei',
     municipality: 'Lanaken',
     region: 'Belgisch Limburg',
-    connections: ['60', '503', '64']
+    connections: ['60', '503']
   },
   {
     id: 'kp-503',
