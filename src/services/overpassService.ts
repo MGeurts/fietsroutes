@@ -53,10 +53,10 @@ export async function fetchKnooppuntenInBBox(
   `.replace(/\s+/g, ' ').trim();
 
   const endpoints = [
+    'https://overpass-api.de/api/interpreter',
     'https://overpass.kumi.systems/api/interpreter',
-    'https://maps.mail.ru/osm/tools/overpass/api/interpreter',
     'https://overpass.private.coffee/api/interpreter',
-    'https://overpass-api.de/api/interpreter'
+    'https://maps.mail.ru/osm/tools/overpass/api/interpreter'
   ];
 
   for (const endpoint of endpoints) {
@@ -66,7 +66,10 @@ export async function fetchKnooppuntenInBBox(
     try {
       const response = await fetch(endpoint, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'User-Agent': 'FietsknooppuntenApp/1.0'
+        },
         body: `data=${encodeURIComponent(query)}`,
         signal: signal || timeoutController.signal
       });
@@ -122,4 +125,28 @@ export async function fetchKnooppuntenInBBox(
   }
 
   return [];
+}
+
+/**
+ * Fetch knooppunten specifically around a target coordinate (e.g. an address or current location)
+ * within a given radius in kilometers (default: 6 km).
+ */
+export async function fetchKnooppuntenAroundPoint(
+  lat: number,
+  lng: number,
+  radiusKm: number = 6,
+  signal?: AbortSignal
+): Promise<KnooppuntNode[]> {
+  const kmPerLat = 111.0;
+  const kmPerLng = 111.0 * Math.cos((lat * Math.PI) / 180);
+
+  const deltaLat = radiusKm / kmPerLat;
+  const deltaLng = radiusKm / Math.max(kmPerLng, 10);
+
+  const south = lat - deltaLat;
+  const north = lat + deltaLat;
+  const west = lng - deltaLng;
+  const east = lng + deltaLng;
+
+  return fetchKnooppuntenInBBox(south, west, north, east, signal);
 }

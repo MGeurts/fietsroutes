@@ -1,8 +1,10 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import L from 'leaflet';
 import { KnooppuntNode, MapTileProvider } from '../types';
-import { fetchKnooppuntenInBBox } from '../services/overpassService';
-import { Search, Loader2, Layers, Crosshair, ZoomIn, ZoomOut, Compass, Sparkles, Undo2, Redo2, X, Info, Check, PanelLeftClose, PanelLeftOpen, MapPin, Key, ExternalLink, HelpCircle } from 'lucide-react';
+import { fetchKnooppuntenInBBox, fetchKnooppuntenAroundPoint } from '../services/overpassService';
+import { calculateHaversineDistanceKm } from '../services/routingService';
+import { searchPlacesAndAddresses, isKnooppuntQuery, PlaceSearchResult } from '../services/geocodingService';
+import { Search, Loader2, Layers, Crosshair, ZoomIn, ZoomOut, Compass, Sparkles, Undo2, Redo2, X, Info, Check, PanelLeftClose, PanelLeftOpen, MapPin, Key, ExternalLink, HelpCircle, Database } from 'lucide-react';
 
 export interface SearchedAddressItem {
   lat: number;
@@ -10,6 +12,7 @@ export interface SearchedAddressItem {
   title: string;
   subtitle: string;
   type?: string;
+  isCity?: boolean;
 }
 
 export interface SearchCandidatesState {
@@ -34,6 +37,7 @@ interface MapPlannerProps {
   redoNodeRef?: string;
   isSidebarCollapsed?: boolean;
   onToggleSidebar?: () => void;
+  onOpenDataModal?: () => void;
 }
 
 // Calculate bearing angle between two coordinates
@@ -83,6 +87,7 @@ export const MapPlanner: React.FC<MapPlannerProps> = ({
   redoNodeRef,
   isSidebarCollapsed,
   onToggleSidebar,
+  onOpenDataModal,
 }) => {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<L.Map | null>(null);
@@ -96,6 +101,12 @@ export const MapPlanner: React.FC<MapPlannerProps> = ({
   const searchedAddressMarkerRef = useRef<L.Marker | null>(null);
   const hasAutoLocatedOnStartRef = useRef(false);
   const nodeMarkersRef = useRef<Map<string, L.Marker>>(new Map());
+
+  // Keep a current reference to availableNodes for async event listeners & popups
+  const availableNodesRef = useRef<KnooppuntNode[]>(availableNodes);
+  useEffect(() => {
+    availableNodesRef.current = availableNodes;
+  }, [availableNodes]);
 
   const [isSearchingNodes, setIsSearchingNodes] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -482,6 +493,100 @@ export const MapPlanner: React.FC<MapPlannerProps> = ({
     }
   }, [onAddNewNodes, onAddNewNode]);
 
+  // Center map on a knooppunt without adding it to the route
+  const centerOnKnooppunt = useCallback((node: KnooppuntNode) => {
+    const map = mapInstanceRef.current;
+    if (!map) return;
+
+    map.flyTo([node.lat, node.lng], 15, { duration: 1.2 });
+    setSearchMessage(`Knooppunt ${node.ref} (${node.municipality || node.name || 'Gecentreerd'})`);
+    setTimeout(() => setSearchMessage(null), 3500);
+
+    // Open popup after fly animation completes
+    setTimeout(() => {
+      const idKey = String(node.id || node.ref);
+      const marker = nodeMarkersRef.current.get(idKey);
+      if (marker) {
+        marker.openPopup();
+      }
+    }, 1200);
+
+    setSearchCandidates(null);
+    setSearchQuery('');
+  }, []);
+
+  // Find closest knooppunt to specific coordinates (e.g. address or current location)
+  // If not loaded in local cache within 5 km, dynamically fetches from Overpass around coordinates
+  // to strictly avoid jumping across the country to a distant preloaded node!
+  const handleFindNearestToCoordinates = useCallback(async (lat: number, lng: number, label: string = 'locatie') => {
+    const currentNodes = availableNodesRef.current;
+
+    // 1. Check if any node in local memory is already within 4.5 km
+    let bestExisting: KnooppuntNode | null = null;
+    let minExistingDistKm = Infinity;
+
+    for (const n of currentNodes) {
+      const dKm = calculateHaversineDistanceKm(lat, lng, n.lat, n.lng);
+      if (dKm < minExistingDistKm) {
+        minExistingDistKm = dKm;
+        bestExisting = n;
+      }
+    }
+
+    // If we already have a genuine nearby node (<= 4.5 km), jump to it directly!
+    if (bestExisting && minExistingDistKm <= 4.5) {
+      centerOnKnooppunt(bestExisting);
+      setSearchMessage(`Dichtstbijzijnde knooppunt ${(bestExisting as KnooppuntNode).ref} (${minExistingDistKm.toFixed(1)} km van ${label})`);
+      setTimeout(() => setSearchMessage(null), 4000);
+      return;
+    }
+
+    // 2. Otherwise: do NOT jump across the country!
+    // Dynamically fetch knooppunten around this location (radius 6.5 km)
+    setSearchMessage(`Knooppunten ophalen in de buurt van ${label}...`);
+    setIsSearchingNodes(true);
+
+    try {
+      const fetched = await fetchKnooppuntenAroundPoint(lat, lng, 6.5);
+      if (fetched.length > 0) {
+        if (onAddNewNodes) {
+          onAddNewNodes(fetched);
+        } else if (onAddNewNode) {
+          fetched.forEach((n) => onAddNewNode(n));
+        }
+
+        // Find closest among newly fetched
+        let bestFetched: KnooppuntNode | null = null;
+        let minFetchedDistKm = Infinity;
+        for (const n of fetched) {
+          const dKm = calculateHaversineDistanceKm(lat, lng, n.lat, n.lng);
+          if (dKm < minFetchedDistKm) {
+            minFetchedDistKm = dKm;
+            bestFetched = n;
+          }
+        }
+
+        if (bestFetched) {
+          centerOnKnooppunt(bestFetched);
+          setSearchMessage(`Dichtstbijzijnde knooppunt ${(bestFetched as KnooppuntNode).ref} gevonden (${minFetchedDistKm.toFixed(1)} km van ${label})`);
+        }
+      } else {
+        setSearchMessage(`Geen fietsknooppunt gevonden binnen 6.5 km van ${label}.`);
+      }
+    } catch {
+      // Fallback: only use bestExisting if reasonably close (within 10 km)
+      if (bestExisting && minExistingDistKm <= 10.0) {
+        centerOnKnooppunt(bestExisting);
+        setSearchMessage(`Knooppunt ${(bestExisting as KnooppuntNode).ref} (${minExistingDistKm.toFixed(1)} km)`);
+      } else {
+        setSearchMessage(`Kon knooppunten rond ${label} momenteel niet ophalen.`);
+      }
+    } finally {
+      setIsSearchingNodes(false);
+      setTimeout(() => setSearchMessage(null), 4500);
+    }
+  }, [centerOnKnooppunt, onAddNewNodes, onAddNewNode]);
+
   // Place distinct red dot on current location with pulse animation
   const placeCurrentLocationDot = useCallback((lat: number, lng: number, accuracy?: number) => {
     const map = mapInstanceRef.current;
@@ -542,26 +647,13 @@ export const MapPlanner: React.FC<MapPlannerProps> = ({
       const btn = document.getElementById('btn-find-nearest-node');
       if (btn) {
         btn.onclick = () => {
-          let nearestNode: KnooppuntNode | null = null;
-          let minDist = Infinity;
-          availableNodes.forEach((n) => {
-            const d = Math.hypot(n.lat - lat, n.lng - lng);
-            if (d < minDist) {
-              minDist = d;
-              nearestNode = n;
-            }
-          });
-          if (nearestNode) {
-            centerOnKnooppunt(nearestNode);
-            setSearchMessage(`Dichtstbijzijnde knooppunt ${(nearestNode as KnooppuntNode).ref} getoond`);
-            setTimeout(() => setSearchMessage(null), 3500);
-          }
+          handleFindNearestToCoordinates(lat, lng, 'huidige locatie');
         };
       }
     });
 
     currentLocationMarkerRef.current = marker;
-  }, [availableNodes]);
+  }, [handleFindNearestToCoordinates]);
 
   // Center on user geolocation and place red dot
   const handleLocateMe = useCallback(() => {
@@ -596,28 +688,6 @@ export const MapPlanner: React.FC<MapPlannerProps> = ({
       }
     );
   }, [placeCurrentLocationDot]);
-
-  // Center map on a knooppunt without adding it to the route
-  const centerOnKnooppunt = useCallback((node: KnooppuntNode) => {
-    const map = mapInstanceRef.current;
-    if (!map) return;
-
-    map.flyTo([node.lat, node.lng], 15, { duration: 1.2 });
-    setSearchMessage(`Knooppunt ${node.ref} (${node.municipality || node.name || 'Gecentreerd'})`);
-    setTimeout(() => setSearchMessage(null), 3500);
-
-    // Open popup after fly animation completes
-    setTimeout(() => {
-      const idKey = String(node.id || node.ref);
-      const marker = nodeMarkersRef.current.get(idKey);
-      if (marker) {
-        marker.openPopup();
-      }
-    }, 1200);
-
-    setSearchCandidates(null);
-    setSearchQuery('');
-  }, []);
 
   // Center map on a searched address, zoom in, and place prominent marker
   const centerOnAddress = useCallback((addr: SearchedAddressItem) => {
@@ -679,20 +749,7 @@ export const MapPlanner: React.FC<MapPlannerProps> = ({
       const btn = document.getElementById('btn-find-nearest-node-addr');
       if (btn) {
         btn.onclick = () => {
-          let nearestNode: KnooppuntNode | null = null;
-          let minDist = Infinity;
-          availableNodes.forEach((n) => {
-            const d = Math.hypot(n.lat - lat, n.lng - lng);
-            if (d < minDist) {
-              minDist = d;
-              nearestNode = n;
-            }
-          });
-          if (nearestNode) {
-            centerOnKnooppunt(nearestNode);
-            setSearchMessage(`Dichtstbijzijnde knooppunt ${(nearestNode as KnooppuntNode).ref} getoond`);
-            setTimeout(() => setSearchMessage(null), 3500);
-          }
+          handleFindNearestToCoordinates(lat, lng, addr.title);
         };
       }
       const removeBtn = document.getElementById('btn-remove-addr-pin');
@@ -717,96 +774,87 @@ export const MapPlanner: React.FC<MapPlannerProps> = ({
       marker.openPopup();
     }, 1200);
 
-    // Auto-discover nearby knooppunten around the address
-    setTimeout(() => {
-      handleScanBBoxForKnooppunten();
-    }, 1500);
+    // Eagerly pre-load knooppunten around the searched address immediately
+    fetchKnooppuntenAroundPoint(lat, lng, 6.5)
+      .then((nearby) => {
+        if (nearby.length > 0) {
+          if (onAddNewNodes) {
+            onAddNewNodes(nearby);
+          } else if (onAddNewNode) {
+            nearby.forEach((n) => onAddNewNode(n));
+          }
+          setSearchMessage(`${addr.title} gevonden • ${nearby.length} fietsknooppunten geladen`);
+          setTimeout(() => setSearchMessage(null), 4000);
+        }
+      })
+      .catch(() => {});
 
     setSearchCandidates(null);
     setSearchQuery('');
-  }, [availableNodes, centerOnKnooppunt, handleScanBBoxForKnooppunten]);
+  }, [onAddNewNodes, onAddNewNode, handleFindNearestToCoordinates]);
 
   // Process search query for knooppunten or addresses
-  const handleProcessSearchQuery = useCallback((queryRaw: string) => {
+  const handleProcessSearchQuery = useCallback(async (queryRaw: string) => {
     const queryStr = queryRaw.trim();
     if (!queryStr || !mapInstanceRef.current) return;
 
-    // Check if query is a knooppunt reference (e.g. "131", "kp 131", "knooppunt 131")
-    const kpMatch = queryStr.match(/^(?:knooppunt|kp\.?|node)?\s*([0-9a-zA-Z]+)$/i);
-    const searchRef = kpMatch ? kpMatch[1].toLowerCase() : queryStr.toLowerCase();
+    // 1. Check if query is a knooppunt reference (e.g. "131", "kp 131", "42a")
+    if (isKnooppuntQuery(queryStr)) {
+      const kpMatch = queryStr.match(/^(?:knooppunt|kp\.?|node)?\s*([a-z]?\d{1,4}[a-z]?)$/i);
+      const searchRef = kpMatch ? kpMatch[1].toLowerCase() : queryStr.toLowerCase();
 
-    // Find all nodes in availableNodes that match this ref
-    const matchingByRef = availableNodes.filter(
-      (n) => n.ref.toLowerCase() === searchRef || n.ref.replace(/^0+/, '') === searchRef.replace(/^0+/, '')
-    );
+      // Find all nodes in availableNodes that match this ref
+      const matchingByRef = availableNodes.filter(
+        (n) => n.ref.toLowerCase() === searchRef || n.ref.replace(/^0+/, '') === searchRef.replace(/^0+/, '')
+      );
 
-    if (matchingByRef.length === 1) {
-      // Exactly 1 knooppunt: center the map on it (DO NOT add to route!)
-      centerOnKnooppunt(matchingByRef[0]);
+      if (matchingByRef.length === 1) {
+        centerOnKnooppunt(matchingByRef[0]);
+        return;
+      }
+
+      if (matchingByRef.length > 1) {
+        const mapCenter = mapInstanceRef.current.getCenter();
+        const sorted = [...matchingByRef].sort((a, b) => {
+          const distA = Math.hypot(a.lat - mapCenter.lat, a.lng - mapCenter.lng);
+          const distB = Math.hypot(b.lat - mapCenter.lat, b.lng - mapCenter.lng);
+          return distA - distB;
+        });
+        setSearchCandidates({ query: searchRef, nodes: sorted });
+        return;
+      }
+
+      setSearchMessage(`Knooppunt ${searchRef} niet gevonden in de momenteel geladen kaart.`);
+      setTimeout(() => setSearchMessage(null), 3500);
       return;
     }
 
-    if (matchingByRef.length > 1) {
-      // Multiple knooppunten found with same ref: present choice list (keuzelijst)
-      const mapCenter = mapInstanceRef.current.getCenter();
-      const sorted = [...matchingByRef].sort((a, b) => {
-        const distA = Math.hypot(a.lat - mapCenter.lat, a.lng - mapCenter.lng);
-        const distB = Math.hypot(b.lat - mapCenter.lat, b.lng - mapCenter.lng);
-        return distA - distB;
-      });
-      setSearchCandidates({ query: searchRef, nodes: sorted });
-      return;
-    }
-
-    // Check if query matches municipality or name (e.g. "Lanaken", "Bilzen", "Zutendaal")
-    const matchingByName = availableNodes.filter(
-      (n) =>
-        (n.name && n.name.toLowerCase().includes(queryStr.toLowerCase())) ||
-        (n.municipality && n.municipality.toLowerCase().includes(queryStr.toLowerCase())) ||
-        (n.highlight && n.highlight.toLowerCase().includes(queryStr.toLowerCase()))
-    );
-
-    if (matchingByName.length === 1) {
-      centerOnKnooppunt(matchingByName[0]);
-      return;
-    }
-
-    if (matchingByName.length > 1) {
-      const mapCenter = mapInstanceRef.current.getCenter();
-      const sorted = [...matchingByName].sort((a, b) => {
-        const distA = Math.hypot(a.lat - mapCenter.lat, a.lng - mapCenter.lng);
-        const distB = Math.hypot(b.lat - mapCenter.lat, b.lng - mapCenter.lng);
-        return distA - distB;
-      });
-      setSearchCandidates({ query: queryStr, nodes: sorted });
-      return;
-    }
-
-    // Otherwise search address or place via Nominatim OpenStreetMap
+    // 2. City, Place, or Address search (e.g. "Brugge", "Gent", "Antwerpen", "Steenstraat")
     setIsSearchingLocation(true);
-    setSearchMessage('Adres zoeken...');
-    fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(queryStr)}&countrycodes=nl,be&limit=6&addressdetails=1`)
-      .then((res) => res.json())
-      .then((results) => {
-        if (results && results.length > 0 && mapInstanceRef.current) {
-          const formattedAddresses: SearchedAddressItem[] = results.map((r: any) => {
-            const parts = (r.display_name || '').split(',').map((s: string) => s.trim());
-            const title = parts[0] || queryStr;
-            const subtitle = parts.slice(1).join(', ') || '';
-            return {
-              lat: parseFloat(r.lat),
-              lng: parseFloat(r.lon),
-              title,
-              subtitle,
-              type: r.type,
-            };
-          });
+    setSearchMessage(`Zoeken naar "${queryStr}"...`);
 
-          if (formattedAddresses.length === 1) {
-            // Exactly 1 address: navigate, center, zoom and place marker
-            centerOnAddress(formattedAddresses[0]);
+    try {
+      const results = await searchPlacesAndAddresses(queryStr, 6);
+      if (results && results.length > 0 && mapInstanceRef.current) {
+        const formattedAddresses: SearchedAddressItem[] = results.map((r) => ({
+          lat: r.lat,
+          lng: r.lng,
+          title: r.title,
+          subtitle: r.subtitle,
+          type: r.type,
+          isCity: r.isCity,
+        }));
+
+        if (formattedAddresses.length === 1) {
+          centerOnAddress(formattedAddresses[0]);
+        } else {
+          // If query exactly matches a city name (e.g. "Brugge"), fly to it directly
+          const exactCity = formattedAddresses.find(
+            (r) => r.title.toLowerCase() === queryStr.toLowerCase() && r.isCity
+          );
+          if (exactCity) {
+            centerOnAddress(exactCity);
           } else {
-            // Multiple addresses found: present choice list (keuzelijst) sorted by distance to map center
             const mapCenter = mapInstanceRef.current.getCenter();
             const sorted = [...formattedAddresses].sort((a, b) => {
               const distA = Math.hypot(a.lat - mapCenter.lat, a.lng - mapCenter.lng);
@@ -815,17 +863,26 @@ export const MapPlanner: React.FC<MapPlannerProps> = ({
             });
             setSearchCandidates({ query: queryStr, addresses: sorted });
           }
-        } else {
-          setSearchMessage(`Geen knooppunt of adres gevonden voor "${queryStr}".`);
         }
-      })
-      .catch(() => {
-        setSearchMessage('Zoeken mislukt. Controleer netwerkverbinding.');
-      })
-      .finally(() => {
-        setIsSearchingLocation(false);
-        setTimeout(() => setSearchMessage(null), 3500);
-      });
+      } else {
+        // Fallback: check if any node has municipality/name strictly matching
+        const matchingByName = availableNodes.filter(
+          (n) =>
+            (n.name && n.name.toLowerCase() === queryStr.toLowerCase()) ||
+            (n.municipality && n.municipality.toLowerCase() === queryStr.toLowerCase())
+        );
+        if (matchingByName.length > 0) {
+          centerOnKnooppunt(matchingByName[0]);
+        } else {
+          setSearchMessage(`Geen stad, adres of knooppunt gevonden voor "${queryStr}".`);
+        }
+      }
+    } catch {
+      setSearchMessage(`Zoeken naar "${queryStr}" mislukt.`);
+    } finally {
+      setIsSearchingLocation(false);
+      setTimeout(() => setSearchMessage(null), 3500);
+    }
   }, [availableNodes, centerOnKnooppunt, centerOnAddress]);
 
   // Form submit for mobile search bar
@@ -849,13 +906,21 @@ export const MapPlanner: React.FC<MapPlannerProps> = ({
       }
     };
 
+    const handleCenterAddressEvent = (e: any) => {
+      if (e.detail?.address) {
+        centerOnAddress(e.detail.address);
+      }
+    };
+
     window.addEventListener('map-search-query', handleHeaderSearchEvent);
     window.addEventListener('map-center-node', handleCenterNodeEvent);
+    window.addEventListener('map-center-address', handleCenterAddressEvent);
     return () => {
       window.removeEventListener('map-search-query', handleHeaderSearchEvent);
       window.removeEventListener('map-center-node', handleCenterNodeEvent);
+      window.removeEventListener('map-center-address', handleCenterAddressEvent);
     };
-  }, [handleProcessSearchQuery, centerOnKnooppunt]);
+  }, [handleProcessSearchQuery, centerOnKnooppunt, centerOnAddress]);
 
   // On startup: automatically determine current location, zoom and center on map
   useEffect(() => {
@@ -1017,6 +1082,19 @@ export const MapPlanner: React.FC<MapPlannerProps> = ({
               </>
             )}
           </button>
+
+          {/* Local Cache & Data Management */}
+          {onOpenDataModal && (
+            <button
+              onClick={onOpenDataModal}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 bg-white/95 backdrop-blur hover:bg-blue-50 text-slate-700 hover:text-blue-800 text-xs font-semibold rounded-md border border-slate-200 shadow-xs transition active:scale-95 cursor-pointer"
+              title="Knooppunten data, offline opslag & regio download"
+            >
+              <Database className="w-3.5 h-3.5 text-blue-600" />
+              <span className="hidden sm:inline">Data &amp; Regio's</span>
+              <span className="sm:hidden">Data</span>
+            </button>
+          )}
         </div>
       </div>
 

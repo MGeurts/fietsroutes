@@ -2,13 +2,16 @@ import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { KnooppuntNode, RouteLeg, ElevationPoint, BikeType, MapTileProvider, PlannedRoute } from './types';
 import { INITIAL_NODES } from './data/knooppuntenData';
 import { calculateBicycleLeg, estimateElevationProfile, downloadGpxFile } from './services/routingService';
+import { getAllCachedNodes, saveNodesToCache } from './services/knooppuntenCacheService';
+import { searchPlacesAndAddresses, isKnooppuntQuery, PlaceSearchResult, PRELOADED_MAJOR_PLACES } from './services/geocodingService';
 import { MapPlanner } from './components/MapPlanner';
 import { RoutePanel } from './components/RoutePanel';
 import { StrookjePrintModal } from './components/StrookjePrintModal';
 import { RoundTripModal } from './components/RoundTripModal';
+import { DataManagementModal } from './components/DataManagementModal';
 import { LaravelAntagonistModal } from './components/LaravelAntagonistModal';
 import { GpxImportModal } from './components/GpxImportModal';
-import { Map, List, Bike, Sparkles, Navigation, Undo2, Redo2, X, Search, MapPin } from 'lucide-react';
+import { Map, List, Bike, Sparkles, Navigation, Undo2, Redo2, X, Search, MapPin, Database } from 'lucide-react';
 
 export default function App() {
   // Available nodes in current state (preloaded + Overpass queried)
@@ -52,6 +55,7 @@ export default function App() {
   // Modals
   const [isStrookjeOpen, setIsStrookjeOpen] = useState(false);
   const [isRoundTripOpen, setIsRoundTripOpen] = useState(false);
+  const [isDataModalOpen, setIsDataModalOpen] = useState(false);
   const [isLaravelModalOpen, setIsLaravelModalOpen] = useState(false);
   const [isGpxImportOpen, setIsGpxImportOpen] = useState(false);
 
@@ -203,6 +207,8 @@ export default function App() {
 
   // Add/synchronize dynamically discovered nodes from Overpass with spatial deduplication
   const handleAddNewNodes = useCallback((newNodes: KnooppuntNode[]) => {
+    if (!newNodes || newNodes.length === 0) return;
+    saveNodesToCache(newNodes).catch(() => {});
     setAvailableNodes((prev) => {
       const updated = [...prev];
       for (const node of newNodes) {
@@ -237,6 +243,22 @@ export default function App() {
       return updated;
     });
   }, []);
+
+  // Load persisted knooppunten from local IndexedDB cache on startup
+  useEffect(() => {
+    getAllCachedNodes()
+      .then((cached) => {
+        if (cached && cached.length > 0) {
+          handleAddNewNodes(cached);
+        } else {
+          // Initialize cache with bundled high-density nodes
+          saveNodesToCache(INITIAL_NODES).catch(() => {});
+        }
+      })
+      .catch((err) => {
+        console.warn('Kon lokale knooppunten-cache niet laden:', err);
+      });
+  }, [handleAddNewNodes]);
 
   // Reordering and removing nodes with history tracking
   const handleRemoveNode = (index: number) => {
@@ -329,6 +351,8 @@ export default function App() {
 
   const [headerSearchQuery, setHeaderSearchQuery] = useState('');
   const [showHeaderSuggestions, setShowHeaderSuggestions] = useState(false);
+  const [placeSuggestions, setPlaceSuggestions] = useState<PlaceSearchResult[]>([]);
+  const [isSearchingPlaces, setIsSearchingPlaces] = useState(false);
   const searchDropdownRef = useRef<HTMLDivElement>(null);
 
   // Close suggestions when clicking outside
@@ -345,34 +369,73 @@ export default function App() {
   }, []);
 
   // Filter matching knooppunten for header search
-  const headerSuggestions = useMemo(() => {
+  const headerNodeSuggestions = useMemo(() => {
     const q = headerSearchQuery.trim().toLowerCase();
     if (!q) return [];
 
-    const kpMatch = q.match(/^(?:knooppunt|kp\.?|node)?\s*([0-9a-zA-Z]+)$/i);
-    const searchRef = kpMatch ? kpMatch[1].toLowerCase() : q;
+    // Knooppunt number check (e.g. '131', 'kp 42', '12a')
+    if (isKnooppuntQuery(q)) {
+      const match = q.match(/^(?:knooppunt|kp\.?|node)?\s*([a-z]?\d{1,4}[a-z]?)$/i);
+      const searchRef = match ? match[1].toLowerCase() : q;
 
-    // Exact or matching ref first
-    const refMatches = availableNodes.filter(
-      (n) => n.ref.toLowerCase() === searchRef || n.ref.replace(/^0+/, '') === searchRef.replace(/^0+/, '')
-    );
-
-    if (refMatches.length > 0) {
-      return refMatches;
+      return availableNodes.filter(
+        (n) => n.ref.toLowerCase() === searchRef || n.ref.replace(/^0+/, '') === searchRef.replace(/^0+/, '')
+      );
     }
 
-    // Name or Municipality matches
+    // Name or Municipality matches (DO NOT match highlight to avoid false hits like Maasbruggen -> Brugge)
     return availableNodes
       .filter(
         (n) =>
           (n.name && n.name.toLowerCase().includes(q)) ||
-          (n.municipality && n.municipality.toLowerCase().includes(q)) ||
-          (n.highlight && n.highlight.toLowerCase().includes(q))
+          (n.municipality && n.municipality.toLowerCase().includes(q))
       )
       .slice(0, 6);
   }, [headerSearchQuery, availableNodes]);
 
-  // Center on node without adding to route
+  // Place & Address search (cities like Brugge, Gent, addresses, etc.)
+  useEffect(() => {
+    const q = headerSearchQuery.trim();
+    if (!q || isKnooppuntQuery(q)) {
+      setPlaceSuggestions([]);
+      setIsSearchingPlaces(false);
+      return;
+    }
+
+    // 1. Instant local matches from preloaded major hubs (0ms latency for Brugge, Gent, etc.)
+    const instantMatches = PRELOADED_MAJOR_PLACES.filter(
+      (p) =>
+        p.title.toLowerCase().startsWith(q.toLowerCase()) ||
+        p.title.toLowerCase().includes(q.toLowerCase()) ||
+        p.subtitle.toLowerCase().includes(q.toLowerCase())
+    );
+    setPlaceSuggestions(instantMatches.slice(0, 5));
+
+    // 2. Debounced remote query to Nominatim for streets/villages
+    const controller = new AbortController();
+    setIsSearchingPlaces(true);
+    const timer = setTimeout(() => {
+      searchPlacesAndAddresses(q, 5, controller.signal)
+        .then((results) => {
+          if (!controller.signal.aborted) {
+            setPlaceSuggestions(results);
+          }
+        })
+        .catch(() => {})
+        .finally(() => {
+          if (!controller.signal.aborted) {
+            setIsSearchingPlaces(false);
+          }
+        });
+    }, 250);
+
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [headerSearchQuery]);
+
+  // Center on knooppunt without adding to route
   const handleSelectHeaderNode = (node: KnooppuntNode) => {
     setHeaderSearchQuery('');
     setShowHeaderSuggestions(false);
@@ -382,20 +445,46 @@ export default function App() {
     window.dispatchEvent(new CustomEvent('map-center-node', { detail: { node } }));
   };
 
+  // Center on place / city / address
+  const handleSelectHeaderPlace = (place: PlaceSearchResult) => {
+    setHeaderSearchQuery('');
+    setShowHeaderSuggestions(false);
+    if (mobileTab === 'panel') {
+      setMobileTab('map');
+    }
+    window.dispatchEvent(new CustomEvent('map-center-address', { detail: { address: place } }));
+  };
+
   const handleHeaderSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!headerSearchQuery.trim()) return;
+    const q = headerSearchQuery.trim();
+    if (!q) return;
 
     setShowHeaderSuggestions(false);
     if (mobileTab === 'panel') {
       setMobileTab('map');
     }
 
-    if (headerSuggestions.length === 1) {
-      handleSelectHeaderNode(headerSuggestions[0]);
-    } else {
-      window.dispatchEvent(new CustomEvent('map-search-query', { detail: { query: headerSearchQuery } }));
+    // 1. If it is a knooppunt query and we have a matching node:
+    if (isKnooppuntQuery(q) && headerNodeSuggestions.length > 0) {
+      handleSelectHeaderNode(headerNodeSuggestions[0]);
+      return;
     }
+
+    // 2. If places / cities matched (e.g. "Brugge"):
+    if (!isKnooppuntQuery(q) && placeSuggestions.length > 0) {
+      handleSelectHeaderPlace(placeSuggestions[0]);
+      return;
+    }
+
+    // 3. If knooppunt by name matched:
+    if (headerNodeSuggestions.length === 1) {
+      handleSelectHeaderNode(headerNodeSuggestions[0]);
+      return;
+    }
+
+    // 4. Fallback: dispatch search query to map
+    window.dispatchEvent(new CustomEvent('map-search-query', { detail: { query: q } }));
   };
 
   return (
@@ -466,44 +555,91 @@ export default function App() {
           </form>
 
           {/* Autocomplete / Keuzelijst dropdown when typing in header */}
-          {showHeaderSuggestions && headerSearchQuery.trim() && headerSuggestions.length > 0 && (
+          {showHeaderSuggestions && headerSearchQuery.trim() && (placeSuggestions.length > 0 || headerNodeSuggestions.length > 0 || isSearchingPlaces) && (
             <div className="absolute top-full mt-2 left-0 right-0 bg-slate-800 border border-slate-700 rounded-xl shadow-2xl overflow-hidden z-50 py-1 max-h-80 overflow-y-auto">
-              <div className="px-3 py-1.5 text-[11px] font-semibold text-slate-400 border-b border-slate-700/60 flex items-center justify-between">
-                <span>
-                  {headerSuggestions.length > 1
-                    ? `Meerdere knooppunten (${headerSuggestions.length} keuzes)`
-                    : 'Gevonden knooppunt'}
-                </span>
-                <span className="text-[10px] text-emerald-400">Klik om te centreren</span>
-              </div>
-              {headerSuggestions.map((node, index) => (
-                <button
-                  key={node.id || `${node.ref}-${index}`}
-                  type="button"
-                  onClick={() => handleSelectHeaderNode(node)}
-                  className="w-full text-left px-3 py-2 hover:bg-slate-700/80 transition flex items-center justify-between group cursor-pointer"
-                >
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <span className="w-7 h-7 rounded-full bg-emerald-500 text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-xs">
-                      {node.ref}
+              {/* Places & Cities Section */}
+              {placeSuggestions.length > 0 && (
+                <div>
+                  <div className="px-3 py-1.5 text-[11px] font-semibold text-blue-400 border-b border-slate-700/60 flex items-center justify-between bg-slate-800/80">
+                    <span className="flex items-center gap-1.5">
+                      <MapPin className="w-3 h-3 text-blue-400" />
+                      <span>Steden &amp; Locaties</span>
                     </span>
-                    <div className="truncate">
-                      <div className="text-xs font-semibold text-white group-hover:text-emerald-300 transition truncate">
-                        {node.name || `Knooppunt ${node.ref}`}
-                      </div>
-                      <div className="text-[11px] text-slate-400 truncate">
-                        {node.municipality ? `${node.municipality} • ` : ''}
-                        {node.region || 'Fietsnetwerk'}
-                      </div>
-                    </div>
+                    <span className="text-[10px] text-slate-400">Klik om te navigeren</span>
                   </div>
-                  <span className="text-[11px] text-emerald-400 font-medium opacity-0 group-hover:opacity-100 transition shrink-0 ml-2">
-                    Centreer →
-                  </span>
-                </button>
-              ))}
+                  {placeSuggestions.map((place, idx) => (
+                    <button
+                      key={`place-${idx}-${place.lat}-${place.lng}`}
+                      type="button"
+                      onClick={() => handleSelectHeaderPlace(place)}
+                      className="w-full text-left px-3 py-2 hover:bg-slate-700/80 transition flex items-center justify-between group cursor-pointer"
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div className="w-7 h-7 rounded-full bg-blue-500/20 border border-blue-500/30 text-blue-400 flex items-center justify-center shrink-0">
+                          <MapPin className="w-3.5 h-3.5" />
+                        </div>
+                        <div className="truncate">
+                          <div className="text-xs font-semibold text-white group-hover:text-blue-300 transition truncate flex items-center gap-1.5">
+                            <span>{place.title}</span>
+                            {place.isCity && (
+                              <span className="text-[9px] bg-blue-900/60 text-blue-300 px-1.5 py-0.5 rounded font-medium border border-blue-700/50">
+                                Stad
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-[11px] text-slate-400 truncate">
+                            {place.subtitle}
+                          </div>
+                        </div>
+                      </div>
+                      <span className="text-[11px] text-blue-400 font-medium opacity-0 group-hover:opacity-100 transition shrink-0 ml-2">
+                        Naartoe →
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
 
-              {/* Address / Location search option */}
+              {/* Knooppunten Section */}
+              {headerNodeSuggestions.length > 0 && (
+                <div>
+                  <div className="px-3 py-1.5 text-[11px] font-semibold text-emerald-400 border-t border-b border-slate-700/60 flex items-center justify-between bg-slate-800/80">
+                    <span className="flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                      <span>Fietsknooppunten ({headerNodeSuggestions.length})</span>
+                    </span>
+                    <span className="text-[10px] text-emerald-400">Klik om te centreren</span>
+                  </div>
+                  {headerNodeSuggestions.map((node, index) => (
+                    <button
+                      key={node.id || `${node.ref}-${index}`}
+                      type="button"
+                      onClick={() => handleSelectHeaderNode(node)}
+                      className="w-full text-left px-3 py-2 hover:bg-slate-700/80 transition flex items-center justify-between group cursor-pointer"
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <span className="w-7 h-7 rounded-full bg-emerald-500 text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-xs">
+                          {node.ref}
+                        </span>
+                        <div className="truncate">
+                          <div className="text-xs font-semibold text-white group-hover:text-emerald-300 transition truncate">
+                            {node.name || `Knooppunt ${node.ref}`}
+                          </div>
+                          <div className="text-[11px] text-slate-400 truncate">
+                            {node.municipality ? `${node.municipality} • ` : ''}
+                            {node.region || 'Fietsnetwerk'}
+                          </div>
+                        </div>
+                      </div>
+                      <span className="text-[11px] text-emerald-400 font-medium opacity-0 group-hover:opacity-100 transition shrink-0 ml-2">
+                        Centreer →
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {/* Address / Location manual search option */}
               <button
                 type="button"
                 onClick={() => {
@@ -514,9 +650,9 @@ export default function App() {
                 className="w-full text-left px-3 py-2 bg-slate-750 hover:bg-slate-700/90 border-t border-slate-700 transition flex items-center justify-between group cursor-pointer text-xs text-slate-300"
               >
                 <div className="flex items-center gap-2 text-slate-300 group-hover:text-white min-w-0">
-                  <MapPin className="w-4 h-4 text-blue-400 shrink-0" />
+                  <Search className="w-4 h-4 text-slate-400 shrink-0" />
                   <span className="truncate">
-                    Zoek adres of plaats: <strong className="text-white">"{headerSearchQuery}"</strong>
+                    Zoek op kaart naar: <strong className="text-white">"{headerSearchQuery}"</strong>
                   </span>
                 </div>
                 <span className="text-[11px] text-blue-400 font-medium opacity-0 group-hover:opacity-100 transition shrink-0 ml-2">
@@ -529,6 +665,15 @@ export default function App() {
 
         {/* Header Right Actions */}
         <div className="flex items-center gap-2 sm:gap-3">
+          <button
+            onClick={() => setIsDataModalOpen(true)}
+            className="flex items-center gap-1.5 px-2.5 sm:px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-medium rounded-md transition cursor-pointer shadow-xs tablet-touch-friendly-btn"
+            title="Knooppunten data, offline opslag & regio download"
+          >
+            <Database className="w-3.5 h-3.5 text-blue-400" />
+            <span className="hidden lg:inline">Data &amp; Regio's</span>
+          </button>
+
           <button
             onClick={handleExportGpx}
             disabled={selectedNodes.length === 0}
@@ -591,7 +736,7 @@ export default function App() {
             onOpenRoundTrip={() => setIsRoundTripOpen(true)}
             onOpenGpxImport={() => setIsGpxImportOpen(true)}
             onOpenLaravelModal={() => setIsLaravelModalOpen(true)}
-            onSelectRegion={() => {}}
+            onSelectRegion={() => setIsDataModalOpen(true)}
           />
         </div>
 
@@ -617,6 +762,7 @@ export default function App() {
             redoNodeRef={redoNodeRef}
             isSidebarCollapsed={isSidebarCollapsed}
             onToggleSidebar={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+            onOpenDataModal={() => setIsDataModalOpen(true)}
           />
         </div>
       </div>
@@ -679,6 +825,13 @@ export default function App() {
         isOpen={isGpxImportOpen}
         onClose={() => setIsGpxImportOpen(false)}
         onImportGpx={handleImportGpx}
+      />
+
+      <DataManagementModal
+        isOpen={isDataModalOpen}
+        onClose={() => setIsDataModalOpen(false)}
+        availableNodesCount={availableNodes.length}
+        onImportNodes={handleAddNewNodes}
       />
     </div>
   );

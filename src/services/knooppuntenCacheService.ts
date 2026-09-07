@@ -1,0 +1,215 @@
+import { KnooppuntNode } from '../types';
+import { INITIAL_NODES } from '../data/knooppuntenData';
+
+const DB_NAME = 'FietsknooppuntenDB';
+const DB_VERSION = 1;
+const STORE_NODES = 'nodes';
+const STORE_META = 'metadata';
+
+let dbInstance: IDBDatabase | null = null;
+
+function openDB(): Promise<IDBDatabase> {
+  if (dbInstance) return Promise.resolve(dbInstance);
+
+  return new Promise((resolve, reject) => {
+    if (typeof window === 'undefined' || !window.indexedDB) {
+      reject(new Error('IndexedDB niet beschikbaar'));
+      return;
+    }
+
+    const request = window.indexedDB.open(DB_NAME, DB_VERSION);
+
+    request.onupgradeneeded = (event) => {
+      const db = (event.target as IDBOpenDBRequest).result;
+      if (!db.objectStoreNames.contains(STORE_NODES)) {
+        const nodeStore = db.createObjectStore(STORE_NODES, { keyPath: 'id' });
+        nodeStore.createIndex('ref', 'ref', { unique: false });
+        nodeStore.createIndex('lat', 'lat', { unique: false });
+        nodeStore.createIndex('lng', 'lng', { unique: false });
+      }
+      if (!db.objectStoreNames.contains(STORE_META)) {
+        db.createObjectStore(STORE_META, { keyPath: 'key' });
+      }
+    };
+
+    request.onsuccess = (event) => {
+      dbInstance = (event.target as IDBOpenDBRequest).result;
+      resolve(dbInstance);
+    };
+
+    request.onerror = (event) => {
+      reject((event.target as IDBOpenDBRequest).error);
+    };
+  });
+}
+
+export interface CacheMetadata {
+  totalNodes: number;
+  lastSyncTimestamp: number | null;
+  cachedRegions: string[];
+}
+
+/**
+ * Initialize cache with seed INITIAL_NODES if database is empty
+ */
+export async function initializeCache(): Promise<KnooppuntNode[]> {
+  try {
+    const db = await openDB();
+    const existing = await getAllNodesFromCache();
+
+    if (existing.length === 0) {
+      // Seed with initial nodes
+      await saveNodesToCache(INITIAL_NODES);
+      await saveMetadata('lastSyncTimestamp', Date.now());
+      await saveMetadata('cachedRegions', ['Belgisch Limburg (Zutendaal & Kempen)']);
+      return INITIAL_NODES;
+    }
+
+    return existing;
+  } catch (err) {
+    console.warn('IndexedDB initialisatiefout, fallback naar geheugen:', err);
+    return INITIAL_NODES;
+  }
+}
+
+/**
+ * Retrieve all nodes from local IndexedDB
+ */
+export async function getAllNodesFromCache(): Promise<KnooppuntNode[]> {
+  try {
+    const db = await openDB();
+    return new Promise((resolve) => {
+      const tx = db.transaction(STORE_NODES, 'readonly');
+      const store = tx.objectStore(STORE_NODES);
+      const request = store.getAll();
+
+      request.onsuccess = () => {
+        resolve(request.result || []);
+      };
+
+      request.onerror = () => {
+        resolve([]);
+      };
+    });
+  } catch {
+    return [];
+  }
+}
+
+export const getAllCachedNodes = getAllNodesFromCache;
+
+/**
+ * Save or merge a batch of nodes into IndexedDB with spatial deduplication
+ */
+export async function saveNodesToCache(nodes: KnooppuntNode[]): Promise<number> {
+  try {
+    const db = await openDB();
+    return new Promise((resolve) => {
+      const tx = db.transaction(STORE_NODES, 'readwrite');
+      const store = tx.objectStore(STORE_NODES);
+
+      let savedCount = 0;
+      for (const node of nodes) {
+        // Ensure valid node ID
+        const id = node.id || `kp-${node.ref}-${node.lat.toFixed(4)}-${node.lng.toFixed(4)}`;
+        const record = { ...node, id, updatedAt: Date.now() };
+        store.put(record);
+        savedCount++;
+      }
+
+      tx.oncomplete = () => {
+        resolve(savedCount);
+      };
+
+      tx.onerror = () => {
+        resolve(savedCount);
+      };
+    });
+  } catch {
+    return 0;
+  }
+}
+
+/**
+ * Save key-value metadata
+ */
+export async function saveMetadata(key: string, value: any): Promise<void> {
+  try {
+    const db = await openDB();
+    return new Promise((resolve) => {
+      const tx = db.transaction(STORE_META, 'readwrite');
+      const store = tx.objectStore(STORE_META);
+      store.put({ key, value, updatedAt: Date.now() });
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => resolve();
+    });
+  } catch {
+    // ignore
+  }
+}
+
+/**
+ * Get metadata value
+ */
+export async function getMetadata<T = any>(key: string): Promise<T | null> {
+  try {
+    const db = await openDB();
+    return new Promise((resolve) => {
+      const tx = db.transaction(STORE_META, 'readonly');
+      const store = tx.objectStore(STORE_META);
+      const request = store.get(key);
+      request.onsuccess = () => {
+        resolve(request.result?.value ?? null);
+      };
+      request.onerror = () => resolve(null);
+    });
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Get overall cache status (node count, last sync date, regions)
+ */
+export async function getCacheStatus(): Promise<CacheMetadata> {
+  try {
+    const nodes = await getAllNodesFromCache();
+    const lastSync = await getMetadata<number>('lastSyncTimestamp');
+    const regions = (await getMetadata<string[]>('cachedRegions')) || [];
+
+    return {
+      totalNodes: nodes.length,
+      lastSyncTimestamp: lastSync,
+      cachedRegions: regions,
+    };
+  } catch {
+    return {
+      totalNodes: INITIAL_NODES.length,
+      lastSyncTimestamp: null,
+      cachedRegions: [],
+    };
+  }
+}
+
+/**
+ * Clear the entire node cache (reset to initial state)
+ */
+export async function clearCache(): Promise<void> {
+  try {
+    const db = await openDB();
+    return new Promise((resolve) => {
+      const tx = db.transaction([STORE_NODES, STORE_META], 'readwrite');
+      tx.objectStore(STORE_NODES).clear();
+      tx.objectStore(STORE_META).clear();
+      tx.oncomplete = async () => {
+        // Re-seed with initial nodes
+        await saveNodesToCache(INITIAL_NODES);
+        await saveMetadata('lastSyncTimestamp', Date.now());
+        resolve();
+      };
+      tx.onerror = () => resolve();
+    });
+  } catch {
+    // ignore
+  }
+}
