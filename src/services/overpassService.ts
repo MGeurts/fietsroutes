@@ -41,36 +41,43 @@ export async function fetchKnooppuntenInBBox(
     return bboxCache.get(cacheKey)!;
   }
 
-  // Overpass QL query: find all nodes with rcn_ref or network:type=node_network
+  // Overpass QL query: find all cycle network nodes in bbox
   const query = `
-    [out:json][timeout:12];
+    [out:json][timeout:8];
     (
       node["rcn_ref"](${south},${west},${north},${east});
       node["network:type"="node_network"]["ref"](${south},${west},${north},${east});
+      node["network"="rcn"]["ref"](${south},${west},${north},${east});
     );
-    out body 200;
+    out body;
   `.replace(/\s+/g, ' ').trim();
 
   const endpoints = [
-    'https://overpass-api.de/api/interpreter',
-    'https://overpass.kumi.systems/api/interpreter'
+    'https://overpass.kumi.systems/api/interpreter',
+    'https://maps.mail.ru/osm/tools/overpass/api/interpreter',
+    'https://overpass.private.coffee/api/interpreter',
+    'https://overpass-api.de/api/interpreter'
   ];
 
   for (const endpoint of endpoints) {
+    const timeoutController = new AbortController();
+    const timeoutId = setTimeout(() => timeoutController.abort(), 7000);
+
     try {
       const response = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: `data=${encodeURIComponent(query)}`,
-        signal
+        signal: signal || timeoutController.signal
       });
+      clearTimeout(timeoutId);
 
       if (!response.ok) {
         continue;
       }
 
       const data: OverpassResponse = await response.json();
-      if (!data.elements) continue;
+      if (!data.elements || data.elements.length === 0) continue;
 
       const nodes: KnooppuntNode[] = [];
 
@@ -84,12 +91,12 @@ export async function fetchKnooppuntenInBBox(
 
         // Spatial deduplication: in OSM, multi-lane roads or dual intersections often have
         // 2 or more nodes with the same rcn_ref (e.g. node 62 or 567).
-        // Only keep one authoritative node per physical intersection (within ~400m / 0.005 deg).
+        // Only keep one authoritative node per physical intersection (within ~300m / 0.003 deg).
         const isDuplicateNearby = nodes.some(
           (existing) =>
             existing.ref === cleanRef &&
-            Math.abs(existing.lat - el.lat) < 0.005 &&
-            Math.abs(existing.lng - el.lon) < 0.005
+            Math.abs(existing.lat - el.lat) < 0.003 &&
+            Math.abs(existing.lng - el.lon) < 0.003
         );
         if (isDuplicateNearby) continue;
 
@@ -103,9 +110,12 @@ export async function fetchKnooppuntenInBBox(
         });
       }
 
-      bboxCache.set(cacheKey, nodes);
-      return nodes;
+      if (nodes.length > 0) {
+        bboxCache.set(cacheKey, nodes);
+        return nodes;
+      }
     } catch {
+      clearTimeout(timeoutId);
       // Try next endpoint if available
       continue;
     }

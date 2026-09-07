@@ -192,37 +192,39 @@ export const MapPlanner: React.FC<MapPlannerProps> = ({
 
     markersGroup.clearLayers();
 
-    // Map of selected node order indices
+    // Map of selected node order indices by unique ID
     const selectedIndices = new Map<string, number[]>();
     selectedNodes.forEach((node, idx) => {
-      const arr = selectedIndices.get(node.ref) || [];
+      const idKey = String(node.id || node.ref);
+      const arr = selectedIndices.get(idKey) || [];
       arr.push(idx + 1);
-      selectedIndices.set(node.ref, arr);
+      selectedIndices.set(idKey, arr);
     });
 
-    // Deduplicate nodes spatially so that duplicate badges (e.g. 62, 64) are NEVER rendered twice
+    // Deduplicate nodes spatially so that immediate duplicates (e.g. multi-lane OSM nodes of 62, 64)
+    // are merged, while distinct geographic nodes that happen to share a ref number (e.g. 131 in Bilzen
+    // and 131 in Lanaken, ~12km apart) are BOTH preserved and rendered!
     const uniqueNodes: KnooppuntNode[] = [];
-    const seenSpatial = new Map<string, [number, number]>();
+    const seenByRef = new Map<string, KnooppuntNode[]>();
 
     availableNodes.forEach((node) => {
-      const existingCoords = seenSpatial.get(node.ref);
-      if (existingCoords) {
-        if (
-          Math.abs(existingCoords[0] - node.lat) < 0.005 &&
-          Math.abs(existingCoords[1] - node.lng) < 0.005
-        ) {
-          return; // Skip duplicate marker
-        }
-      }
-      seenSpatial.set(node.ref, [node.lat, node.lng]);
+      const existingList = seenByRef.get(node.ref) || [];
+      const isMicroDuplicate = existingList.some(
+        (ex) => Math.hypot(ex.lat - node.lat, ex.lng - node.lng) < 0.003
+      );
+      if (isMicroDuplicate) return;
+
+      existingList.push(node);
+      seenByRef.set(node.ref, existingList);
       uniqueNodes.push(node);
     });
 
     // Render each node with authentic badge design and role pins (start, inbetween, end)
     uniqueNodes.forEach((node) => {
-      const isSelected = selectedIndices.has(node.ref);
-      const isStart = selectedNodes.length > 0 && selectedNodes[0].ref === node.ref;
-      const isEnd = selectedNodes.length > 1 && selectedNodes[selectedNodes.length - 1].ref === node.ref;
+      const idKey = String(node.id || node.ref);
+      const isSelected = selectedIndices.has(idKey);
+      const isStart = selectedNodes.length > 0 && String(selectedNodes[0].id || selectedNodes[0].ref) === idKey;
+      const isEnd = selectedNodes.length > 1 && String(selectedNodes[selectedNodes.length - 1].id || selectedNodes[selectedNodes.length - 1].ref) === idKey;
 
       let rolePinHtml = '';
       if (isStart && isEnd) {

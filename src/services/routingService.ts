@@ -33,7 +33,7 @@ export async function calculateBicycleLeg(
   fromNode: KnooppuntNode,
   toNode: KnooppuntNode
 ): Promise<RouteLeg> {
-  const cacheKey = `${fromNode.ref}_${toNode.ref}`;
+  const cacheKey = `${fromNode.id || fromNode.ref}_${toNode.id || toNode.ref}`;
   if (legCache.has(cacheKey)) {
     return legCache.get(cacheKey)!;
   }
@@ -41,14 +41,22 @@ export async function calculateBicycleLeg(
   // 1. Check pre-validated official tourism board GIS database
   const officialCorridor = getOfficialGisCorridor(fromNode.ref, toNode.ref);
   if (officialCorridor && officialCorridor.coordinates.length > 1) {
-    const leg: RouteLeg = {
-      fromNode,
-      toNode,
-      distanceKm: officialCorridor.distanceKm,
-      coordinates: officialCorridor.coordinates,
-    };
-    legCache.set(cacheKey, leg);
-    return leg;
+    const startCoord = officialCorridor.coordinates[0];
+    const endCoord = officialCorridor.coordinates[officialCorridor.coordinates.length - 1];
+    const isStartNear = Math.hypot(startCoord[0] - fromNode.lat, startCoord[1] - fromNode.lng) < 0.02; // ~2km
+    const isEndNear = Math.hypot(endCoord[0] - toNode.lat, endCoord[1] - toNode.lng) < 0.02;
+
+    // Only use pre-baked corridor if it physically corresponds to these specific nodes
+    if (isStartNear && isEndNear) {
+      const leg: RouteLeg = {
+        fromNode,
+        toNode,
+        distanceKm: officialCorridor.distanceKm,
+        coordinates: officialCorridor.coordinates,
+      };
+      legCache.set(cacheKey, leg);
+      return leg;
+    }
   }
 
   const straightDist = calculateHaversineDistanceKm(fromNode.lat, fromNode.lng, toNode.lat, toNode.lng);

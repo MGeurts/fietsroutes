@@ -77,7 +77,7 @@ export const INITIAL_NODES: KnooppuntNode[] = [
     municipality: 'Bilzen',
     region: 'Belgisch Limburg',
     highlight: 'Natuurgebied Stevoorden-Hoefaert',
-    connections: ['533', '69', '504']
+    connections: ['533', '69', '504', '131']
   },
   {
     id: 'kp-63',
@@ -87,7 +87,28 @@ export const INITIAL_NODES: KnooppuntNode[] = [
     name: 'Bessemerveld / Gellik',
     municipality: 'Lanaken / Zutendaal',
     region: 'Belgisch Limburg',
-    connections: ['62', '140', '131']
+    connections: ['62', '140']
+  },
+  {
+    id: 'osm-370250018',
+    ref: '140',
+    lat: 50.92089,
+    lng: 5.66560,
+    name: 'Neerharenbos / Rekem',
+    municipality: 'Lanaken',
+    region: 'Belgisch Limburg',
+    connections: ['63', '131']
+  },
+  {
+    id: 'osm-619414119',
+    ref: '131',
+    lat: 50.89556,
+    lng: 5.67268,
+    name: 'Lanaken / Smeermaas',
+    municipality: 'Lanaken',
+    region: 'Belgisch Limburg',
+    highlight: 'Albertkanaal & Grensovergang Maastricht',
+    connections: ['140', '503', '10']
   },
   {
     id: 'kp-252',
@@ -316,7 +337,7 @@ export const INITIAL_NODES: KnooppuntNode[] = [
 
   // Borgloon & Haspengouw (Bloesemstreek)
   {
-    id: 'kp-131',
+    id: 'kp-131-bilzen',
     ref: '131',
     lat: 50.8740,
     lng: 5.5180,
@@ -324,7 +345,7 @@ export const INITIAL_NODES: KnooppuntNode[] = [
     municipality: 'Bilzen',
     region: 'Belgisch Limburg',
     highlight: 'Imposant waterslot & Engelse kasteeltuinen',
-    connections: ['63', '503', '136', '137']
+    connections: ['505', '136', '137']
   },
   {
     id: 'kp-136',

@@ -174,8 +174,8 @@ export default function App() {
   // Click on a node: append to route
   const handleNodeClick = useCallback((node: KnooppuntNode) => {
     applyRouteUpdate((prev) => {
-      // Don't add same node twice consecutively
-      if (prev.length > 0 && prev[prev.length - 1].ref === node.ref) {
+      // Don't add same physical node twice consecutively
+      if (prev.length > 0 && String(prev[prev.length - 1].id || prev[prev.length - 1].ref) === String(node.id || node.ref)) {
         return prev;
       }
       return [...prev, node];
@@ -185,7 +185,7 @@ export default function App() {
   // Add dynamically discovered node from Overpass
   const handleAddNewNode = useCallback((node: KnooppuntNode) => {
     setAvailableNodes((prev) => {
-      if (prev.some((n) => n.ref === node.ref && Math.abs(n.lat - node.lat) < 0.005 && Math.abs(n.lng - node.lng) < 0.005)) {
+      if (prev.some((n) => n.id === node.id || (n.ref === node.ref && Math.hypot(n.lat - node.lat, n.lng - node.lng) < 0.003))) {
         return prev;
       }
       return [...prev, node];
