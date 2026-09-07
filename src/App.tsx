@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { KnooppuntNode, RouteLeg, ElevationPoint, BikeType, MapTileProvider, PlannedRoute } from './types';
 import { INITIAL_NODES, POPULAR_REGIONS } from './data/knooppuntenData';
 import { calculateBicycleLeg, estimateElevationProfile, downloadGpxFile } from './services/routingService';
@@ -8,7 +8,7 @@ import { StrookjePrintModal } from './components/StrookjePrintModal';
 import { RoundTripModal } from './components/RoundTripModal';
 import { LaravelAntagonistModal } from './components/LaravelAntagonistModal';
 import { GpxImportModal } from './components/GpxImportModal';
-import { Map, List, Bike, Sparkles, Navigation, Undo2, Redo2 } from 'lucide-react';
+import { Map, List, Bike, Sparkles, Navigation, Undo2, Redo2, X } from 'lucide-react';
 
 export default function App() {
   // Available nodes in current state (preloaded + Overpass queried)
@@ -319,11 +319,74 @@ export default function App() {
   };
 
   const [headerSearchQuery, setHeaderSearchQuery] = useState('');
+  const [showHeaderSuggestions, setShowHeaderSuggestions] = useState(false);
+  const searchDropdownRef = useRef<HTMLDivElement>(null);
+
+  // Close suggestions when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (searchDropdownRef.current && !searchDropdownRef.current.contains(e.target as Node)) {
+        setShowHeaderSuggestions(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
+
+  // Filter matching knooppunten for header search
+  const headerSuggestions = useMemo(() => {
+    const q = headerSearchQuery.trim().toLowerCase();
+    if (!q) return [];
+
+    const kpMatch = q.match(/^(?:knooppunt|kp\.?|node)?\s*([0-9a-zA-Z]+)$/i);
+    const searchRef = kpMatch ? kpMatch[1].toLowerCase() : q;
+
+    // Exact or matching ref first
+    const refMatches = availableNodes.filter(
+      (n) => n.ref.toLowerCase() === searchRef || n.ref.replace(/^0+/, '') === searchRef.replace(/^0+/, '')
+    );
+
+    if (refMatches.length > 0) {
+      return refMatches;
+    }
+
+    // Name or Municipality matches
+    return availableNodes
+      .filter(
+        (n) =>
+          (n.name && n.name.toLowerCase().includes(q)) ||
+          (n.municipality && n.municipality.toLowerCase().includes(q)) ||
+          (n.highlight && n.highlight.toLowerCase().includes(q))
+      )
+      .slice(0, 6);
+  }, [headerSearchQuery, availableNodes]);
+
+  // Center on node without adding to route
+  const handleSelectHeaderNode = (node: KnooppuntNode) => {
+    setHeaderSearchQuery('');
+    setShowHeaderSuggestions(false);
+    if (mobileTab === 'panel') {
+      setMobileTab('map');
+    }
+    window.dispatchEvent(new CustomEvent('map-center-node', { detail: { node } }));
+  };
 
   const handleHeaderSearch = (e: React.FormEvent) => {
     e.preventDefault();
     if (!headerSearchQuery.trim()) return;
-    window.dispatchEvent(new CustomEvent('map-search-query', { detail: { query: headerSearchQuery } }));
+
+    setShowHeaderSuggestions(false);
+    if (mobileTab === 'panel') {
+      setMobileTab('map');
+    }
+
+    if (headerSuggestions.length === 1) {
+      handleSelectHeaderNode(headerSuggestions[0]);
+    } else {
+      window.dispatchEvent(new CustomEvent('map-search-query', { detail: { query: headerSearchQuery } }));
+    }
   };
 
   return (
@@ -353,27 +416,86 @@ export default function App() {
           </div>
         </div>
 
-        {/* Center Search Pill */}
-        <form
-          onSubmit={handleHeaderSearch}
-          className="hidden md:flex items-center bg-slate-800 rounded-full px-4 py-2 w-72 lg:w-96 border border-slate-700 focus-within:border-emerald-500 transition"
-        >
-          <svg className="w-4 h-4 text-slate-500 mr-2 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path
-              d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
+        {/* Center Search Pill with Dropdown */}
+        <div ref={searchDropdownRef} className="relative hidden md:block">
+          <form
+            onSubmit={handleHeaderSearch}
+            className="flex items-center bg-slate-800 rounded-full px-4 py-2 w-72 lg:w-96 border border-slate-700 focus-within:border-emerald-500 focus-within:ring-1 focus-within:ring-emerald-500 transition"
+          >
+            <svg className="w-4 h-4 text-slate-400 mr-2 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path
+                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+            <input
+              type="text"
+              value={headerSearchQuery}
+              onChange={(e) => {
+                setHeaderSearchQuery(e.target.value);
+                setShowHeaderSuggestions(true);
+              }}
+              onFocus={() => setShowHeaderSuggestions(true)}
+              placeholder="Zoek knooppunt (bijv. 131) of adres..."
+              className="bg-transparent border-none text-sm text-slate-200 placeholder-slate-500 focus:ring-0 focus:outline-none w-full"
             />
-          </svg>
-          <input
-            type="text"
-            value={headerSearchQuery}
-            onChange={(e) => setHeaderSearchQuery(e.target.value)}
-            placeholder="Zoek knooppunt of adres..."
-            className="bg-transparent border-none text-sm text-slate-200 placeholder-slate-500 focus:ring-0 focus:outline-none w-full"
-          />
-        </form>
+            {headerSearchQuery && (
+              <button
+                type="button"
+                onClick={() => {
+                  setHeaderSearchQuery('');
+                  setShowHeaderSuggestions(false);
+                }}
+                className="text-slate-400 hover:text-white p-0.5 ml-1 transition cursor-pointer"
+                title="Wissen"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </form>
+
+          {/* Autocomplete / Keuzelijst dropdown when typing in header */}
+          {showHeaderSuggestions && headerSearchQuery.trim() && headerSuggestions.length > 0 && (
+            <div className="absolute top-full mt-2 left-0 right-0 bg-slate-800 border border-slate-700 rounded-xl shadow-2xl overflow-hidden z-50 py-1 max-h-80 overflow-y-auto">
+              <div className="px-3 py-1.5 text-[11px] font-semibold text-slate-400 border-b border-slate-700/60 flex items-center justify-between">
+                <span>
+                  {headerSuggestions.length > 1
+                    ? `Meerdere knooppunten (${headerSuggestions.length} keuzes)`
+                    : 'Gevonden knooppunt'}
+                </span>
+                <span className="text-[10px] text-emerald-400">Klik om te centreren</span>
+              </div>
+              {headerSuggestions.map((node, index) => (
+                <button
+                  key={node.id || `${node.ref}-${index}`}
+                  type="button"
+                  onClick={() => handleSelectHeaderNode(node)}
+                  className="w-full text-left px-3 py-2 hover:bg-slate-700/80 transition flex items-center justify-between group cursor-pointer"
+                >
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <span className="w-7 h-7 rounded-full bg-emerald-500 text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-xs">
+                      {node.ref}
+                    </span>
+                    <div className="truncate">
+                      <div className="text-xs font-semibold text-white group-hover:text-emerald-300 transition truncate">
+                        {node.name || `Knooppunt ${node.ref}`}
+                      </div>
+                      <div className="text-[11px] text-slate-400 truncate">
+                        {node.municipality ? `${node.municipality} • ` : ''}
+                        {node.region || 'Fietsnetwerk'}
+                      </div>
+                    </div>
+                  </div>
+                  <span className="text-[11px] text-emerald-400 font-medium opacity-0 group-hover:opacity-100 transition shrink-0 ml-2">
+                    Centreer →
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
 
         {/* Quick Region Bar */}
         <div className="hidden xl:flex items-center gap-1 text-xs">

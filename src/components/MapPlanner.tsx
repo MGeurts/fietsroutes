@@ -79,11 +79,16 @@ export const MapPlanner: React.FC<MapPlannerProps> = ({
   const routeDecoratorsLayerRef = useRef<L.LayerGroup | null>(null);
   const currentLocationMarkerRef = useRef<L.Marker | null>(null);
   const currentLocationCircleRef = useRef<L.Circle | null>(null);
+  const nodeMarkersRef = useRef<Map<string, L.Marker>>(new Map());
 
   const [isSearchingNodes, setIsSearchingNodes] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearchingLocation, setIsSearchingLocation] = useState(false);
   const [searchMessage, setSearchMessage] = useState<string | null>(null);
+  const [searchCandidates, setSearchCandidates] = useState<{
+    query: string;
+    nodes: KnooppuntNode[];
+  } | null>(null);
   const [showLayerMenu, setShowLayerMenu] = useState(false);
   const [activeInfoLayer, setActiveInfoLayer] = useState<string | null>(null);
   const [currentZoom, setCurrentZoom] = useState(13);
@@ -191,6 +196,7 @@ export const MapPlanner: React.FC<MapPlannerProps> = ({
     if (!markersGroup) return;
 
     markersGroup.clearLayers();
+    nodeMarkersRef.current.clear();
 
     // Map of selected node order indices by unique ID
     const selectedIndices = new Map<string, number[]>();
@@ -316,6 +322,7 @@ export const MapPlanner: React.FC<MapPlannerProps> = ({
         onNodeClick(node);
       });
 
+      nodeMarkersRef.current.set(idKey, marker);
       markersGroup.addLayer(marker);
     });
   }, [availableNodes, selectedNodes, onNodeClick]);
@@ -420,99 +427,139 @@ export const MapPlanner: React.FC<MapPlannerProps> = ({
     }
   }, [onAddNewNodes, onAddNewNode]);
 
-  // Search places / addresses via OpenStreetMap Nominatim
-  const handleSearchLocation = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!searchQuery.trim() || !mapInstanceRef.current) return;
+  // Center map on a knooppunt without adding it to the route
+  const centerOnKnooppunt = useCallback((node: KnooppuntNode) => {
+    const map = mapInstanceRef.current;
+    if (!map) return;
 
-    // Check if query is a knooppunt number directly
-    const matchingNode = availableNodes.find(
-      (n) => n.ref.toLowerCase() === searchQuery.trim().toLowerCase()
+    map.flyTo([node.lat, node.lng], 15, { duration: 1.2 });
+    setSearchMessage(`Knooppunt ${node.ref} (${node.municipality || node.name || 'Gecentreerd'})`);
+    setTimeout(() => setSearchMessage(null), 3500);
+
+    // Open popup after fly animation completes
+    setTimeout(() => {
+      const idKey = String(node.id || node.ref);
+      const marker = nodeMarkersRef.current.get(idKey);
+      if (marker) {
+        marker.openPopup();
+      }
+    }, 1200);
+
+    setSearchCandidates(null);
+    setSearchQuery('');
+  }, []);
+
+  // Process search query for knooppunten or addresses
+  const handleProcessSearchQuery = useCallback((queryRaw: string) => {
+    const queryStr = queryRaw.trim();
+    if (!queryStr || !mapInstanceRef.current) return;
+
+    // Check if query is a knooppunt reference (e.g. "131", "kp 131", "knooppunt 131")
+    const kpMatch = queryStr.match(/^(?:knooppunt|kp\.?|node)?\s*([0-9a-zA-Z]+)$/i);
+    const searchRef = kpMatch ? kpMatch[1].toLowerCase() : queryStr.toLowerCase();
+
+    // Find all nodes in availableNodes that match this ref
+    const matchingByRef = availableNodes.filter(
+      (n) => n.ref.toLowerCase() === searchRef || n.ref.replace(/^0+/, '') === searchRef.replace(/^0+/, '')
     );
-    if (matchingNode) {
-      mapInstanceRef.current.flyTo([matchingNode.lat, matchingNode.lng], 14, { duration: 1.2 });
-      onNodeClick(matchingNode);
-      setSearchQuery('');
+
+    if (matchingByRef.length === 1) {
+      // Exactly 1 knooppunt: center the map on it (DO NOT add to route!)
+      centerOnKnooppunt(matchingByRef[0]);
       return;
     }
 
+    if (matchingByRef.length > 1) {
+      // Multiple knooppunten found with same ref: present choice list (keuzelijst)
+      const mapCenter = mapInstanceRef.current.getCenter();
+      const sorted = [...matchingByRef].sort((a, b) => {
+        const distA = Math.hypot(a.lat - mapCenter.lat, a.lng - mapCenter.lng);
+        const distB = Math.hypot(b.lat - mapCenter.lat, b.lng - mapCenter.lng);
+        return distA - distB;
+      });
+      setSearchCandidates({ query: searchRef, nodes: sorted });
+      return;
+    }
+
+    // Check if query matches municipality or name (e.g. "Lanaken", "Bilzen", "Zutendaal")
+    const matchingByName = availableNodes.filter(
+      (n) =>
+        (n.name && n.name.toLowerCase().includes(queryStr.toLowerCase())) ||
+        (n.municipality && n.municipality.toLowerCase().includes(queryStr.toLowerCase())) ||
+        (n.highlight && n.highlight.toLowerCase().includes(queryStr.toLowerCase()))
+    );
+
+    if (matchingByName.length === 1) {
+      centerOnKnooppunt(matchingByName[0]);
+      return;
+    }
+
+    if (matchingByName.length > 1) {
+      const mapCenter = mapInstanceRef.current.getCenter();
+      const sorted = [...matchingByName].sort((a, b) => {
+        const distA = Math.hypot(a.lat - mapCenter.lat, a.lng - mapCenter.lng);
+        const distB = Math.hypot(b.lat - mapCenter.lat, b.lng - mapCenter.lng);
+        return distA - distB;
+      });
+      setSearchCandidates({ query: queryStr, nodes: sorted });
+      return;
+    }
+
+    // Otherwise search address or place via Nominatim OpenStreetMap
     setIsSearchingLocation(true);
     setSearchMessage(null);
-
-    try {
-      const query = encodeURIComponent(searchQuery.trim());
-      const url = `https://nominatim.openstreetmap.org/search?format=json&q=${query}&countrycodes=nl,be&limit=3`;
-      const res = await fetch(url);
-      if (res.ok) {
-        const results = await res.json();
-        if (results && results.length > 0) {
+    fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(queryStr)}&countrycodes=nl,be&limit=3`)
+      .then((res) => res.json())
+      .then((results) => {
+        if (results && results.length > 0 && mapInstanceRef.current) {
           const top = results[0];
-          const lat = parseFloat(top.lat);
-          const lon = parseFloat(top.lon);
-          mapInstanceRef.current.flyTo([lat, lon], 13, { duration: 1.5 });
-          setSearchMessage(`Gevonden: ${top.display_name.split(',')[0]}`);
+          mapInstanceRef.current.flyTo([parseFloat(top.lat), parseFloat(top.lon)], 13, { duration: 1.5 });
+          setSearchMessage(`Locatie: ${top.display_name.split(',')[0]}`);
           setSearchQuery('');
-          // Automatically trigger knooppunten discovery for this new area after fly animation
           setTimeout(() => {
             handleScanBBoxForKnooppunten();
           }, 1600);
         } else {
-          setSearchMessage('Geen locatie gevonden in NL/BE. Probeer een andere naam.');
+          setSearchMessage(`Geen knooppunt of adres gevonden voor "${queryStr}".`);
         }
-      }
-    } catch {
-      setSearchMessage('Zoeken mislukt. Controleer netwerkverbinding.');
-    } finally {
-      setIsSearchingLocation(false);
-      setTimeout(() => setSearchMessage(null), 4000);
-    }
+      })
+      .catch(() => {
+        setSearchMessage('Zoeken mislukt. Controleer netwerkverbinding.');
+      })
+      .finally(() => {
+        setIsSearchingLocation(false);
+        setTimeout(() => setSearchMessage(null), 3500);
+      });
+  }, [availableNodes, centerOnKnooppunt, handleScanBBoxForKnooppunten]);
+
+  // Form submit for mobile search bar
+  const handleSearchLocation = (e: React.FormEvent) => {
+    e.preventDefault();
+    handleProcessSearchQuery(searchQuery);
   };
 
-  // Listen for header search events dispatched by App.tsx
+  // Listen for search and center events dispatched by header and controls
   useEffect(() => {
     const handleHeaderSearchEvent = (e: any) => {
       if (e.detail?.query) {
         setSearchQuery(e.detail.query);
-        const queryStr: string = e.detail.query;
-        const matchingNode = availableNodes.find(
-          (n) => n.ref.toLowerCase() === queryStr.trim().toLowerCase()
-        );
-        if (matchingNode && mapInstanceRef.current) {
-          mapInstanceRef.current.flyTo([matchingNode.lat, matchingNode.lng], 14, { duration: 1.2 });
-          onNodeClick(matchingNode);
-          return;
-        }
+        handleProcessSearchQuery(e.detail.query);
+      }
+    };
 
-        setIsSearchingLocation(true);
-        fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(queryStr.trim())}&countrycodes=nl,be&limit=3`)
-          .then((res) => res.json())
-          .then((results) => {
-            if (results && results.length > 0 && mapInstanceRef.current) {
-              const top = results[0];
-              mapInstanceRef.current.flyTo([parseFloat(top.lat), parseFloat(top.lon)], 13, { duration: 1.5 });
-              setSearchMessage(`Gevonden: ${top.display_name.split(',')[0]}`);
-              setTimeout(() => {
-                handleScanBBoxForKnooppunten();
-              }, 1600);
-            } else {
-              setSearchMessage('Geen locatie gevonden in NL/BE.');
-            }
-          })
-          .catch(() => {
-            setSearchMessage('Zoeken mislukt.');
-          })
-          .finally(() => {
-            setIsSearchingLocation(false);
-            setTimeout(() => setSearchMessage(null), 3500);
-          });
+    const handleCenterNodeEvent = (e: any) => {
+      if (e.detail?.node) {
+        centerOnKnooppunt(e.detail.node);
       }
     };
 
     window.addEventListener('map-search-query', handleHeaderSearchEvent);
+    window.addEventListener('map-center-node', handleCenterNodeEvent);
     return () => {
       window.removeEventListener('map-search-query', handleHeaderSearchEvent);
+      window.removeEventListener('map-center-node', handleCenterNodeEvent);
     };
-  }, [availableNodes, onNodeClick, handleScanBBoxForKnooppunten]);
+  }, [handleProcessSearchQuery, centerOnKnooppunt]);
 
   // Place distinct red dot on current location with pulse animation
   const placeCurrentLocationDot = (lat: number, lng: number, accuracy?: number) => {
@@ -996,6 +1043,104 @@ export const MapPlanner: React.FC<MapPlannerProps> = ({
           </button>
         )}
       </div>
+
+      {/* Keuzelijst modal when searched knooppunt exists multiple times */}
+      {searchCandidates && searchCandidates.nodes.length > 0 && (
+        <div className="absolute inset-0 z-[2000] bg-slate-900/40 backdrop-blur-xs flex items-start justify-center pt-16 sm:pt-20 px-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 max-w-lg w-full overflow-hidden flex flex-col max-h-[82vh] animate-in zoom-in-95 duration-150">
+            {/* Modal Header */}
+            <div className="p-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-full bg-emerald-600 text-white flex items-center justify-center font-bold text-xs shadow-xs">
+                  {searchCandidates.query}
+                </div>
+                <div>
+                  <h3 className="font-bold text-slate-900 text-sm sm:text-base">
+                    Kies een knooppunt ({searchCandidates.nodes.length} gevonden)
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Knooppunt <strong>{searchCandidates.query}</strong> komt meermaals voor. Kies de gewenste locatie:
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setSearchCandidates(null)}
+                className="w-8 h-8 rounded-full hover:bg-slate-200 text-slate-500 hover:text-slate-800 flex items-center justify-center transition cursor-pointer"
+                title="Sluiten"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* List of candidates */}
+            <div className="p-3 overflow-y-auto divide-y divide-slate-100 space-y-1">
+              {searchCandidates.nodes.map((node, index) => {
+                const mapCenter = mapInstanceRef.current?.getCenter();
+                const distKm = mapCenter
+                  ? Math.round(
+                      Math.hypot(
+                        (node.lat - mapCenter.lat) * 111,
+                        (node.lng - mapCenter.lng) * 111 * Math.cos((node.lat * Math.PI) / 180)
+                      ) * 10
+                    ) / 10
+                  : null;
+
+                return (
+                  <div
+                    key={node.id || `${node.ref}-${index}`}
+                    onClick={() => centerOnKnooppunt(node)}
+                    className="p-3 rounded-xl hover:bg-emerald-50/90 border border-transparent hover:border-emerald-200 transition cursor-pointer flex items-center justify-between group"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-9 h-9 rounded-full bg-emerald-100 text-emerald-800 border-2 border-emerald-500 flex items-center justify-center font-bold text-xs shrink-0 shadow-xs group-hover:scale-105 group-hover:bg-emerald-600 group-hover:text-white transition-all">
+                        {node.ref}
+                      </div>
+                      <div>
+                        <div className="font-bold text-slate-900 text-sm group-hover:text-emerald-900">
+                          {node.name || `Knooppunt ${node.ref}`}
+                        </div>
+                        <div className="text-xs text-slate-500">
+                          {node.municipality && (
+                            <span className="font-medium text-slate-700">{node.municipality} &bull; </span>
+                          )}
+                          <span>{node.region || 'Fietsnetwerk'}</span>
+                        </div>
+                        {node.highlight && (
+                          <div className="text-[11px] text-amber-700 font-medium mt-0.5 flex items-center gap-1">
+                            <span>★</span> {node.highlight}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col items-end gap-1 shrink-0 ml-3">
+                      {distKm !== null && (
+                        <span className="text-[11px] font-medium text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full">
+                          📍 {distKm} km
+                        </span>
+                      )}
+                      <span className="text-xs font-semibold text-emerald-700 group-hover:underline">
+                        Centreer kaart →
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Footer */}
+            <div className="px-4 py-2.5 bg-slate-50 border-t border-slate-200 text-[11px] text-slate-500 flex items-center justify-between">
+              <span>Het knooppunt wordt gecentreerd zonder het aan uw route toe te voegen.</span>
+              <button
+                onClick={() => setSearchCandidates(null)}
+                className="text-xs font-semibold text-slate-600 hover:text-slate-900 px-2.5 py-1 rounded hover:bg-slate-200 transition cursor-pointer"
+              >
+                Sluiten
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
