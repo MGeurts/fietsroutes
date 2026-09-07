@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { KnooppuntNode, RouteLeg, ElevationPoint, BikeType, MapTileProvider, PlannedRoute } from './types';
-import { INITIAL_NODES, POPULAR_REGIONS } from './data/knooppuntenData';
+import { INITIAL_NODES } from './data/knooppuntenData';
 import { calculateBicycleLeg, estimateElevationProfile, downloadGpxFile } from './services/routingService';
 import { MapPlanner } from './components/MapPlanner';
 import { RoutePanel } from './components/RoutePanel';
@@ -8,26 +8,15 @@ import { StrookjePrintModal } from './components/StrookjePrintModal';
 import { RoundTripModal } from './components/RoundTripModal';
 import { LaravelAntagonistModal } from './components/LaravelAntagonistModal';
 import { GpxImportModal } from './components/GpxImportModal';
-import { Map, List, Bike, Sparkles, Navigation, Undo2, Redo2, X } from 'lucide-react';
+import { Map, List, Bike, Sparkles, Navigation, Undo2, Redo2, X, Search, MapPin } from 'lucide-react';
 
 export default function App() {
   // Available nodes in current state (preloaded + Overpass queried)
   const [availableNodes, setAvailableNodes] = useState<KnooppuntNode[]>(INITIAL_NODES);
 
-  // Default initial route matching user's curated loop (64 -> 251 -> 252 -> 62 -> 65 -> 533 -> 532 -> 64)
-  const defaultInitialNodes = [
-    INITIAL_NODES.find((n) => n.ref === '64') || INITIAL_NODES[0],  // 64: Start (Lieteberg)
-    INITIAL_NODES.find((n) => n.ref === '251') || INITIAL_NODES[1], // 251: Zutendaal
-    INITIAL_NODES.find((n) => n.ref === '252') || INITIAL_NODES[2], // 252: Wiemesmeer
-    INITIAL_NODES.find((n) => n.ref === '62') || INITIAL_NODES[3],  // 62: Bessemer
-    INITIAL_NODES.find((n) => n.ref === '65') || INITIAL_NODES[4],  // 65: Gellik / Albertkanaal
-    INITIAL_NODES.find((n) => n.ref === '533') || INITIAL_NODES[5], // 533: Eigenbilzen
-    INITIAL_NODES.find((n) => n.ref === '532') || INITIAL_NODES[6], // 532: Roelen
-    INITIAL_NODES.find((n) => n.ref === '64') || INITIAL_NODES[0],  // 64: End (Lieteberg)
-  ];
-
-  const [selectedNodes, setSelectedNodes] = useState<KnooppuntNode[]>(defaultInitialNodes);
-  const [routeName, setRouteName] = useState<string>('Rondrit Nationaal Park Hoge Kempen & Albertkanaal');
+  // Clean initial state without default route (starts fresh on current location)
+  const [selectedNodes, setSelectedNodes] = useState<KnooppuntNode[]>([]);
+  const [routeName, setRouteName] = useState<string>('Mijn Fietsroute');
   const [routeLegs, setRouteLegs] = useState<RouteLeg[]>([]);
   const [fullCoordinates, setFullCoordinates] = useState<[number, number][]>([]);
   const [totalDistanceKm, setTotalDistanceKm] = useState<number>(0);
@@ -493,25 +482,29 @@ export default function App() {
                   </span>
                 </button>
               ))}
+
+              {/* Address / Location search option */}
+              <button
+                type="button"
+                onClick={() => {
+                  setShowHeaderSuggestions(false);
+                  if (mobileTab === 'panel') setMobileTab('map');
+                  window.dispatchEvent(new CustomEvent('map-search-query', { detail: { query: headerSearchQuery } }));
+                }}
+                className="w-full text-left px-3 py-2 bg-slate-750 hover:bg-slate-700/90 border-t border-slate-700 transition flex items-center justify-between group cursor-pointer text-xs text-slate-300"
+              >
+                <div className="flex items-center gap-2 text-slate-300 group-hover:text-white min-w-0">
+                  <MapPin className="w-4 h-4 text-blue-400 shrink-0" />
+                  <span className="truncate">
+                    Zoek adres of plaats: <strong className="text-white">"{headerSearchQuery}"</strong>
+                  </span>
+                </div>
+                <span className="text-[11px] text-blue-400 font-medium opacity-0 group-hover:opacity-100 transition shrink-0 ml-2">
+                  Zoeken →
+                </span>
+              </button>
             </div>
           )}
-        </div>
-
-        {/* Quick Region Bar */}
-        <div className="hidden xl:flex items-center gap-1 text-xs">
-          <span className="text-slate-500 mr-1 text-[11px]">Regio:</span>
-          {POPULAR_REGIONS.map((reg) => (
-            <button
-              key={reg.id}
-              onClick={() => {
-                const event = new CustomEvent('fly-to-region', { detail: { center: reg.center, zoom: reg.zoom } });
-                window.dispatchEvent(event);
-              }}
-              className="px-2 py-1 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-[11px] font-medium transition cursor-pointer border border-slate-700/60"
-            >
-              {reg.name.split(' ')[0]}
-            </button>
-          ))}
         </div>
 
         {/* Header Right Actions */}
