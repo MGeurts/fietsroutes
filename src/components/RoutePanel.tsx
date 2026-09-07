@@ -35,6 +35,7 @@ interface RoutePanelProps {
   onMoveNode?: (index: number, direction: 'up' | 'down') => void;
   onReverseRoute: () => void;
   onClearRoute: () => void;
+  onFitRoute?: () => void;
   onUndo: () => void;
   canUndo: boolean;
   onRedo?: () => void;
@@ -68,6 +69,7 @@ export const RoutePanel: React.FC<RoutePanelProps> = ({
   onRemoveNode,
   onReverseRoute,
   onClearRoute,
+  onFitRoute,
   onUndo,
   canUndo,
   onRedo,
@@ -294,15 +296,26 @@ export const RoutePanel: React.FC<RoutePanelProps> = ({
             )}
           </div>
 
-          {selectedNodes.length > 1 && (
+          {selectedNodes.length > 0 && (
             <div className="flex items-center gap-1">
               <button
-                onClick={onReverseRoute}
-                className="p-1 text-slate-500 hover:text-emerald-700 hover:bg-slate-100 rounded cursor-pointer transition"
-                title="Draai rijrichting om"
+                onClick={onFitRoute}
+                className="p-1 text-slate-600 hover:text-emerald-700 hover:bg-emerald-50 rounded cursor-pointer transition flex items-center justify-center"
+                title="Toon (en centreer) de volledige route op de kaart"
               >
-                <ArrowUpDown className="w-3.5 h-3.5" />
+                <Compass className="w-3.5 h-3.5 text-emerald-600" />
               </button>
+
+              {selectedNodes.length > 1 && (
+                <button
+                  onClick={onReverseRoute}
+                  className="p-1 text-slate-500 hover:text-emerald-700 hover:bg-slate-100 rounded cursor-pointer transition"
+                  title="Draai rijrichting om"
+                >
+                  <ArrowUpDown className="w-3.5 h-3.5" />
+                </button>
+              )}
+
               <button
                 onClick={() => setShowClearConfirm(true)}
                 className="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded cursor-pointer transition"

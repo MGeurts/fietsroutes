@@ -632,18 +632,29 @@ export const MapPlanner: React.FC<MapPlannerProps> = ({
   };
 
   // Zoom to entire planned route
-  const handleFitRoute = () => {
+  const handleFitRoute = useCallback(() => {
     const map = mapInstanceRef.current;
     if (!map) return;
 
     if (routeCoordinates.length > 0) {
       const bounds = L.latLngBounds(routeCoordinates);
-      map.fitBounds(bounds, { padding: [40, 40] });
+      map.fitBounds(bounds, { padding: [50, 50], maxZoom: 16 });
     } else if (selectedNodes.length > 0) {
       const bounds = L.latLngBounds(selectedNodes.map((n) => [n.lat, n.lng]));
-      map.fitBounds(bounds, { padding: [40, 40] });
+      map.fitBounds(bounds, { padding: [50, 50], maxZoom: 16 });
     }
-  };
+  }, [routeCoordinates, selectedNodes]);
+
+  // Listen for external trigger to fit and center route
+  useEffect(() => {
+    const handleFitEvent = () => {
+      handleFitRoute();
+    };
+    window.addEventListener('map-fit-route', handleFitEvent);
+    return () => {
+      window.removeEventListener('map-fit-route', handleFitEvent);
+    };
+  }, [handleFitRoute]);
 
   return (
     <div className="relative w-full h-full flex flex-col bg-slate-100 overflow-hidden">

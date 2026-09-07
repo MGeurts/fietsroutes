@@ -299,6 +299,13 @@ export default function App() {
     applyRouteUpdate(nodes, name);
   };
 
+  const handleFitRoute = useCallback(() => {
+    window.dispatchEvent(new CustomEvent('map-fit-route'));
+    if (mobileTab === 'panel') {
+      setMobileTab('map');
+    }
+  }, [mobileTab]);
+
   const currentRouteObject: PlannedRoute = {
     id: 'active-route',
     name: routeName || 'Fietsroute',
@@ -438,6 +445,7 @@ export default function App() {
             onMoveNode={handleMoveNode}
             onReverseRoute={handleReverseRoute}
             onClearRoute={handleClearRoute}
+            onFitRoute={handleFitRoute}
             onUndo={handleUndo}
             canUndo={canUndo}
             onRedo={handleRedo}
