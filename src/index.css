@@ -27,20 +27,53 @@
 
 /* Print optimizations for the Knooppunten-strookje */
 @media print {
-  body * {
-    visibility: hidden;
+  /* Hide main application background UI when printing */
+  body > #root > div > header,
+  body > #root > div > div.main-workspace-layout,
+  body > #root > div > div.mobile-bottom-nav,
+  .no-print {
+    display: none !important;
   }
-  #printable-strookje, #printable-strookje * {
-    visibility: visible;
+
+  /* Reset modal backdrop and cards so they flow naturally onto paper */
+  .strookje-modal-backdrop {
+    position: static !important;
+    background: transparent !important;
+    backdrop-filter: none !important;
+    padding: 0 !important;
+    inset: auto !important;
+    width: 100% !important;
+    height: auto !important;
+    display: block !important;
   }
+
+  .strookje-modal-container {
+    box-shadow: none !important;
+    border: none !important;
+    max-height: none !important;
+    max-width: 100% !important;
+    width: 100% !important;
+    overflow: visible !important;
+  }
+
+  .strookje-modal-scroll {
+    overflow: visible !important;
+    max-height: none !important;
+    padding: 0 !important;
+  }
+
   #printable-strookje {
-    position: absolute;
-    left: 0;
-    top: 0;
-    width: 100%;
-    margin: 0;
-    padding: 15px;
-    border: 1px solid #059669 !important;
+    position: relative !important;
+    left: auto !important;
+    top: auto !important;
+    width: 100% !important;
+    max-width: 480px !important;
+    margin: 10px auto !important;
+    padding: 16px !important;
+    border: 2px dashed #059669 !important;
+    box-shadow: none !important;
+    page-break-inside: avoid;
+    break-inside: avoid;
   }
 }
 

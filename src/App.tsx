@@ -23,7 +23,27 @@ export default function App() {
   const [elevationGainM, setElevationGainM] = useState<number>(0);
   const [elevationPoints, setElevationPoints] = useState<ElevationPoint[]>([]);
   const [selectedBike, setSelectedBike] = useState<BikeType>('ebike');
-  const [activeTileProvider, setActiveTileProvider] = useState<MapTileProvider>('cyclemap');
+  // Default to cyclosm (dedicated cycling map, 100% free, no API key required, no watermark)
+  const [activeTileProvider, setActiveTileProvider] = useState<MapTileProvider>(() => {
+    try {
+      const saved = localStorage.getItem('preferred_tile_provider') as MapTileProvider | null;
+      if (saved && saved !== 'cyclemap') {
+        return saved;
+      }
+    } catch {
+      // ignore
+    }
+    return 'cyclosm';
+  });
+
+  const handleTileProviderChange = (provider: MapTileProvider) => {
+    setActiveTileProvider(provider);
+    try {
+      localStorage.setItem('preferred_tile_provider', provider);
+    } catch {
+      // ignore
+    }
+  };
 
   // Mobile layout switcher & sidebar toggle
   const [mobileTab, setMobileTab] = useState<'map' | 'panel'>('map');
@@ -589,7 +609,7 @@ export default function App() {
             onAddNewNode={handleAddNewNode}
             onAddNewNodes={handleAddNewNodes}
             activeTileProvider={activeTileProvider}
-            onChangeTileProvider={setActiveTileProvider}
+            onChangeTileProvider={handleTileProviderChange}
             onUndo={handleUndo}
             canUndo={canUndo}
             onRedo={handleRedo}

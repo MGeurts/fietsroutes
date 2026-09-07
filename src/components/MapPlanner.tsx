@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import L from 'leaflet';
 import { KnooppuntNode, MapTileProvider } from '../types';
 import { fetchKnooppuntenInBBox } from '../services/overpassService';
-import { Search, Loader2, Layers, Crosshair, ZoomIn, ZoomOut, Compass, Sparkles, Undo2, Redo2, X, Info, Check, PanelLeftClose, PanelLeftOpen, MapPin } from 'lucide-react';
+import { Search, Loader2, Layers, Crosshair, ZoomIn, ZoomOut, Compass, Sparkles, Undo2, Redo2, X, Info, Check, PanelLeftClose, PanelLeftOpen, MapPin, Key, ExternalLink, HelpCircle } from 'lucide-react';
 
 export interface SearchedAddressItem {
   lat: number;
@@ -106,6 +106,32 @@ export const MapPlanner: React.FC<MapPlannerProps> = ({
   const [activeInfoLayer, setActiveInfoLayer] = useState<string | null>(null);
   const [currentZoom, setCurrentZoom] = useState(13);
 
+  // Thunderforest API key management for OpenCycleMap
+  const [thunderforestApiKey, setThunderforestApiKey] = useState(() => {
+    try {
+      return localStorage.getItem('thunderforest_api_key') || '';
+    } catch {
+      return '';
+    }
+  });
+  const [tempApiKeyInput, setTempApiKeyInput] = useState('');
+  const [showApiKeyInput, setShowApiKeyInput] = useState(false);
+
+  const handleSaveApiKey = (newKey: string) => {
+    const trimmed = newKey.trim();
+    setThunderforestApiKey(trimmed);
+    try {
+      if (trimmed) {
+        localStorage.setItem('thunderforest_api_key', trimmed);
+      } else {
+        localStorage.removeItem('thunderforest_api_key');
+      }
+    } catch {
+      // ignore
+    }
+    setShowApiKeyInput(false);
+  };
+
   // Initialize Leaflet Map
   useEffect(() => {
     if (!mapContainerRef.current || mapInstanceRef.current) return;
@@ -154,25 +180,25 @@ export const MapPlanner: React.FC<MapPlannerProps> = ({
       overlayTileLayerRef.current = null;
     }
 
-    let tileUrl = 'https://{s}.tile.thunderforest.com/cycle/{z}/{x}/{y}.png';
-    let attribution = '&copy; <a href="https://www.opencyclemap.org" target="_blank" rel="noreferrer">OpenCycleMap</a> &bull; &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap</a>';
+    let tileUrl = 'https://{s}.tile-cyclosm.openstreetmap.fr/cyclosm/{z}/{x}/{y}.png';
+    let attribution = '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap</a> &bull; CyclOSM';
     let maxZoom = 18;
     let subdomains = 'abc';
 
-    if (activeTileProvider === 'cyclemap') {
-      tileUrl = 'https://{s}.tile.thunderforest.com/cycle/{z}/{x}/{y}.png';
-      attribution = '&copy; <a href="https://www.opencyclemap.org" target="_blank" rel="noreferrer">OpenCycleMap</a> &bull; &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap</a>';
+    if (activeTileProvider === 'cyclosm') {
+      tileUrl = 'https://{s}.tile-cyclosm.openstreetmap.fr/cyclosm/{z}/{x}/{y}.png';
+      attribution = '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap</a> &bull; CyclOSM';
       maxZoom = 18;
+      subdomains = 'abc';
+    } else if (activeTileProvider === 'osm_waymarked') {
+      tileUrl = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
+      attribution = '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap contributors</a>';
+      maxZoom = 19;
       subdomains = 'abc';
     } else if (activeTileProvider === 'standard') {
       tileUrl = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
       attribution = '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap contributors</a>';
       maxZoom = 19;
-      subdomains = 'abc';
-    } else if (activeTileProvider === 'cyclosm') {
-      tileUrl = 'https://{s}.tile-cyclosm.openstreetmap.fr/cyclosm/{z}/{x}/{y}.png';
-      attribution = '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap</a> &bull; CyclOSM';
-      maxZoom = 18;
       subdomains = 'abc';
     } else if (activeTileProvider === 'voyager_waymarked') {
       tileUrl = 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
@@ -183,6 +209,22 @@ export const MapPlanner: React.FC<MapPlannerProps> = ({
       tileUrl = 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png';
       attribution = '&copy; OpenStreetMap contributors, SRTM | OpenTopoMap';
       maxZoom = 17;
+    } else if (activeTileProvider === 'cyclemap') {
+      let thunderforestKey = '';
+      try {
+        thunderforestKey = localStorage.getItem('thunderforest_api_key') || '';
+      } catch {
+        // ignore
+      }
+      if (thunderforestKey) {
+        tileUrl = `https://{s}.tile.thunderforest.com/cycle/{z}/{x}/{y}.png?apikey=${encodeURIComponent(thunderforestKey)}`;
+      } else {
+        // Note: without key, Thunderforest embeds the "API KEY REQUIRED" watermark
+        tileUrl = 'https://{s}.tile.thunderforest.com/cycle/{z}/{x}/{y}.png';
+      }
+      attribution = '&copy; <a href="https://www.opencyclemap.org" target="_blank" rel="noreferrer">OpenCycleMap</a> &bull; &copy; <a href="https://www.thunderforest.com" target="_blank" rel="noreferrer">Thunderforest</a>';
+      maxZoom = 18;
+      subdomains = 'abc';
     }
 
     const baseLayer = L.tileLayer(tileUrl, {
@@ -201,7 +243,7 @@ export const MapPlanner: React.FC<MapPlannerProps> = ({
       }).addTo(map);
       overlayTileLayerRef.current = waymarkedLayer;
     }
-  }, [activeTileProvider]);
+  }, [activeTileProvider, thunderforestApiKey]);
 
   // Render Knooppunten Markers
   useEffect(() => {
@@ -980,10 +1022,13 @@ export const MapPlanner: React.FC<MapPlannerProps> = ({
 
       {/* Map Layers Modal / Popover (Matching exact OpenStreetMap styling from screenshot) */}
       {showLayerMenu && (
-        <div className="absolute top-16 right-4 sm:right-6 z-[1200] w-72 sm:w-80 bg-white rounded-2xl shadow-2xl border border-slate-200 p-4 animate-in fade-in slide-in-from-top-2 font-sans select-none">
+        <div className="absolute top-16 right-4 sm:right-6 z-[1200] w-80 sm:w-96 bg-white rounded-2xl shadow-2xl border border-slate-200 p-4 animate-in fade-in slide-in-from-top-2 font-sans select-none max-h-[85vh] overflow-y-auto">
           {/* Header */}
-          <div className="flex items-center justify-between pb-3 mb-3 border-b border-slate-100">
-            <h2 className="text-2xl font-bold text-slate-800 tracking-tight">Map Layers</h2>
+          <div className="flex items-center justify-between pb-2 mb-3 border-b border-slate-100">
+            <div>
+              <h2 className="text-xl font-bold text-slate-900 tracking-tight">Kaartlagen (Map Layers)</h2>
+              <p className="text-[11px] text-slate-500">Kies je favoriete achtergrondkaart</p>
+            </div>
             <button
               onClick={() => setShowLayerMenu(false)}
               className="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition cursor-pointer"
@@ -993,9 +1038,100 @@ export const MapPlanner: React.FC<MapPlannerProps> = ({
             </button>
           </div>
 
+          {/* Quick Notice about Watermark */}
+          <div className="mb-3 p-2.5 bg-amber-50 border border-amber-200 rounded-xl text-amber-900 text-[11px] leading-relaxed">
+            <div className="flex items-center gap-1.5 font-bold text-amber-950 mb-0.5">
+              <HelpCircle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+              <span>Watermerk "API key required" op de achtergrond?</span>
+            </div>
+            <span>
+              Dit watermerk verschijnt alleen bij <strong>OpenCycleMap (Thunderforest)</strong> omdat deze externe dienst tegenwoordig een API-sleutel vereist. 
+              Kies hieronder simpelweg <strong>CyclOSM</strong> of <strong>OSM + Fietsnetwerk</strong>: deze zijn <strong>100% gratis en zónder watermerk</strong>!
+            </span>
+          </div>
+
           {/* Layer Options List */}
-          <div className="space-y-3">
-            {/* Standard */}
+          <div className="space-y-2.5">
+            {/* CyclOSM (Aanbevolen) */}
+            <div
+              onClick={() => onChangeTileProvider('cyclosm')}
+              className={`relative h-16 rounded-xl overflow-hidden cursor-pointer transition border ${
+                activeTileProvider === 'cyclosm'
+                  ? 'border-2 border-emerald-500 ring-2 ring-emerald-500/20 shadow-md'
+                  : 'border-slate-200 hover:border-slate-300'
+              }`}
+            >
+              <div className="absolute inset-0 bg-[#f0f9f3]">
+                <svg className="w-full h-full object-cover" viewBox="0 0 240 60" preserveAspectRatio="none">
+                  <path d="M0,20 Q80,10 140,40 T240,20" fill="none" stroke="#10b981" strokeWidth="3" />
+                  <path d="M30,0 Q70,60 110,30 T180,60" fill="none" stroke="#059669" strokeWidth="2.5" />
+                  <path d="M120,10 Q160,35 220,15" fill="none" stroke="#d97706" strokeWidth="2.5" strokeDasharray="3,2" />
+                </svg>
+              </div>
+
+              <div className="absolute top-2 left-0 bg-white/95 backdrop-blur-xs px-2.5 py-1 rounded-r-lg shadow-xs border-y border-r border-slate-200/60 flex items-center gap-1.5">
+                <span className="font-bold text-slate-900 text-xs">CyclOSM</span>
+                <span className="text-[9px] font-bold text-emerald-700 bg-emerald-100 px-1.5 py-0.2 rounded">Aanbevolen</span>
+              </div>
+
+              <div className="absolute bottom-1.5 left-3 text-[10px] text-slate-600 font-medium bg-white/80 px-1.5 py-0.5 rounded">
+                Geen watermerk &bull; Fietsinfrastructuur &amp; reliëf
+              </div>
+
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setActiveInfoLayer(activeInfoLayer === 'cyclosm' ? null : 'cyclosm');
+                }}
+                className="absolute top-2 right-2 w-6 h-6 rounded-full bg-slate-900/15 hover:bg-slate-900/30 text-slate-800 flex items-center justify-center transition cursor-pointer"
+                title="Info over CyclOSM"
+              >
+                <Info className="w-3.5 h-3.5" />
+              </button>
+            </div>
+
+            {/* OSM + Fietsnetwerk (Waymarked Trails) */}
+            <div
+              onClick={() => onChangeTileProvider('osm_waymarked')}
+              className={`relative h-16 rounded-xl overflow-hidden cursor-pointer transition border ${
+                activeTileProvider === 'osm_waymarked'
+                  ? 'border-2 border-blue-500 ring-2 ring-blue-500/20 shadow-md'
+                  : 'border-slate-200 hover:border-slate-300'
+              }`}
+            >
+              <div className="absolute inset-0 bg-[#eef2f6]">
+                <svg className="w-full h-full object-cover" viewBox="0 0 240 60" preserveAspectRatio="none">
+                  <path d="M0,0 Q60,30 120,10 T240,40 L240,60 L0,60 Z" fill="#d9e6d0" opacity="0.8" />
+                  <path d="M0,35 Q60,10 120,30 T240,15" fill="none" stroke="#2563eb" strokeWidth="3" />
+                  <circle cx="60" cy="20" r="5" fill="#2563eb" />
+                  <circle cx="160" cy="20" r="5" fill="#2563eb" />
+                </svg>
+              </div>
+
+              <div className="absolute top-2 left-0 bg-white/95 backdrop-blur-xs px-2.5 py-1 rounded-r-lg shadow-xs border-y border-r border-slate-200/60 flex items-center gap-1.5">
+                <span className="font-bold text-slate-900 text-xs">OSM + Fietsnetwerk</span>
+                <span className="text-[9px] font-bold text-blue-700 bg-blue-100 px-1.5 py-0.2 rounded">Gratis</span>
+              </div>
+
+              <div className="absolute bottom-1.5 left-3 text-[10px] text-slate-600 font-medium bg-white/80 px-1.5 py-0.5 rounded">
+                Geen watermerk &bull; Officiële knooppuntenlijnen
+              </div>
+
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setActiveInfoLayer(activeInfoLayer === 'osm_waymarked' ? null : 'osm_waymarked');
+                }}
+                className="absolute top-2 right-2 w-6 h-6 rounded-full bg-slate-900/15 hover:bg-slate-900/30 text-slate-800 flex items-center justify-center transition cursor-pointer"
+                title="Info over OSM + Fietsnetwerk"
+              >
+                <Info className="w-3.5 h-3.5" />
+              </button>
+            </div>
+
+            {/* Standard OpenStreetMap */}
             <div
               onClick={() => onChangeTileProvider('standard')}
               className={`relative h-16 rounded-xl overflow-hidden cursor-pointer transition border ${
@@ -1004,138 +1140,205 @@ export const MapPlanner: React.FC<MapPlannerProps> = ({
                   : 'border-slate-200 hover:border-slate-300'
               }`}
             >
-              {/* Thumbnail SVG */}
               <div className="absolute inset-0 bg-[#e8ece9]">
                 <svg className="w-full h-full object-cover" viewBox="0 0 240 60" preserveAspectRatio="none">
                   <path d="M0,0 Q60,30 120,10 T240,40 L240,60 L0,60 Z" fill="#cbe3bb" opacity="0.85" />
                   <path d="M40,0 Q90,50 160,20 T240,10" fill="none" stroke="#ffffff" strokeWidth="4" />
                   <path d="M0,45 Q100,20 200,55" fill="none" stroke="#fcd6a4" strokeWidth="3" />
-                  <path d="M80,0 L120,60" fill="none" stroke="#ffffff" strokeWidth="2.5" />
                 </svg>
               </div>
 
-              {/* Title Badge on the left */}
-              <div className="absolute top-2 left-0 bg-white/90 backdrop-blur-xs px-3 py-1 rounded-r-lg shadow-xs border-y border-r border-slate-200/50">
-                <span className="font-bold text-slate-900 text-sm">Standard</span>
+              <div className="absolute top-2 left-0 bg-white/95 backdrop-blur-xs px-2.5 py-1 rounded-r-lg shadow-xs border-y border-r border-slate-200/60">
+                <span className="font-bold text-slate-900 text-xs">Standard (OSM)</span>
               </div>
 
-              {/* Info icon on the right */}
+              <div className="absolute bottom-1.5 left-3 text-[10px] text-slate-600 font-medium bg-white/80 px-1.5 py-0.5 rounded">
+                Geen watermerk &bull; Klassieke kaartweergave
+              </div>
+
               <button
                 type="button"
                 onClick={(e) => {
                   e.stopPropagation();
                   setActiveInfoLayer(activeInfoLayer === 'standard' ? null : 'standard');
                 }}
-                className="absolute top-3 right-3 w-6 h-6 rounded-full bg-slate-900/15 hover:bg-slate-900/30 text-slate-800 flex items-center justify-center transition cursor-pointer"
+                className="absolute top-2 right-2 w-6 h-6 rounded-full bg-slate-900/15 hover:bg-slate-900/30 text-slate-800 flex items-center justify-center transition cursor-pointer"
                 title="Info over Standard"
               >
                 <Info className="w-3.5 h-3.5" />
               </button>
             </div>
 
-            {/* CyclOSM */}
+            {/* CartoDB Voyager + Fietsnetwerk */}
             <div
-              onClick={() => onChangeTileProvider('cyclosm')}
+              onClick={() => onChangeTileProvider('voyager_waymarked')}
               className={`relative h-16 rounded-xl overflow-hidden cursor-pointer transition border ${
-                activeTileProvider === 'cyclosm'
-                  ? 'border-2 border-blue-500 ring-2 ring-blue-500/20 shadow-md'
+                activeTileProvider === 'voyager_waymarked'
+                  ? 'border-2 border-purple-500 ring-2 ring-purple-500/20 shadow-md'
                   : 'border-slate-200 hover:border-slate-300'
               }`}
             >
-              {/* Thumbnail SVG */}
-              <div className="absolute inset-0 bg-[#f0f3f0]">
+              <div className="absolute inset-0 bg-[#fafafa]">
                 <svg className="w-full h-full object-cover" viewBox="0 0 240 60" preserveAspectRatio="none">
-                  <path d="M0,20 Q80,10 140,40 T240,20" fill="none" stroke="#3b82f6" strokeWidth="3" />
-                  <path d="M30,0 Q70,60 110,30 T180,60" fill="none" stroke="#2563eb" strokeWidth="2.5" />
-                  <path d="M120,10 Q160,35 220,15" fill="none" stroke="#92400e" strokeWidth="2.5" strokeDasharray="3,2" />
-                  <path d="M0,40 Q90,55 190,35" fill="none" stroke="#b45309" strokeWidth="2" strokeDasharray="2,2" />
+                  <path d="M0,25 Q120,45 240,20" fill="none" stroke="#9333ea" strokeWidth="2.5" />
+                  <path d="M40,0 L70,60" fill="none" stroke="#e2e8f0" strokeWidth="2" />
+                  <circle cx="120" cy="35" r="4" fill="#9333ea" />
                 </svg>
               </div>
 
-              {/* Title Badge on the left */}
-              <div className="absolute top-2 left-0 bg-white/90 backdrop-blur-xs px-3 py-1 rounded-r-lg shadow-xs border-y border-r border-slate-200/50">
-                <span className="font-bold text-slate-900 text-sm">CyclOSM</span>
+              <div className="absolute top-2 left-0 bg-white/95 backdrop-blur-xs px-2.5 py-1 rounded-r-lg shadow-xs border-y border-r border-slate-200/60 flex items-center gap-1.5">
+                <span className="font-bold text-slate-900 text-xs">CartoDB Voyager</span>
+                <span className="text-[9px] font-bold text-purple-700 bg-purple-100 px-1.5 py-0.2 rounded">Rustig</span>
               </div>
 
-              {/* Info icon on the right */}
+              <div className="absolute bottom-1.5 left-3 text-[10px] text-slate-600 font-medium bg-white/80 px-1.5 py-0.5 rounded">
+                Geen watermerk &bull; Rustige lichte kaart met routes
+              </div>
+
               <button
                 type="button"
                 onClick={(e) => {
                   e.stopPropagation();
-                  setActiveInfoLayer(activeInfoLayer === 'cyclosm' ? null : 'cyclosm');
+                  setActiveInfoLayer(activeInfoLayer === 'voyager_waymarked' ? null : 'voyager_waymarked');
                 }}
-                className="absolute top-3 right-3 w-6 h-6 rounded-full bg-slate-900/15 hover:bg-slate-900/30 text-slate-800 flex items-center justify-center transition cursor-pointer"
-                title="Info over CyclOSM"
+                className="absolute top-2 right-2 w-6 h-6 rounded-full bg-slate-900/15 hover:bg-slate-900/30 text-slate-800 flex items-center justify-center transition cursor-pointer"
+                title="Info over CartoDB Voyager"
               >
                 <Info className="w-3.5 h-3.5" />
               </button>
             </div>
 
-            {/* Cycle Map (OpenCycleMap) - Highlighted Active Option */}
+            {/* Cycle Map (OpenCycleMap / Thunderforest) */}
             <div
               onClick={() => onChangeTileProvider('cyclemap')}
-              className={`relative h-16 rounded-xl overflow-hidden cursor-pointer transition border ${
+              className={`relative h-20 rounded-xl overflow-hidden cursor-pointer transition border ${
                 activeTileProvider === 'cyclemap'
-                  ? 'border-2 border-blue-500 ring-2 ring-blue-500/30 shadow-md'
+                  ? 'border-2 border-amber-500 ring-2 ring-amber-500/20 shadow-md'
                   : 'border-slate-200 hover:border-slate-300'
               }`}
             >
-              {/* Thumbnail SVG matching user screenshot */}
               <div className="absolute inset-0 bg-[#eaf2e8]">
                 <svg className="w-full h-full object-cover" viewBox="0 0 240 60" preserveAspectRatio="none">
-                  {/* Subtle terrain contours */}
                   <path d="M0,15 Q60,5 120,25 T240,10" fill="none" stroke="#d5dec5" strokeWidth="1" />
-                  <path d="M0,35 Q70,45 150,20 T240,40" fill="none" stroke="#d5dec5" strokeWidth="1" />
-                  {/* National orange cycle route */}
-                  <path d="M110,0 Q130,30 180,15 T240,45" fill="none" stroke="#ea580c" strokeWidth="2" />
-                  {/* Regional purple knooppunten route */}
                   <path d="M0,40 Q45,25 70,30 T140,15 T220,35" fill="none" stroke="#9333ea" strokeWidth="2.5" />
-                  <path d="M60,50 L70,30 L80,5" fill="none" stroke="#9333ea" strokeWidth="2" />
-                  {/* Purple node circle badges with numbers */}
-                  <circle cx="70" cy="30" r="10" fill="#f3e8ff" stroke="#9333ea" strokeWidth="1.8" />
-                  <text x="70" y="33.5" textAnchor="middle" fontSize="9" fontWeight="bold" fill="#7e22ce" fontFamily="sans-serif">64</text>
-                  <circle cx="140" cy="15" r="10" fill="#f3e8ff" stroke="#9333ea" strokeWidth="1.8" />
-                  <text x="140" y="18.5" textAnchor="middle" fontSize="8" fontWeight="bold" fill="#7e22ce" fontFamily="sans-serif">251</text>
-                  <circle cx="210" cy="40" r="10" fill="#f3e8ff" stroke="#9333ea" strokeWidth="1.8" />
-                  <text x="210" y="43.5" textAnchor="middle" fontSize="8" fontWeight="bold" fill="#7e22ce" fontFamily="sans-serif">532</text>
+                  <circle cx="70" cy="30" r="8" fill="#f3e8ff" stroke="#9333ea" strokeWidth="1.5" />
                 </svg>
               </div>
 
-              {/* Title Badge on the left */}
-              <div className="absolute top-2 left-0 bg-white/90 backdrop-blur-xs px-3 py-1 rounded-r-lg shadow-xs border-y border-r border-slate-200/50">
-                <span className="font-bold text-slate-900 text-sm">Cycle Map</span>
+              <div className="absolute top-2 left-0 bg-white/95 backdrop-blur-xs px-2.5 py-1 rounded-r-lg shadow-xs border-y border-r border-slate-200/60 flex items-center gap-1.5">
+                <span className="font-bold text-slate-900 text-xs">OpenCycleMap</span>
+                {thunderforestApiKey ? (
+                  <span className="text-[9px] font-bold text-emerald-700 bg-emerald-100 px-1.5 py-0.2 rounded flex items-center gap-0.5">
+                    <Check className="w-2.5 h-2.5" /> Sleutel actief
+                  </span>
+                ) : (
+                  <span className="text-[9px] font-bold text-amber-700 bg-amber-100 px-1.5 py-0.2 rounded">
+                    Watermerk actief
+                  </span>
+                )}
               </div>
 
-              {/* Info icon on the right */}
+              <div className="absolute bottom-2 left-3 right-10 text-[10px] text-slate-600 font-medium bg-white/90 px-1.5 py-0.5 rounded leading-tight">
+                {thunderforestApiKey ? 'Eigen Thunderforest API-key ingesteld' : 'Bevat watermerk zonder eigen Thunderforest API-key'}
+              </div>
+
               <button
                 type="button"
                 onClick={(e) => {
                   e.stopPropagation();
                   setActiveInfoLayer(activeInfoLayer === 'cyclemap' ? null : 'cyclemap');
                 }}
-                className="absolute top-3 right-3 w-6 h-6 rounded-full bg-slate-900/15 hover:bg-slate-900/30 text-slate-800 flex items-center justify-center transition cursor-pointer"
-                title="Info over Cycle Map"
+                className="absolute top-2 right-2 w-6 h-6 rounded-full bg-slate-900/15 hover:bg-slate-900/30 text-slate-800 flex items-center justify-center transition cursor-pointer"
+                title="Info over OpenCycleMap"
               >
                 <Info className="w-3.5 h-3.5" />
               </button>
             </div>
           </div>
 
+          {/* Thunderforest API Key Configuration Collapsible */}
+          <div className="mt-3 pt-3 border-t border-slate-100">
+            <button
+              type="button"
+              onClick={() => setShowApiKeyInput(!showApiKeyInput)}
+              className="w-full flex items-center justify-between text-xs font-semibold text-slate-700 hover:text-slate-900 p-1 rounded hover:bg-slate-50 transition cursor-pointer"
+            >
+              <span className="flex items-center gap-1.5">
+                <Key className="w-3.5 h-3.5 text-amber-600" />
+                <span>Eigen Thunderforest API-sleutel instellen</span>
+              </span>
+              <span className="text-[10px] text-slate-400 font-normal">
+                {showApiKeyInput ? 'Verbergen' : (thunderforestApiKey ? 'Bewerken' : 'Optioneel')}
+              </span>
+            </button>
+
+            {showApiKeyInput && (
+              <div className="mt-2 p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2 text-xs animate-in fade-in">
+                <p className="text-[11px] text-slate-600">
+                  Als je per se OpenCycleMap zonder watermerk wilt, kun je op{' '}
+                  <a
+                    href="https://www.thunderforest.com"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-emerald-600 hover:underline font-semibold inline-flex items-center gap-0.5"
+                  >
+                    thunderforest.com <ExternalLink className="w-2.5 h-2.5" />
+                  </a>{' '}
+                  een gratis account aanmaken en hieronder je API key invoeren:
+                </p>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    placeholder="bijv. abcd1234efgh5678"
+                    defaultValue={thunderforestApiKey}
+                    onChange={(e) => setTempApiKeyInput(e.target.value)}
+                    className="flex-1 px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg text-xs text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-emerald-500 font-mono"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => handleSaveApiKey(tempApiKeyInput || thunderforestApiKey)}
+                    className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg text-xs transition cursor-pointer"
+                  >
+                    Opslaan
+                  </button>
+                </div>
+                {thunderforestApiKey && (
+                  <div className="flex items-center justify-between pt-1">
+                    <span className="text-[10px] text-emerald-700 font-medium">Huidige sleutel opgeslagen</span>
+                    <button
+                      type="button"
+                      onClick={() => handleSaveApiKey('')}
+                      className="text-[10px] text-rose-600 hover:underline cursor-pointer"
+                    >
+                      Sleutel wissen
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
           {/* Info Card if user clicked (i) */}
           {activeInfoLayer && (
             <div className="mt-3 p-2.5 bg-blue-50 rounded-lg text-xs text-blue-900 border border-blue-200 animate-in fade-in">
               <div className="font-semibold mb-1">
-                {activeInfoLayer === 'cyclemap' && 'Cycle Map (OpenCycleMap)'}
+                {activeInfoLayer === 'cyclosm' && 'CyclOSM (Aanbevolen fietskaart)'}
+                {activeInfoLayer === 'osm_waymarked' && 'OSM + Fietsnetwerk (Waymarked Trails)'}
                 {activeInfoLayer === 'standard' && 'Standard (OpenStreetMap)'}
-                {activeInfoLayer === 'cyclosm' && 'CyclOSM (Fietsinfrastructuur)'}
+                {activeInfoLayer === 'voyager_waymarked' && 'CartoDB Voyager + Fietsnetwerk'}
+                {activeInfoLayer === 'cyclemap' && 'OpenCycleMap (Thunderforest)'}
               </div>
               <p className="text-[11px] leading-relaxed text-blue-800">
-                {activeInfoLayer === 'cyclemap' &&
-                  'De officiële OpenStreetMap Cycle Map (OpenCycleMap). Toont gemarkeerde fietsknooppunten (paarse cirkels met nummers), genummerde verbindingsroutes en hoogtelijnen.'}
-                {activeInfoLayer === 'standard' &&
-                  'De standaard OpenStreetMap kaartweergave met volledige topografie en straten.'}
                 {activeInfoLayer === 'cyclosm' &&
-                  'Kaartstijl gespecialiseerd in fietsinfrastructuur, fietspaden, gravel- en mountainbiketrails.'}
+                  'Kaartstijl specifiek ontworpen voor fietsers. Toont fietspaden, gravelwegen, hoogtelijnen en wegdekkwaliteit. Helemaal gratis en zonder watermerk.'}
+                {activeInfoLayer === 'osm_waymarked' &&
+                  'Standaard OpenStreetMap verrijkt met de officiële fietsknooppunten- en routenetwerken van Waymarked Trails. Gratis en zonder watermerk.'}
+                {activeInfoLayer === 'standard' &&
+                  'De standaard OpenStreetMap kaartweergave met volledige topografie, straten en dorpen. Gratis en zonder watermerk.'}
+                {activeInfoLayer === 'voyager_waymarked' &&
+                  'Lichte, moderne cartografie van CartoDB gecombineerd met de fietsknooppuntenlijnen. Rustig voor het oog.'}
+                {activeInfoLayer === 'cyclemap' &&
+                  'De klassieke OpenCycleMap. Toont heuvelreliëf en knooppunten. Omdat Thunderforest tegenwoordig een commerciële dienst is, plaatsen zij standaard een watermerk tenzij je een gratis of betaalde API-key invoert.'}
               </p>
             </div>
           )}
