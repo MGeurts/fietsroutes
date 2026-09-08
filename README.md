@@ -134,13 +134,13 @@ bun install
 
 ### Build or update the official network dataset
 
-Run this on a development machine or in CI, never on Antagonist hosting. It validates `rcn` route relations and writes `public/data/benelux_network.json`; relations without verified endpoint geometry are excluded rather than guessed. The importer discovers relations in small cells and falls back across four public Overpass services, so a full Benelux build can take several minutes. A slow cell is retried as smaller cells; an unreachable provider is abandoned after 30 seconds, and no partial file is written when all providers fail.
+Run this on a development machine or in CI, never on Antagonist hosting. It validates `rcn` route relations and writes `public/data/benelux_network.json`; relations without verified endpoint geometry are excluded rather than guessed. The importer downloads the public [Geofabrik Belgium](https://download.geofabrik.de/europe/belgium.html) and [Netherlands](https://download.geofabrik.de/europe/netherlands.html) OpenStreetMap extracts and processes them on disk with `osmium-tool`; it never asks Overpass for a country-wide JSON response. Install `osmium-tool` first (`sudo apt-get install osmium-tool` on Ubuntu). The download is roughly 2 GB and can take a while.
 
 ```bash
 npm run build:network
 ```
 
-If your local network cannot reach Overpass, use **Actions → Build official cycle-network dataset → Run workflow** after this workflow has been merged. The manual workflow runs the same validation on GitHub-hosted infrastructure and commits `public/data/benelux_network.json` only when it successfully completes.
+If you do not want to download the extracts locally, use **Actions → Build official cycle-network dataset → Run workflow**. The manual workflow installs Osmium on a GitHub-hosted runner and commits `public/data/benelux_network.json` only when it successfully completes. To reuse locally downloaded extracts, set `NETWORK_PBF_DIR` to the folder containing `belgium-latest.osm.pbf` and `netherlands-latest.osm.pbf`.
 
 ### 3. Start the Development Server
 

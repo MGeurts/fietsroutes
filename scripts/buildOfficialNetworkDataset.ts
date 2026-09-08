@@ -1,184 +1,114 @@
 /**
- * Build the production graph off-line. It accepts only OSM route relations that explicitly
- * describe a regional cycle-node route, rejects alternatives/connections, and emits no edge
- * when endpoints or geometry cannot be verified. This script is intentionally never run by
- * the browser or on Antagonist shared hosting.
+ * Build the production graph from regional OpenStreetMap PBF extracts.
+ *
+ * This deliberately does not use Overpass: a nationwide relation query can time out,
+ * and recursive JSON responses can exceed the GitHub Actions Node heap. Osmium scans
+ * the binary extracts on disk and returns only the route relations, their ways, and
+ * the referenced nodes needed to verify an individual knooppunt connection.
  */
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
+import readline from 'node:readline';
+import { spawn } from 'node:child_process';
+import { Readable } from 'node:stream';
+import { pipeline } from 'node:stream/promises';
 import type { KnooppuntNode, OfficialNetworkDataset, OfficialNetworkDatasetEdge } from '../src/types';
 
-type Bbox = [number, number, number, number];
-interface OSMNode { type: 'node'; id: number; lat: number; lon: number; tags?: Record<string, string>; }
-interface OSMWay { type: 'way'; id: number; geometry?: { lat: number; lon: number }[]; }
-interface OSMRelationMember { type: 'node' | 'way' | 'relation'; ref: number; role: string; }
-interface OSMRelation { type: 'relation'; id: number; tags?: Record<string, string>; members?: OSMRelationMember[]; }
-type OSMElement = OSMNode | OSMWay | OSMRelation;
-interface OSMResponse { elements: OSMElement[]; }
+interface PbfSource { filename: string; label: string; url: string; }
+interface OplNode { id: number; lat: number; lng: number; tags: Record<string, string>; }
+interface OplWay { id: number; nodeIds: number[]; }
+interface OplRelation { id: number; tags: Record<string, string>; nodeMemberIds: number[]; wayMemberIds: number[]; }
 
-// Public Overpass instances reject the large recursive query for an entire province. Discover
-// relation ids in small cells first, then download their geometry in bounded batches.
-// Keep this build script independent of browser services. Importing the application data
-// layer also evaluates its GIS corridor modules, which wastes the constrained CI heap.
-const SECTORS: Bbox[] = [
-  [50.72, 5.08, 51.30, 5.85], [51.02, 4.22, 51.52, 5.20],
-  [50.72, 2.52, 51.40, 3.50], [50.70, 3.45, 51.30, 4.28],
-  [50.68, 4.10, 51.05, 5.12], [50.55, 4.12, 50.82, 5.02],
-  [50.15, 5.15, 50.80, 6.45], [49.95, 4.42, 50.65, 5.22],
-  [49.95, 3.15, 50.75, 4.65], [49.50, 5.20, 50.40, 6.05],
-  [50.72, 5.55, 51.75, 6.25], [51.28, 4.20, 51.85, 6.00],
-  [51.20, 3.35, 51.75, 4.30], [51.70, 3.90, 52.32, 5.15],
-  [51.92, 4.80, 52.32, 5.55], [52.25, 4.50, 53.20, 5.35],
-  [51.72, 5.05, 52.55, 6.85], [52.10, 5.90, 52.75, 7.10],
-  [52.25, 5.15, 52.85, 5.95], [52.60, 6.15, 53.25, 7.05],
-  [52.80, 4.80, 53.55, 6.45], [53.05, 6.15, 53.58, 7.25],
+const PBF_SOURCES: PbfSource[] = [
+  { label: 'Belgium', filename: 'belgium-latest.osm.pbf', url: 'https://download.geofabrik.de/europe/belgium-latest.osm.pbf' },
+  { label: 'Netherlands', filename: 'netherlands-latest.osm.pbf', url: 'https://download.geofabrik.de/europe/netherlands-latest.osm.pbf' },
 ];
-const MAX_CELL_SIZE_DEGREES = 0.25;
-const MIN_DISCOVERY_CELL_SIZE_DEGREES = 0.0625;
-// Process a small group and discard its raw OSM response before downloading the next one.
-// Keeping every recursive response alive exhausts the default GitHub Actions Node heap.
-const RELATIONS_PER_GEOMETRY_REQUEST = 1;
-// Try each independent public endpoint once. A second attempt at an unresponsive
-// endpoint only makes the command look stuck; the next provider is a better retry.
-const RETRIES_PER_ENDPOINT = 1;
-const REQUEST_PAUSE_MS = 250;
-const REQUEST_TIMEOUT_MS = 30_000;
-const ENDPOINT_TOLERANCE_DEGREES = 0.0045; // ~500 m: only a data-validation tolerance, never a route fallback.
-
-const OVERPASS_ENDPOINTS = [
-  'https://overpass-api.de/api/interpreter',
-  'https://overpass.private.coffee/api/interpreter',
-  'https://overpass.kumi.systems/api/interpreter',
-  'https://maps.mail.ru/osm/tools/overpass/api/interpreter',
-];
+const ENDPOINT_TOLERANCE_DEGREES = 0.0045; // Validation only (~500 m), never a routing fallback.
 
 function close(a: [number, number], b: [number, number]): boolean {
   return Math.hypot(a[0] - b[0], a[1] - b[1]) <= ENDPOINT_TOLERANCE_DEGREES;
 }
 
-function pause(milliseconds: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+function decodeOpl(value: string): string {
+  try { return decodeURIComponent(value); } catch { return value; }
 }
 
-function splitIntoCells([south, west, north, east]: Bbox, maximumSize = MAX_CELL_SIZE_DEGREES): Bbox[] {
-  const cells: Bbox[] = [];
-  for (let cellSouth = south; cellSouth < north; cellSouth += maximumSize) {
-    for (let cellWest = west; cellWest < east; cellWest += maximumSize) {
-      cells.push([
-        Number(cellSouth.toFixed(6)),
-        Number(cellWest.toFixed(6)),
-        Number(Math.min(cellSouth + maximumSize, north).toFixed(6)),
-        Number(Math.min(cellWest + maximumSize, east).toFixed(6)),
-      ]);
-    }
+function parseTags(line: string): Record<string, string> {
+  const token = /(?:^|\s)T([^\s]*)/.exec(line)?.[1];
+  if (!token) return {};
+  const tags: Record<string, string> = {};
+  for (const pair of token.split(',')) {
+    const separator = pair.indexOf('=');
+    if (separator < 0) continue;
+    tags[decodeOpl(pair.slice(0, separator))] = decodeOpl(pair.slice(separator + 1));
   }
-  return cells;
+  return tags;
 }
 
-function chunks<T>(values: T[], size: number): T[][] {
-  return Array.from({ length: Math.ceil(values.length / size) }, (_, index) => values.slice(index * size, (index + 1) * size));
+function parseNode(line: string): OplNode | null {
+  const id = /^n(\d+)\b/.exec(line)?.[1];
+  const lng = /(?:^|\s)x(-?\d+(?:\.\d+)?)/.exec(line)?.[1];
+  const lat = /(?:^|\s)y(-?\d+(?:\.\d+)?)/.exec(line)?.[1];
+  if (!id || lng === undefined || lat === undefined) return null;
+  return { id: Number(id), lat: Number(lat), lng: Number(lng), tags: parseTags(line) };
 }
 
-async function queryOverpass(query: string, label: string): Promise<OSMResponse> {
-  const errors: string[] = [];
-  for (const endpoint of OVERPASS_ENDPOINTS) {
-    for (let attempt = 1; attempt <= RETRIES_PER_ENDPOINT; attempt += 1) {
-      try {
-        const response = await fetch(endpoint, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/x-www-form-urlencoded',
-            'User-Agent': 'fietsroutes-network-builder/1.1',
-          },
-          body: `data=${encodeURIComponent(query)}`,
-          signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-        });
-        if (response.ok) return response.json() as Promise<OSMResponse>;
+function parseWay(line: string): OplWay | null {
+  const id = /^w(\d+)\b/.exec(line)?.[1];
+  const members = /(?:^|\s)N([^\s]*)/.exec(line)?.[1];
+  if (!id || !members) return null;
+  const nodeIds = members.split(',')
+    .map((member) => /^n(\d+)$/.exec(member)?.[1])
+    .filter((member): member is string => Boolean(member))
+    .map(Number);
+  return nodeIds.length > 1 ? { id: Number(id), nodeIds } : null;
+}
 
-        const detail = (await response.text()).replace(/\s+/g, ' ').slice(0, 180);
-        errors.push(`${endpoint}: HTTP ${response.status}${detail ? ` (${detail})` : ''}`);
-        if (response.status !== 429 && response.status < 500) break;
-      } catch (error) {
-        errors.push(`${endpoint}: ${error instanceof Error ? error.message : String(error)}`);
-      }
-      if (attempt < RETRIES_PER_ENDPOINT) await pause(1000 * attempt);
-    }
+function parseRelation(line: string): OplRelation | null {
+  const id = /^r(\d+)\b/.exec(line)?.[1];
+  const members = /(?:^|\s)M([^\s]*)/.exec(line)?.[1];
+  if (!id || members === undefined) return null;
+  const nodeMemberIds: number[] = [];
+  const wayMemberIds: number[] = [];
+  for (const member of members.split(',')) {
+    const match = /^(n|w)(\d+)(?:@.*)?$/.exec(member);
+    if (!match) continue;
+    if (match[1] === 'n') nodeMemberIds.push(Number(match[2]));
+    if (match[1] === 'w') wayMemberIds.push(Number(match[2]));
   }
-  throw new Error(`Overpass query failed for ${label}. ${errors.join(' | ')}`);
+  return { id: Number(id), tags: parseTags(line), nodeMemberIds, wayMemberIds };
 }
 
-async function discoverRelationIds(cells: Bbox[]): Promise<number[]> {
-  const ids = new Set<number>();
-
-  async function discoverCell(bbox: Bbox, label: string): Promise<void> {
-    const [south, west, north, east] = bbox;
-    try {
-      const response = await queryOverpass(
-        `[out:json][timeout:90]; relation["type"="route"]["route"="bicycle"]["network"="rcn"]["network:type"="node_network"](${south},${west},${north},${east}); out ids;`,
-        bbox.join(','),
-      );
-      for (const element of response.elements) {
-        if (element.type === 'relation') ids.add(element.id);
-      }
-    } catch (error) {
-      const height = north - south;
-      const width = east - west;
-      if (height <= MIN_DISCOVERY_CELL_SIZE_DEGREES && width <= MIN_DISCOVERY_CELL_SIZE_DEGREES) throw error;
-
-      const smallerSize = Math.max(MIN_DISCOVERY_CELL_SIZE_DEGREES, Math.min(height, width) / 2);
-      const children = splitIntoCells(bbox, smallerSize);
-      console.warn(`Retrying ${label} as ${children.length} smaller cells after Overpass timeout.`);
-      for (let index = 0; index < children.length; index += 1) {
-        await discoverCell(children[index], `${label}.${index + 1}`);
-        await pause(REQUEST_PAUSE_MS);
-      }
-    }
-  }
-
-  for (let index = 0; index < cells.length; index += 1) {
-    const bbox = cells[index];
-    console.log(`Discovering ${index + 1}/${cells.length}: ${bbox.join(', ')}...`);
-    await discoverCell(bbox, String(index + 1));
-    await pause(REQUEST_PAUSE_MS);
-  }
-  return [...ids];
+async function readOplLines(file: string, consume: (line: string) => void): Promise<void> {
+  const input = fs.createReadStream(file, { encoding: 'utf8' });
+  const lines = readline.createInterface({ input, crlfDelay: Infinity });
+  for await (const line of lines) consume(line);
 }
 
-async function fetchRelationGeometries(
-  relationIds: number[],
-  consume: (response: OSMResponse) => void,
-): Promise<void> {
-  const batches = chunks(relationIds, RELATIONS_PER_GEOMETRY_REQUEST);
-  for (let index = 0; index < batches.length; index += 1) {
-    const ids = batches[index];
-    console.log(`Downloading geometry ${index + 1}/${batches.length} (${ids.length} relations)...`);
-    const response = await queryOverpass(
-      // Do not use recursive `>` here: an unexpected nested route relation can expand
-      // into an entire regional network and exhaust the runner heap. We only need the
-      // route relation itself, its direct way members, and their geometry/end-point nodes.
-      `[out:json][timeout:120];
-       relation(id:${ids.join(',')})->.routes;
-       way(r.routes)->.routeWays;
-       node(r.routes)->.routeNodes;
-       .routes out body;
-       .routeWays out geom;
-       .routeNodes out body;`,
-      `relation batch ${index + 1}/${batches.length}`,
-    );
-    consume(response);
-    await pause(REQUEST_PAUSE_MS);
-  }
+function isRcnCycleRelation(relation: OplRelation): boolean {
+  return relation.tags.type === 'route'
+    && relation.tags.route === 'bicycle'
+    && relation.tags.network === 'rcn'
+    && relation.tags.state?.toLowerCase() !== 'connection'
+    && relation.tags.state?.toLowerCase() !== 'alternate';
 }
 
-function buildCoordinates(relation: OSMRelation, ways: Map<number, OSMWay>, nodes: Map<number, OSMNode>, from: OSMNode, to: OSMNode): [number, number][] | null {
-  const segments = (relation.members || [])
-    .filter((member) => member.type === 'way')
-    .map((member) => ways.get(member.ref)?.geometry?.map((node) => [node.lat, node.lon] as [number, number]))
+function getKnooppuntRef(node: OplNode): string | undefined {
+  if (node.tags.rcn_ref) return node.tags.rcn_ref.trim();
+  if (node.tags['network:type'] === 'node_network' && node.tags.ref) return node.tags.ref.trim();
+  if (node.tags.network === 'rcn' && node.tags.ref) return node.tags.ref.trim();
+  return undefined;
+}
+
+function buildCoordinates(relation: OplRelation, ways: Map<number, OplWay>, nodes: Map<number, OplNode>, from: OplNode, to: OplNode): [number, number][] | null {
+  const segments = relation.wayMemberIds
+    .map((wayId) => ways.get(wayId)?.nodeIds.map((nodeId) => nodes.get(nodeId)).filter((node): node is OplNode => Boolean(node)).map((node) => [node.lat, node.lng] as [number, number]))
     .filter((segment): segment is [number, number][] => Boolean(segment && segment.length > 1));
-  if (segments.length === 0) return null;
+  if (segments.length !== relation.wayMemberIds.length || segments.length === 0) return null;
 
-  const start: [number, number] = [from.lat, from.lon];
-  const finish: [number, number] = [to.lat, to.lon];
+  const start: [number, number] = [from.lat, from.lng];
+  const finish: [number, number] = [to.lat, to.lng];
   const first = segments.shift()!;
   let coordinates = close(first[0], start) ? first : close(first[first.length - 1], start) ? [...first].reverse() : [];
   if (coordinates.length === 0) return null;
@@ -203,68 +133,109 @@ function edgeDistanceKm(coordinates: [number, number][]): number {
   return Math.round(distance * 100) / 100;
 }
 
-function consumeVerifiedEdges(
-  response: OSMResponse,
-  datasetNodes: Map<string, KnooppuntNode>,
-  edges: Map<string, OfficialNetworkDatasetEdge>,
-): number {
-  const osmNodes = new Map(response.elements
-    .filter((element): element is OSMNode => element.type === 'node')
-    .map((node) => [node.id, node]));
-  const ways = new Map(response.elements
-    .filter((element): element is OSMWay => element.type === 'way')
-    .map((way) => [way.id, way]));
-  const relations = response.elements.filter((element): element is OSMRelation => element.type === 'relation');
-  let rejected = 0;
+function runOsmium(args: string[]): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const child = spawn('osmium', args, { stdio: 'inherit' });
+    child.once('error', (error) => reject(new Error(`Osmium kon niet starten. Installeer osmium-tool: ${error.message}`)));
+    child.once('exit', (code) => code === 0 ? resolve() : reject(new Error(`Osmium stopte met exitcode ${code ?? 'onbekend'}.`)));
+  });
+}
 
+async function downloadPbf(source: PbfSource, workingDirectory: string): Promise<string> {
+  const suppliedDirectory = process.env.NETWORK_PBF_DIR;
+  if (suppliedDirectory) {
+    const suppliedFile = path.join(suppliedDirectory, source.filename);
+    if (!fs.existsSync(suppliedFile)) throw new Error(`NETWORK_PBF_DIR bevat ${source.filename} niet.`);
+    return suppliedFile;
+  }
+  const target = path.join(workingDirectory, source.filename);
+  console.log(`Downloading ${source.label} PBF...`);
+  const response = await fetch(source.url, { signal: AbortSignal.timeout(30 * 60_000) });
+  if (!response.ok || !response.body) throw new Error(`PBF download failed for ${source.label}: HTTP ${response.status}.`);
+  await pipeline(Readable.fromWeb(response.body as never), fs.createWriteStream(target));
+  return target;
+}
+
+async function readRelations(relationFile: string): Promise<OplRelation[]> {
+  const relations: OplRelation[] = [];
+  await readOplLines(relationFile, (line) => {
+    if (!line.startsWith('r')) return;
+    const relation = parseRelation(line);
+    if (relation && isRcnCycleRelation(relation) && relation.nodeMemberIds.length > 1 && relation.wayMemberIds.length > 0) relations.push(relation);
+  });
+  return relations;
+}
+
+async function readPayload(payloadFile: string): Promise<{ nodes: Map<number, OplNode>; ways: Map<number, OplWay> }> {
+  const nodes = new Map<number, OplNode>();
+  const ways = new Map<number, OplWay>();
+  await readOplLines(payloadFile, (line) => {
+    if (line.startsWith('n')) { const node = parseNode(line); if (node) nodes.set(node.id, node); }
+    else if (line.startsWith('w')) { const way = parseWay(line); if (way) ways.set(way.id, way); }
+  });
+  return { nodes, ways };
+}
+
+function consumeVerifiedEdges(relations: OplRelation[], nodes: Map<number, OplNode>, ways: Map<number, OplWay>, datasetNodes: Map<string, KnooppuntNode>, edges: Map<string, OfficialNetworkDatasetEdge>): number {
+  let rejected = 0;
   for (const relation of relations) {
-    const tags = relation.tags || {};
-    const state = tags.state?.toLowerCase();
-    if (state === 'connection' || state === 'alternate') { rejected += 1; continue; }
-    const endpointMembers = (relation.members || [])
-      .filter((member) => member.type === 'node')
-      .map((member) => osmNodes.get(member.ref))
-      .filter((node): node is OSMNode => Boolean(node?.tags?.rcn_ref));
-    const from = endpointMembers[0];
-    const to = endpointMembers[endpointMembers.length - 1];
-    if (!from || !to || from.id === to.id) { rejected += 1; continue; }
-    const coordinates = buildCoordinates(relation, ways, osmNodes, from, to);
+    const endpoints = relation.nodeMemberIds.map((id) => nodes.get(id)).filter((node): node is OplNode => Boolean(node && getKnooppuntRef(node)));
+    const from = endpoints[0];
+    const to = endpoints[endpoints.length - 1];
+    const fromRef = from && getKnooppuntRef(from);
+    const toRef = to && getKnooppuntRef(to);
+    if (!from || !to || !fromRef || !toRef || from.id === to.id) { rejected += 1; continue; }
+    const coordinates = buildCoordinates(relation, ways, nodes, from, to);
     if (!coordinates || coordinates.length < 2) { rejected += 1; continue; }
     const fromId = `osm-${from.id}`;
     const toId = `osm-${to.id}`;
     const key = [fromId, toId].sort().join('|');
     if (edges.has(key)) continue;
-    datasetNodes.set(fromId, { id: fromId, ref: from.tags!.rcn_ref, lat: from.lat, lng: from.lon, name: from.tags?.name });
-    datasetNodes.set(toId, { id: toId, ref: to.tags!.rcn_ref, lat: to.lat, lng: to.lon, name: to.tags?.name });
-    edges.set(key, {
-      from: fromId, to: toId, coordinates, distanceKm: edgeDistanceKm(coordinates),
-      source: `OpenStreetMap RCN relation ${relation.id}`, verifiedAt: new Date().toISOString(),
-    });
+    datasetNodes.set(fromId, { id: fromId, ref: fromRef, lat: from.lat, lng: from.lng, name: from.tags.name });
+    datasetNodes.set(toId, { id: toId, ref: toRef, lat: to.lat, lng: to.lng, name: to.tags.name });
+    edges.set(key, { from: fromId, to: toId, coordinates, distanceKm: edgeDistanceKm(coordinates), source: `OpenStreetMap RCN relation ${relation.id}`, verifiedAt: new Date().toISOString() });
   }
   return rejected;
 }
 
-async function main(): Promise<void> {
-  console.log('Starting network dataset builder...');
-  const cells = SECTORS.flatMap(splitIntoCells);
-  const relationIds = await discoverRelationIds(cells);
-  if (relationIds.length === 0) {
-    throw new Error('No officiële RCN-relaties gevonden. Controleer de Overpass-antwoorden; er wordt geen lege dataset geschreven.');
-  }
-  console.log(`Found ${relationIds.length} unique RCN relations.`);
-  const datasetNodes = new Map<string, KnooppuntNode>();
-  const edges = new Map<string, OfficialNetworkDatasetEdge>();
-  let rejected = 0;
-  await fetchRelationGeometries(relationIds, (response) => {
-    rejected += consumeVerifiedEdges(response, datasetNodes, edges);
-  });
+async function processSource(source: PbfSource, pbfFile: string, workingDirectory: string, datasetNodes: Map<string, KnooppuntNode>, edges: Map<string, OfficialNetworkDatasetEdge>): Promise<number> {
+  const stem = path.basename(source.filename, '.osm.pbf');
+  const relationsFile = path.join(workingDirectory, `${stem}-relations.opl`);
+  const idsFile = path.join(workingDirectory, `${stem}-ids.txt`);
+  const payloadFile = path.join(workingDirectory, `${stem}-payload.opl`);
+  console.log(`Selecting ${source.label} RCN route relations with Osmium...`);
+  await runOsmium(['tags-filter', '--omit-referenced', '--output-format', 'opl', '--output', relationsFile, pbfFile, 'r/network=rcn']);
+  const relations = await readRelations(relationsFile);
+  if (relations.length === 0) throw new Error(`Geen RCN-fietsrelaties gevonden in ${source.label}.`);
+  const ids = new Set<string>();
+  for (const relation of relations) { relation.nodeMemberIds.forEach((id) => ids.add(`n${id}`)); relation.wayMemberIds.forEach((id) => ids.add(`w${id}`)); }
+  fs.writeFileSync(idsFile, [...ids].join('\n'));
+  console.log(`Extracting ${ids.size} ${source.label} route members with their referenced nodes...`);
+  await runOsmium(['getid', '--add-referenced', '--remove-tags', '--id-file', idsFile, '--output-format', 'opl', '--output', payloadFile, pbfFile]);
+  const { nodes, ways } = await readPayload(payloadFile);
+  const rejected = consumeVerifiedEdges(relations, nodes, ways, datasetNodes, edges);
+  console.log(`${source.label}: ${relations.length} relations examined; ${nodes.size} nodes and ${ways.size} ways retained.`);
+  fs.rmSync(relationsFile, { force: true }); fs.rmSync(idsFile, { force: true }); fs.rmSync(payloadFile, { force: true });
+  return rejected;
+}
 
-  const dataset: OfficialNetworkDataset = {
-    version: 1, generatedAt: new Date().toISOString(), nodes: [...datasetNodes.values()], edges: [...edges.values()],
-  };
-  const output = path.join(process.cwd(), 'public', 'data', 'benelux_network.json');
-  fs.writeFileSync(output, JSON.stringify(dataset));
-  console.log(`Wrote ${dataset.nodes.length} nodes and ${dataset.edges.length} verified edges; rejected ${rejected} relations.`);
+async function main(): Promise<void> {
+  const workingDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'fietsroutes-network-'));
+  try {
+    await runOsmium(['--version']);
+    const datasetNodes = new Map<string, KnooppuntNode>();
+    const edges = new Map<string, OfficialNetworkDatasetEdge>();
+    let rejected = 0;
+    for (const source of PBF_SOURCES) rejected += await processSource(source, await downloadPbf(source, workingDirectory), workingDirectory, datasetNodes, edges);
+    if (edges.size === 0) throw new Error('Geen verifieerbare RCN-routes gevonden; er wordt geen lege dataset geschreven.');
+    const dataset: OfficialNetworkDataset = { version: 1, generatedAt: new Date().toISOString(), nodes: [...datasetNodes.values()], edges: [...edges.values()] };
+    const output = path.join(process.cwd(), 'public', 'data', 'benelux_network.json');
+    fs.mkdirSync(path.dirname(output), { recursive: true });
+    fs.writeFileSync(output, JSON.stringify(dataset));
+    console.log(`Wrote ${dataset.nodes.length} nodes and ${dataset.edges.length} verified edges; rejected ${rejected} relations.`);
+  } finally {
+    fs.rmSync(workingDirectory, { recursive: true, force: true });
+  }
 }
 
 main().catch((error) => { console.error(error); process.exitCode = 1; });
