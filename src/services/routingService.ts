@@ -1,6 +1,6 @@
 import { KnooppuntNode, RouteLeg, ElevationPoint, PlannedRoute } from '../types';
 import { ElevationProfileResult } from '../types';
-import { getOfficialEdgeBetween } from './officialNetworkService';
+import { findOfficialNetworkPath, getOfficialEdgeBetween } from './officialNetworkService';
 
 // In-memory cache for resolved legs to make route rendering instantaneous
 const legCache = new Map<string, RouteLeg>();
@@ -21,7 +21,7 @@ export function calculateHaversineDistanceKm(lat1: number, lon1: number, lat2: n
 }
 
 /**
- * Resolve a leg that is known to exist in the verified cycle-junction network.
+ * Resolve a leg over the verified cycle-junction network.
  *
  * This deliberately has no BRouter, OSRM, straight-line, or synthetic fallback: a general
  * bicycle route is not evidence of a signed junction-network connection.
@@ -43,14 +43,27 @@ export async function calculateBicycleLeg(
   }
 
   const edge = getOfficialEdgeBetween(fromNode, toNode);
-  if (!edge) throw new UnknownKnooppuntenConnectionError(fromNode.ref, toNode.ref);
+  if (edge) {
+    const leg: RouteLeg = {
+      fromNode,
+      toNode,
+      distanceKm: edge.distanceKm,
+      coordinates: edge.coordinates,
+      instructions: `Geverifieerde corridor: ${edge.source}`,
+    };
+    legCache.set(cacheKey, leg);
+    return leg;
+  }
+
+  const path = findOfficialNetworkPath(fromNode, toNode);
+  if (!path) throw new UnknownKnooppuntenConnectionError(fromNode.ref, toNode.ref);
 
   const leg: RouteLeg = {
     fromNode,
     toNode,
-    distanceKm: edge.distanceKm,
-    coordinates: edge.coordinates,
-    instructions: `Geverifieerde corridor: ${edge.source}`,
+    distanceKm: Math.round(path.edges.reduce((total, segment) => total + segment.distanceKm, 0) * 100) / 100,
+    coordinates: path.edges.flatMap((segment, index) => index === 0 ? segment.coordinates : segment.coordinates.slice(1)),
+    instructions: `Geverifieerde knooppuntenroute via ${path.nodes.slice(1, -1).map((node) => node.ref).join(' → ')}.`,
   };
   legCache.set(cacheKey, leg);
   return leg;

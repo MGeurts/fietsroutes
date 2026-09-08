@@ -103,7 +103,7 @@ export const OfflineDataManagerModal: React.FC<OfflineDataManagerModalProps> = (
         }
       );
 
-      setActionSuccessMessage(`Succesvol ${importedCount.toLocaleString('nl-NL')} knooppunten lokaal opgeslagen voor offline gebruik.`);
+      setActionSuccessMessage(`${importedCount.toLocaleString('nl-NL')} knooppunten lokaal opgeslagen als kaartcache.`);
       setTimeout(() => setActionSuccessMessage(null), 5000);
       await loadStatus();
       onDataUpdated?.();
@@ -211,7 +211,7 @@ export const OfflineDataManagerModal: React.FC<OfflineDataManagerModalProps> = (
                 </span>
               </div>
               <p className="text-xs text-slate-400 mt-0.5">
-                Volledige knooppuntennetwerken &amp; verbindingen voor België en Nederland lokaal in uw browser (IndexedDB).
+                Lokale kaartcache met knooppunten voor België en Nederland. Geverifieerde verbindingen komen uit de ingebouwde netwerkdataset.
               </p>
             </div>
           </div>
@@ -279,11 +279,11 @@ export const OfflineDataManagerModal: React.FC<OfflineDataManagerModalProps> = (
                   <div className="flex items-center gap-2">
                     <Sparkles className="w-4 h-4 text-emerald-400" />
                     <h3 className="font-bold text-sm text-white">
-                      1-Klik Volledige Import (België &amp; Nederland)
+                      Optionele knooppuntcache (België &amp; Nederland)
                     </h3>
                   </div>
                   <p className="text-xs text-slate-300 mt-1 max-w-md leading-relaxed">
-                    Installeer in één keer alle fietsknooppunten en verbindingen voor heel Vlaanderen en de Nederlandse provincies lokaal in uw browser. Daarna werkt de hele planner offline.
+                    Sla alle kaartmarkeringen lokaal op om knooppunten ook zonder netwerkverbinding te kunnen zoeken en tonen. Dit voegt geen routes toe en is niet nodig voor de geverifieerde verbindingen.
                   </p>
                 </div>
 
@@ -300,7 +300,7 @@ export const OfflineDataManagerModal: React.FC<OfflineDataManagerModalProps> = (
                   ) : (
                     <>
                       <Download className="w-4 h-4" />
-                      <span>Start 1-malige import</span>
+                      <span>Knooppunten cachen</span>
                     </>
                   )}
                 </button>
@@ -330,7 +330,7 @@ export const OfflineDataManagerModal: React.FC<OfflineDataManagerModalProps> = (
               <div>
                 <h3 className="font-bold text-sm text-white flex items-center gap-2">
                   <MapPin className="w-4 h-4 text-blue-400" />
-                  <span>Grid Sectoren &amp; Update-controle ({sectors.length})</span>
+                  <span>Knooppuntcache &amp; updatecontrole ({sectors.length})</span>
                 </h3>
                 <p className="text-[11px] text-slate-400">
                   U kunt per provincie of deelsector de meest recente wijzigingen ophalen via OpenStreetMap.

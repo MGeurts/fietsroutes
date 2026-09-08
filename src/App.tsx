@@ -109,14 +109,17 @@ export default function App() {
         }
       } catch (error) {
         if (isCancelled) return;
-        setRouteLegs([]);
-        // Never draw a line between selected nodes when no verified network edge exists.
-        // Leaflet would render those waypoints as misleading straight-line routing.
-        setFullCoordinates([]);
-        setTotalDistanceKm(0);
-        setElevationGainM(0);
-        setElevationPoints([]);
-        setElevationAvailable(false);
+        // Keep every preceding verified segment visible. Only the missing segment is
+        // withheld; clearing the full route made a later invalid choice appear to erase
+        // already validated connections.
+        const partialDistance = Math.round(totalDist * 10) / 10;
+        const partialElevation = estimateElevationProfile(allCoords, partialDistance);
+        setRouteLegs(calculatedLegs);
+        setFullCoordinates(allCoords);
+        setTotalDistanceKm(partialDistance);
+        setElevationGainM(partialElevation.totalAscent);
+        setElevationPoints(partialElevation.points);
+        setElevationAvailable(partialElevation.available);
         setRouteError(error instanceof UnknownKnooppuntenConnectionError
           ? error.message
           : 'De officiële knooppuntenroute kon niet worden berekend.');
@@ -774,10 +777,10 @@ export default function App() {
           <button
             onClick={() => setIsOfflineManagerOpen(true)}
             className="flex items-center gap-1.5 px-2.5 sm:px-3 py-2 bg-emerald-950/70 hover:bg-emerald-900/90 text-emerald-300 border border-emerald-700/60 text-xs font-semibold rounded-md transition cursor-pointer shadow-xs tablet-touch-friendly-btn"
-            title="Volledige dataset België & Nederland offline beheren & synchroniseren"
+            title="Lokale knooppuntcache beheren; geverifieerde verbindingen zijn ingebouwd"
           >
             <HardDrive className="w-3.5 h-3.5 text-emerald-400" />
-            <span className="hidden sm:inline">Offline Grid (BE/NL)</span>
+            <span className="hidden sm:inline">Knooppuntcache</span>
           </button>
 
           <button
