@@ -10,7 +10,7 @@ import type { KnooppuntNode, OfficialNetworkDataset, OfficialNetworkDatasetEdge 
 
 type Bbox = [number, number, number, number];
 interface OSMNode { type: 'node'; id: number; lat: number; lon: number; tags?: Record<string, string>; }
-interface OSMWay { type: 'way'; id: number; nodes?: number[]; }
+interface OSMWay { type: 'way'; id: number; geometry?: { lat: number; lon: number }[]; }
 interface OSMRelationMember { type: 'node' | 'way' | 'relation'; ref: number; role: string; }
 interface OSMRelation { type: 'relation'; id: number; tags?: Record<string, string>; members?: OSMRelationMember[]; }
 type OSMElement = OSMNode | OSMWay | OSMRelation;
@@ -37,7 +37,7 @@ const MAX_CELL_SIZE_DEGREES = 0.25;
 const MIN_DISCOVERY_CELL_SIZE_DEGREES = 0.0625;
 // Process a small group and discard its raw OSM response before downloading the next one.
 // Keeping every recursive response alive exhausts the default GitHub Actions Node heap.
-const RELATIONS_PER_GEOMETRY_REQUEST = 2;
+const RELATIONS_PER_GEOMETRY_REQUEST = 1;
 // Try each independent public endpoint once. A second attempt at an unresponsive
 // endpoint only makes the command look stuck; the next provider is a better retry.
 const RETRIES_PER_ENDPOINT = 1;
@@ -160,9 +160,9 @@ async function fetchRelationGeometries(
        relation(id:${ids.join(',')})->.routes;
        way(r.routes)->.routeWays;
        node(r.routes)->.routeNodes;
-       node(w.routeWays)->.geometryNodes;
-       (.routes;.routeWays;.routeNodes;.geometryNodes;);
-       out body;`,
+       .routes out body;
+       .routeWays out geom;
+       .routeNodes out body;`,
       `relation batch ${index + 1}/${batches.length}`,
     );
     consume(response);
@@ -173,7 +173,7 @@ async function fetchRelationGeometries(
 function buildCoordinates(relation: OSMRelation, ways: Map<number, OSMWay>, nodes: Map<number, OSMNode>, from: OSMNode, to: OSMNode): [number, number][] | null {
   const segments = (relation.members || [])
     .filter((member) => member.type === 'way')
-    .map((member) => ways.get(member.ref)?.nodes?.map((id) => nodes.get(id)).filter((node): node is OSMNode => Boolean(node)).map((node) => [node.lat, node.lon] as [number, number]))
+    .map((member) => ways.get(member.ref)?.geometry?.map((node) => [node.lat, node.lon] as [number, number]))
     .filter((segment): segment is [number, number][] => Boolean(segment && segment.length > 1));
   if (segments.length === 0) return null;
 
@@ -245,6 +245,7 @@ function consumeVerifiedEdges(
 }
 
 async function main(): Promise<void> {
+  console.log('Starting network dataset builder...');
   const cells = SECTORS.flatMap(splitIntoCells);
   const relationIds = await discoverRelationIds(cells);
   if (relationIds.length === 0) {
