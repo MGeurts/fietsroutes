@@ -12,14 +12,31 @@ interface SectorDef {
 }
 
 const SECTORS: SectorDef[] = [
+  // België (Vlaanderen, Brussel, Wallonië)
   { id: 'limburg_be', name: 'Belgisch Limburg', country: 'BE', bbox: [50.72, 5.10, 51.28, 5.85] },
   { id: 'antwerpen', name: 'Provincie Antwerpen', country: 'BE', bbox: [51.02, 4.25, 51.48, 5.15] },
   { id: 'west_vlaanderen', name: 'West-Vlaanderen & Kust', country: 'BE', bbox: [50.75, 2.60, 51.38, 3.45] },
-  { id: 'oost_vlaanderen', name: 'Oost-Vlaanderen & Gent', country: 'BE', bbox: [50.75, 3.50, 51.28, 4.25] },
+  { id: 'oost_vlaanderen', name: 'Oost-Vlaanderen', country: 'BE', bbox: [50.75, 3.50, 51.28, 4.25] },
   { id: 'vlaams_brabant_bxl', name: 'Vlaams-Brabant & Brussel', country: 'BE', bbox: [50.72, 4.15, 51.00, 5.05] },
+  { id: 'waals_brabant', name: 'Waals-Brabant', country: 'BE', bbox: [50.55, 4.12, 50.82, 5.02] },
+  { id: 'luik_liege', name: 'Luik & Oostkantons / Vennbahn', country: 'BE', bbox: [50.15, 5.15, 50.80, 6.45] },
+  { id: 'namen_namur', name: 'Namen & Maasvallei', country: 'BE', bbox: [49.95, 4.42, 50.65, 5.22] },
+  { id: 'henegouwen', name: 'Henegouwen', country: 'BE', bbox: [49.95, 3.15, 50.75, 4.65] },
+  { id: 'luxemburg_be', name: 'Belgisch Luxemburg', country: 'BE', bbox: [49.50, 5.20, 50.40, 6.05] },
+
+  // Nederland (alle 12 provincies)
   { id: 'limburg_nl', name: 'Nederlands Limburg', country: 'NL', bbox: [50.75, 5.65, 51.45, 6.20] },
   { id: 'noord_brabant', name: 'Noord-Brabant & De Kempen', country: 'NL', bbox: [51.30, 4.30, 51.75, 5.80] },
   { id: 'zeeland', name: 'Zeeland & Delta', country: 'NL', bbox: [51.22, 3.40, 51.70, 4.20] },
+  { id: 'zuid_holland', name: 'Zuid-Holland', country: 'NL', bbox: [51.72, 3.95, 52.30, 5.10] },
+  { id: 'utrecht', name: 'Utrecht', country: 'NL', bbox: [51.95, 4.85, 52.30, 5.50] },
+  { id: 'noord_holland', name: 'Noord-Holland', country: 'NL', bbox: [52.28, 4.55, 53.15, 5.30] },
+  { id: 'gelderland', name: 'Gelderland & Veluwe', country: 'NL', bbox: [51.75, 5.10, 52.50, 6.80] },
+  { id: 'overijssel', name: 'Overijssel & Twente', country: 'NL', bbox: [52.15, 5.95, 52.70, 7.05] },
+  { id: 'flevoland', name: 'Flevoland', country: 'NL', bbox: [52.30, 5.20, 52.80, 5.90] },
+  { id: 'drenthe', name: 'Drenthe', country: 'NL', bbox: [52.65, 6.20, 53.20, 7.00] },
+  { id: 'friesland', name: 'Friesland', country: 'NL', bbox: [52.85, 5.20, 53.45, 6.30] },
+  { id: 'groningen', name: 'Groningen', country: 'NL', bbox: [53.10, 6.20, 53.50, 7.20] },
 ];
 
 async function fetchSectorNodes(sector: SectorDef): Promise<KnooppuntNode[]> {

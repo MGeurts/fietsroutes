@@ -268,6 +268,7 @@ export const StrookjePrintModal: React.FC<StrookjePrintModalProps> = ({
               <span style="color: #94a3b8;">➔</span>
               <span class="mini-node">${leg.toNode.ref}</span>
               ${leg.toNode.name ? `<span style="font-weight: normal; color: #64748b; max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${leg.toNode.name}</span>` : ''}
+              ${leg.toNode.highlight ? `<span style="color: #d97706; font-size: 9px; font-weight: bold;">★ ${leg.toNode.highlight}</span>` : ''}
             </div>
             <div class="leg-dist">${leg.distanceKm} km</div>
           </div>

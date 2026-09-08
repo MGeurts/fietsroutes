@@ -662,15 +662,27 @@ export default function App() {
                       className="w-full text-left px-3 py-2 hover:bg-slate-700/80 transition flex items-center justify-between group cursor-pointer"
                     >
                       <div className="flex items-center gap-2.5 min-w-0">
-                        <span className="w-8 h-8 rounded-full bg-emerald-500 text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-xs group-hover:scale-105 transition-transform">
-                          {node.ref}
-                        </span>
+                        <div className="relative shrink-0">
+                          <span className="w-8 h-8 rounded-full bg-emerald-500 text-white flex items-center justify-center font-bold text-xs shadow-xs group-hover:scale-105 transition-transform">
+                            {node.ref}
+                          </span>
+                          {node.highlight && (
+                            <span className="absolute -top-1 -right-1 bg-amber-400 text-slate-950 w-3.5 h-3.5 rounded-full flex items-center justify-center text-[8px] font-black shadow-xs ring-1 ring-slate-800" title={node.highlight}>
+                              ★
+                            </span>
+                          )}
+                        </div>
                         <div className="truncate">
                           <div className="text-xs font-bold text-white group-hover:text-emerald-300 transition truncate flex items-center gap-1.5">
                             <span>{node.name || `Knooppunt ${node.ref}`}</span>
                             {node.municipality && (
                               <span className="text-[10px] bg-emerald-950/80 text-emerald-300 px-1.5 py-0.5 rounded font-medium border border-emerald-700/60 shrink-0">
                                 {node.municipality}
+                              </span>
+                            )}
+                            {node.highlight && (
+                              <span className="text-[9px] bg-amber-400/20 text-amber-300 px-1.5 py-0.5 rounded font-bold border border-amber-500/40 shrink-0 flex items-center gap-0.5" title={node.highlight}>
+                                ★ Highlight
                               </span>
                             )}
                           </div>

@@ -457,11 +457,23 @@ export const RoutePanel: React.FC<RoutePanelProps> = ({
                                 </span>
                               )}
                               <span>Knooppunt {node.ref}</span>
+                              {node.highlight && (
+                                <span className="inline-flex items-center gap-0.5 text-[9px] font-bold text-amber-900 bg-amber-100 border border-amber-300 px-1 py-0.2 rounded shrink-0" title={node.highlight}>
+                                  ★ Highlight
+                                </span>
+                              )}
                             </div>
                             <div className="flex items-center justify-between gap-1 text-[11px] mt-0.5">
-                              <span className="text-slate-500 truncate text-[11px]">
-                                {node.name || node.municipality || node.region || 'Fietsnetwerk'}
-                              </span>
+                              <div className="flex items-center gap-1 min-w-0 truncate">
+                                <span className="text-slate-500 truncate text-[11px]">
+                                  {node.name || node.municipality || node.region || 'Fietsnetwerk'}
+                                </span>
+                                {node.highlight && (
+                                  <span className="text-[10px] text-amber-700 font-medium truncate hidden sm:inline" title={node.highlight}>
+                                    &bull; {node.highlight}
+                                  </span>
+                                )}
+                              </div>
                               {index > 0 && (
                                 <span
                                   className="shrink-0 font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 px-1.5 py-0.2 rounded-full text-[10px]"

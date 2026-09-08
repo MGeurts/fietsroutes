@@ -41,6 +41,7 @@ export const OfflineDataManagerModal: React.FC<OfflineDataManagerModalProps> = (
   const [totalCachedNodes, setTotalCachedNodes] = useState<number>(0);
   const [lastSyncTimestamp, setLastSyncTimestamp] = useState<number | null>(null);
   const [isOnline, setIsOnline] = useState<boolean>(navigator.onLine);
+  const [countryFilter, setCountryFilter] = useState<'ALL' | 'BE' | 'NL'>('ALL');
 
   // Batch import progress state
   const [isImportingAll, setIsImportingAll] = useState(false);
@@ -325,20 +326,61 @@ export const OfflineDataManagerModal: React.FC<OfflineDataManagerModalProps> = (
 
           {/* Grid / Region Overview */}
           <div className="pt-4 space-y-3">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
               <div>
                 <h3 className="font-bold text-sm text-white flex items-center gap-2">
                   <MapPin className="w-4 h-4 text-blue-400" />
-                  <span>Grid Sectoren &amp; Update-controle</span>
+                  <span>Grid Sectoren &amp; Update-controle ({sectors.length})</span>
                 </h3>
                 <p className="text-[11px] text-slate-400">
                   U kunt per provincie of deelsector de meest recente wijzigingen ophalen via OpenStreetMap.
                 </p>
               </div>
+
+              {/* Country Tabs */}
+              <div className="flex items-center gap-1 bg-slate-900/80 p-1 rounded-xl border border-slate-700/60 self-start sm:self-auto">
+                <button
+                  type="button"
+                  onClick={() => setCountryFilter('ALL')}
+                  className={`px-2.5 py-1 text-xs font-semibold rounded-lg transition cursor-pointer ${
+                    countryFilter === 'ALL'
+                      ? 'bg-slate-700 text-white shadow-xs'
+                      : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  Alle ({sectors.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCountryFilter('BE')}
+                  className={`px-2.5 py-1 text-xs font-semibold rounded-lg transition cursor-pointer flex items-center gap-1 ${
+                    countryFilter === 'BE'
+                      ? 'bg-emerald-900/80 text-emerald-200 border border-emerald-700/50 shadow-xs'
+                      : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  <span>🇧🇪 België</span>
+                  <span className="text-[10px] opacity-80">({sectors.filter((s) => s.country === 'BE').length})</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCountryFilter('NL')}
+                  className={`px-2.5 py-1 text-xs font-semibold rounded-lg transition cursor-pointer flex items-center gap-1 ${
+                    countryFilter === 'NL'
+                      ? 'bg-orange-950/80 text-orange-200 border border-orange-700/50 shadow-xs'
+                      : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  <span>🇳🇱 Nederland</span>
+                  <span className="text-[10px] opacity-80">({sectors.filter((s) => s.country === 'NL').length})</span>
+                </button>
+              </div>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-              {sectors.map((sector) => {
+              {sectors
+                .filter((sector) => countryFilter === 'ALL' || sector.country === countryFilter)
+                .map((sector) => {
                 const isSyncing = syncingSectorId === sector.id;
                 const hasNodes = sector.nodeCount > 0;
 

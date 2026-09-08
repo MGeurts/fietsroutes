@@ -331,8 +331,8 @@ export const MapPlanner: React.FC<MapPlannerProps> = ({
           <div class="w-8 h-8 rounded-full flex items-center justify-center text-xs shadow-md transition-all cursor-pointer ${bgClass} ${ringClass}">
             ${node.ref}
           </div>
-          ${isHighlight && !isSelected ? `
-            <div class="absolute -top-1.5 -right-1.5 bg-amber-400 text-slate-900 w-3.5 h-3.5 rounded-full flex items-center justify-center text-[8px] font-bold shadow-xs">
+          ${isHighlight ? `
+            <div class="absolute -top-1.5 -right-1.5 bg-amber-400 text-slate-950 w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-black shadow-xs z-30 ring-1.5 ring-white" title="${node.highlight ? node.highlight.replace(/"/g, '&quot;') : 'Bezienswaardigheid / Highlight'}">
               ★
             </div>
           ` : ''}
@@ -349,7 +349,7 @@ export const MapPlanner: React.FC<MapPlannerProps> = ({
       const marker = L.marker([node.lat, node.lng], { icon: customIcon });
 
       const popupContent = `
-        <div class="p-1 font-sans text-slate-900 min-w-[200px]">
+        <div class="p-1 font-sans text-slate-900 min-w-[210px]">
           <div class="flex items-center gap-2 mb-1.5">
             <span class="w-7 h-7 rounded-full bg-emerald-500 text-white flex items-center justify-center font-bold text-xs shadow-sm">
               ${node.ref}
@@ -360,8 +360,12 @@ export const MapPlanner: React.FC<MapPlannerProps> = ({
             </div>
           </div>
           ${node.highlight ? `
-            <div class="my-1.5 p-1.5 bg-amber-50 text-amber-950 text-xs rounded border border-amber-200">
-              ${node.highlight}
+            <div class="my-1.5 p-2 bg-amber-50 text-amber-950 text-xs rounded-lg border border-amber-300 shadow-xs flex items-start gap-1.5">
+              <span class="text-amber-500 font-black text-sm shrink-0 leading-none">★</span>
+              <div>
+                <span class="font-bold text-amber-900 block text-[10px] uppercase tracking-wider">Highlight / Bezienswaardigheid</span>
+                <span class="text-slate-800 text-xs font-medium">${node.highlight}</span>
+              </div>
             </div>
           ` : ''}
           <div class="mt-2 pt-2 border-t border-slate-200 flex justify-end">

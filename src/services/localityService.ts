@@ -174,12 +174,144 @@ export const MUNICIPALITIES_DATABASE: MunicipalityLocation[] = [
   { name: 'Hulst', region: 'Zeeland', country: 'NL', lat: 51.2808, lng: 4.0536 },
   { name: 'Sluis', region: 'Zeeland', country: 'NL', lat: 51.3083, lng: 3.3889 },
 
-  // --- ZUID-HOLLAND & UTRECHT & GELDERLAND (NL) ---
+  // --- WAALS-BRABANT (BE) ---
+  { name: 'Waver (Wavre)', region: 'Waals-Brabant', country: 'BE', lat: 50.7167, lng: 4.6167 },
+  { name: 'Waterloo', region: 'Waals-Brabant', country: 'BE', lat: 50.7167, lng: 4.4000 },
+  { name: 'Louvain-la-Neuve', region: 'Waals-Brabant', country: 'BE', lat: 50.6694, lng: 4.6119 },
+  { name: 'Nijvel (Nivelles)', region: 'Waals-Brabant', country: 'BE', lat: 50.5978, lng: 4.3236 },
+  { name: 'Eigenbrakel (Braine-l\'Alleud)', region: 'Waals-Brabant', country: 'BE', lat: 50.6833, lng: 4.3667 },
+  { name: 'Tubeke (Tubize)', region: 'Waals-Brabant', country: 'BE', lat: 50.6917, lng: 4.2000 },
+  { name: 'Jodoigne (Geldenaken)', region: 'Waals-Brabant', country: 'BE', lat: 50.7250, lng: 4.8667 },
+  { name: 'Villers-la-Ville', region: 'Waals-Brabant', country: 'BE', lat: 50.5786, lng: 4.5303 },
+
+  // --- LUIK & OOSTKANTONS / VENNBAHN (BE) ---
+  { name: 'Luik (Liège)', region: 'Luik & Oostkantons', country: 'BE', lat: 50.6326, lng: 5.5684 },
+  { name: 'Verviers', region: 'Luik & Oostkantons', country: 'BE', lat: 50.5933, lng: 5.8656 },
+  { name: 'Spa', region: 'Luik & Oostkantons', country: 'BE', lat: 50.4925, lng: 5.8644 },
+  { name: 'Eupen', region: 'Luik & Oostkantons', country: 'BE', lat: 50.6300, lng: 6.0333 },
+  { name: 'Malmedy', region: 'Luik & Oostkantons', country: 'BE', lat: 50.4267, lng: 6.0278 },
+  { name: 'Sankt Vith', region: 'Luik & Oostkantons', country: 'BE', lat: 50.2783, lng: 6.1264 },
+  { name: 'Huy (Hoei)', region: 'Luik & Oostkantons', country: 'BE', lat: 50.5186, lng: 5.2325 },
+  { name: 'Waremme (Borgworm)', region: 'Luik & Oostkantons', country: 'BE', lat: 50.6978, lng: 5.2575 },
+  { name: 'Visé (Wezet)', region: 'Luik & Oostkantons', country: 'BE', lat: 50.7381, lng: 5.6942 },
+  { name: 'Stavelot', region: 'Luik & Oostkantons', country: 'BE', lat: 50.3947, lng: 5.9317 },
+  { name: 'Herve', region: 'Luik & Oostkantons', country: 'BE', lat: 50.6403, lng: 5.7947 },
+
+  // --- NAMEN & MAASVALLEI (BE) ---
+  { name: 'Namen (Namur)', region: 'Namen & Maasvallei', country: 'BE', lat: 50.4674, lng: 4.8720 },
+  { name: 'Dinant', region: 'Namen & Maasvallei', country: 'BE', lat: 50.2608, lng: 4.9122 },
+  { name: 'Ciney', region: 'Namen & Maasvallei', country: 'BE', lat: 50.2956, lng: 5.1017 },
+  { name: 'Rochefort', region: 'Namen & Maasvallei', country: 'BE', lat: 50.1583, lng: 5.2217 },
+  { name: 'Andenne', region: 'Namen & Maasvallei', country: 'BE', lat: 50.4908, lng: 5.0997 },
+  { name: 'Gembloux (Gembloers)', region: 'Namen & Maasvallei', country: 'BE', lat: 50.5606, lng: 4.6936 },
+  { name: 'Philippeville', region: 'Namen & Maasvallei', country: 'BE', lat: 50.1961, lng: 4.5428 },
+  { name: 'Couvin', region: 'Namen & Maasvallei', country: 'BE', lat: 50.0519, lng: 4.4967 },
+
+  // --- HENEGOUWEN / HAINAUT (BE) ---
+  { name: 'Bergen (Mons)', region: 'Henegouwen', country: 'BE', lat: 50.4542, lng: 3.9567 },
+  { name: 'Charleroi', region: 'Henegouwen', country: 'BE', lat: 50.4114, lng: 4.4447 },
+  { name: 'Doornik (Tournai)', region: 'Henegouwen', country: 'BE', lat: 50.6056, lng: 3.3878 },
+  { name: 'La Louvière', region: 'Henegouwen', country: 'BE', lat: 50.4794, lng: 4.1869 },
+  { name: 'Moeskroen (Mouscron)', region: 'Henegouwen', country: 'BE', lat: 50.7433, lng: 3.2189 },
+  { name: 'Aat (Ath)', region: 'Henegouwen', country: 'BE', lat: 50.6300, lng: 3.7781 },
+  { name: 'Chimay', region: 'Henegouwen', country: 'BE', lat: 50.0489, lng: 4.3142 },
+  { name: 'Zinnik (Soignies)', region: 'Henegouwen', country: 'BE', lat: 50.5792, lng: 4.0708 },
+
+  // --- BELGISCH LUXEMBURG & ARDENNEN (BE) ---
+  { name: 'Aarlen (Arlon)', region: 'Belgisch Luxemburg', country: 'BE', lat: 49.6833, lng: 5.8167 },
+  { name: 'Bastenaken (Bastogne)', region: 'Belgisch Luxemburg', country: 'BE', lat: 50.0039, lng: 5.7186 },
+  { name: 'Bouillon', region: 'Belgisch Luxemburg', country: 'BE', lat: 49.7944, lng: 5.0681 },
+  { name: 'Durbuy', region: 'Belgisch Luxemburg', country: 'BE', lat: 50.3528, lng: 5.4564 },
+  { name: 'La Roche-en-Ardenne', region: 'Belgisch Luxemburg', country: 'BE', lat: 50.1833, lng: 5.5764 },
+  { name: 'Marche-en-Famenne', region: 'Belgisch Luxemburg', country: 'BE', lat: 50.2269, lng: 5.3442 },
+  { name: 'Neufchâteau', region: 'Belgisch Luxemburg', country: 'BE', lat: 49.8406, lng: 5.4347 },
+  { name: 'Virton', region: 'Belgisch Luxemburg', country: 'BE', lat: 49.5675, lng: 5.5328 },
+
+  // --- ZUID-HOLLAND (NL) ---
   { name: 'Rotterdam', region: 'Zuid-Holland', country: 'NL', lat: 51.9244, lng: 4.4777 },
+  { name: 'Den Haag', region: 'Zuid-Holland', country: 'NL', lat: 52.0705, lng: 4.3007 },
+  { name: 'Delft', region: 'Zuid-Holland', country: 'NL', lat: 52.0116, lng: 4.3571 },
+  { name: 'Leiden', region: 'Zuid-Holland', country: 'NL', lat: 52.1601, lng: 4.4970 },
+  { name: 'Gouda', region: 'Zuid-Holland', country: 'NL', lat: 52.0116, lng: 4.7105 },
   { name: 'Dordrecht', region: 'Zuid-Holland', country: 'NL', lat: 51.8133, lng: 4.6900 },
+  { name: 'Alphen aan den Rijn', region: 'Zuid-Holland', country: 'NL', lat: 52.1289, lng: 4.6578 },
+  { name: 'Gorinchem', region: 'Zuid-Holland', country: 'NL', lat: 51.8306, lng: 4.9739 },
+  { name: 'Brielle', region: 'Zuid-Holland', country: 'NL', lat: 51.9028, lng: 4.1644 },
+
+  // --- UTRECHT (NL) ---
   { name: 'Utrecht', region: 'Utrecht', country: 'NL', lat: 52.0907, lng: 5.1214 },
+  { name: 'Amersfoort', region: 'Utrecht', country: 'NL', lat: 52.1561, lng: 5.3878 },
+  { name: 'Zeist', region: 'Utrecht', country: 'NL', lat: 52.0908, lng: 5.2333 },
+  { name: 'Veenendaal', region: 'Utrecht', country: 'NL', lat: 52.0292, lng: 5.5558 },
+  { name: 'Woerden', region: 'Utrecht', country: 'NL', lat: 52.0867, lng: 4.8833 },
+  { name: 'Nieuwegein', region: 'Utrecht', country: 'NL', lat: 52.0289, lng: 5.0833 },
+
+  // --- NOORD-HOLLAND (NL) ---
+  { name: 'Amsterdam', region: 'Noord-Holland', country: 'NL', lat: 52.3676, lng: 4.9041 },
+  { name: 'Haarlem', region: 'Noord-Holland', country: 'NL', lat: 52.3874, lng: 4.6462 },
+  { name: 'Alkmaar', region: 'Noord-Holland', country: 'NL', lat: 52.6324, lng: 4.7534 },
+  { name: 'Zaanstad', region: 'Noord-Holland', country: 'NL', lat: 52.4420, lng: 4.8292 },
+  { name: 'Hoorn', region: 'Noord-Holland', country: 'NL', lat: 52.6425, lng: 5.0597 },
+  { name: 'Enkhuizen', region: 'Noord-Holland', country: 'NL', lat: 52.7036, lng: 5.2917 },
+  { name: 'Den Helder', region: 'Noord-Holland', country: 'NL', lat: 52.9599, lng: 4.7593 },
+  { name: 'Hilversum', region: 'Noord-Holland', country: 'NL', lat: 52.2292, lng: 5.1667 },
+  { name: 'Texel (Den Burg)', region: 'Noord-Holland', country: 'NL', lat: 53.0561, lng: 4.7972 },
+
+  // --- GELDERLAND (NL) ---
   { name: 'Arnhem', region: 'Gelderland', country: 'NL', lat: 51.9851, lng: 5.8987 },
-  { name: 'Nijmegen', region: 'Gelderland', country: 'NL', lat: 51.8426, lng: 5.8596 }
+  { name: 'Nijmegen', region: 'Gelderland', country: 'NL', lat: 51.8426, lng: 5.8596 },
+  { name: 'Apeldoorn', region: 'Gelderland', country: 'NL', lat: 52.2112, lng: 5.9699 },
+  { name: 'Ede', region: 'Gelderland', country: 'NL', lat: 52.0442, lng: 5.6667 },
+  { name: 'Harderwijk', region: 'Gelderland', country: 'NL', lat: 52.3489, lng: 5.6208 },
+  { name: 'Zutphen', region: 'Gelderland', country: 'NL', lat: 52.1400, lng: 6.1953 },
+  { name: 'Doetinchem', region: 'Gelderland', country: 'NL', lat: 51.9650, lng: 6.2889 },
+  { name: 'Tiel', region: 'Gelderland', country: 'NL', lat: 51.8878, lng: 5.4319 },
+  { name: 'Winterswijk', region: 'Gelderland', country: 'NL', lat: 51.9708, lng: 6.7208 },
+
+  // --- OVERIJSSEL (NL) ---
+  { name: 'Zwolle', region: 'Overijssel', country: 'NL', lat: 52.5168, lng: 6.0830 },
+  { name: 'Enschede', region: 'Overijssel', country: 'NL', lat: 52.2215, lng: 6.8937 },
+  { name: 'Deventer', region: 'Overijssel', country: 'NL', lat: 52.2550, lng: 6.1625 },
+  { name: 'Hengelo', region: 'Overijssel', country: 'NL', lat: 52.2658, lng: 6.7931 },
+  { name: 'Almelo', region: 'Overijssel', country: 'NL', lat: 52.3567, lng: 6.6625 },
+  { name: 'Kampen', region: 'Overijssel', country: 'NL', lat: 52.5550, lng: 5.9117 },
+  { name: 'Steenwijk', region: 'Overijssel', country: 'NL', lat: 52.7889, lng: 6.1194 },
+  { name: 'Giethoorn', region: 'Overijssel', country: 'NL', lat: 52.7397, lng: 6.0786 },
+
+  // --- FLEVOLAND (NL) ---
+  { name: 'Almere', region: 'Flevoland', country: 'NL', lat: 52.3702, lng: 5.2144 },
+  { name: 'Lelystad', region: 'Flevoland', country: 'NL', lat: 52.5185, lng: 5.4714 },
+  { name: 'Dronten', region: 'Flevoland', country: 'NL', lat: 52.5250, lng: 5.7194 },
+  { name: 'Zeewolde', region: 'Flevoland', country: 'NL', lat: 52.3292, lng: 5.5417 },
+  { name: 'Emmeloord', region: 'Flevoland', country: 'NL', lat: 52.7108, lng: 5.7486 },
+  { name: 'Urk', region: 'Flevoland', country: 'NL', lat: 52.6625, lng: 5.6028 },
+
+  // --- DRENTHE (NL) ---
+  { name: 'Assen', region: 'Drenthe', country: 'NL', lat: 52.9925, lng: 6.5644 },
+  { name: 'Emmen', region: 'Drenthe', country: 'NL', lat: 52.7792, lng: 6.9069 },
+  { name: 'Hoogeveen', region: 'Drenthe', country: 'NL', lat: 52.7289, lng: 6.4764 },
+  { name: 'Meppel', region: 'Drenthe', country: 'NL', lat: 52.6958, lng: 6.1944 },
+  { name: 'Coevorden', region: 'Drenthe', country: 'NL', lat: 52.6617, lng: 6.7417 },
+  { name: 'Dwingeloo', region: 'Drenthe', country: 'NL', lat: 52.8347, lng: 6.3681 },
+
+  // --- FRIESLAND / FRYSLÂN (NL) ---
+  { name: 'Leeuwarden', region: 'Friesland', country: 'NL', lat: 53.2012, lng: 5.7999 },
+  { name: 'Sneek', region: 'Friesland', country: 'NL', lat: 53.0325, lng: 5.6594 },
+  { name: 'Heerenveen', region: 'Friesland', country: 'NL', lat: 52.9567, lng: 5.9250 },
+  { name: 'Drachten', region: 'Friesland', country: 'NL', lat: 53.1039, lng: 6.0989 },
+  { name: 'Harlingen', region: 'Friesland', country: 'NL', lat: 53.1747, lng: 5.4264 },
+  { name: 'Dokkum', region: 'Friesland', country: 'NL', lat: 53.3250, lng: 5.9986 },
+  { name: 'Lemmer', region: 'Friesland', country: 'NL', lat: 52.8458, lng: 5.7111 },
+  { name: 'Terschelling', region: 'Friesland', country: 'NL', lat: 53.3611, lng: 5.2167 },
+  { name: 'Ameland', region: 'Friesland', country: 'NL', lat: 53.4472, lng: 5.7722 },
+
+  // --- GRONINGEN (NL) ---
+  { name: 'Groningen', region: 'Groningen', country: 'NL', lat: 53.2194, lng: 6.5665 },
+  { name: 'Delfzijl', region: 'Groningen', country: 'NL', lat: 53.3347, lng: 6.9189 },
+  { name: 'Winschoten', region: 'Groningen', country: 'NL', lat: 53.1436, lng: 7.0378 },
+  { name: 'Veendam', region: 'Groningen', country: 'NL', lat: 53.1067, lng: 6.8736 },
+  { name: 'Stadskanaal', region: 'Groningen', country: 'NL', lat: 52.9892, lng: 6.9536 },
+  { name: 'Appingedam', region: 'Groningen', country: 'NL', lat: 53.3217, lng: 6.8583 }
 ];
 
 /**
