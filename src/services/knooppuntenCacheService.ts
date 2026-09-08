@@ -1,5 +1,6 @@
 import { KnooppuntNode } from '../types';
 import { INITIAL_NODES } from '../data/knooppuntenData';
+import { enrichKnooppuntLocality } from './localityService';
 
 const DB_NAME = 'FietsknooppuntenDB';
 const DB_VERSION = 1;
@@ -84,7 +85,9 @@ export async function getAllNodesFromCache(): Promise<KnooppuntNode[]> {
       const request = store.getAll();
 
       request.onsuccess = () => {
-        resolve(request.result || []);
+        const raw: KnooppuntNode[] = request.result || [];
+        const enriched = raw.map((n) => (!n.municipality || n.name === `Knooppunt ${n.ref}` ? enrichKnooppuntLocality(n) : n));
+        resolve(enriched);
       };
 
       request.onerror = () => {

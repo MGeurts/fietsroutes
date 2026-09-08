@@ -11,7 +11,9 @@ import { RoundTripModal } from './components/RoundTripModal';
 import { DataManagementModal } from './components/DataManagementModal';
 import { LaravelAntagonistModal } from './components/LaravelAntagonistModal';
 import { GpxImportModal } from './components/GpxImportModal';
-import { Map, List, Bike, Sparkles, Navigation, Undo2, Redo2, X, Search, MapPin, Database } from 'lucide-react';
+import { OfflineDataManagerModal } from './components/OfflineDataManagerModal';
+import { enrichKnooppuntLocality } from './services/localityService';
+import { Map, List, Bike, Sparkles, Navigation, Undo2, Redo2, X, Search, MapPin, Database, HardDrive, Wifi, WifiOff } from 'lucide-react';
 
 export default function App() {
   // Available nodes in current state (preloaded + Overpass queried)
@@ -58,6 +60,19 @@ export default function App() {
   const [isDataModalOpen, setIsDataModalOpen] = useState(false);
   const [isLaravelModalOpen, setIsLaravelModalOpen] = useState(false);
   const [isGpxImportOpen, setIsGpxImportOpen] = useState(false);
+  const [isOfflineManagerOpen, setIsOfflineManagerOpen] = useState(false);
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+
+  useEffect(() => {
+    const onOnline = () => setIsOnline(true);
+    const onOffline = () => setIsOnline(false);
+    window.addEventListener('online', onOnline);
+    window.addEventListener('offline', onOffline);
+    return () => {
+      window.removeEventListener('online', onOnline);
+      window.removeEventListener('offline', onOffline);
+    };
+  }, []);
 
   // Recalculate route whenever selectedNodes change
   useEffect(() => {
@@ -244,14 +259,39 @@ export default function App() {
     });
   }, []);
 
+  // Function to reload all nodes from IndexedDB cache
+  const refreshNodesFromCache = useCallback(async () => {
+    try {
+      const cached = await getAllCachedNodes();
+      if (cached && cached.length > 0) {
+        handleAddNewNodes(cached);
+      }
+    } catch (err) {
+      console.warn('Kon lokale knooppunten-cache niet verversen:', err);
+    }
+  }, [handleAddNewNodes]);
+
   // Load persisted knooppunten from local IndexedDB cache on startup
   useEffect(() => {
     getAllCachedNodes()
-      .then((cached) => {
-        if (cached && cached.length > 0) {
+      .then(async (cached) => {
+        if (cached && cached.length > 50) {
           handleAddNewNodes(cached);
         } else {
-          // Initialize cache with bundled high-density nodes
+          // If cache has few/no nodes, try loading pre-packaged benelux dataset
+          try {
+            const res = await fetch('/data/benelux_knooppunten.json');
+            if (res.ok) {
+              const nodes: KnooppuntNode[] = await res.json();
+              if (Array.isArray(nodes) && nodes.length > 0) {
+                await saveNodesToCache(nodes);
+                handleAddNewNodes(nodes);
+                return;
+              }
+            }
+          } catch {
+            // fallback
+          }
           saveNodesToCache(INITIAL_NODES).catch(() => {});
         }
       })
@@ -373,24 +413,28 @@ export default function App() {
     const q = headerSearchQuery.trim().toLowerCase();
     if (!q) return [];
 
+    let results: KnooppuntNode[] = [];
+
     // Knooppunt number check (e.g. '131', 'kp 42', '12a')
     if (isKnooppuntQuery(q)) {
       const match = q.match(/^(?:knooppunt|kp\.?|node)?\s*([a-z]?\d{1,4}[a-z]?)$/i);
       const searchRef = match ? match[1].toLowerCase() : q;
 
-      return availableNodes.filter(
+      results = availableNodes.filter(
         (n) => n.ref.toLowerCase() === searchRef || n.ref.replace(/^0+/, '') === searchRef.replace(/^0+/, '')
       );
+    } else {
+      // Name or Municipality matches (DO NOT match highlight to avoid false hits like Maasbruggen -> Brugge)
+      results = availableNodes
+        .filter(
+          (n) =>
+            (n.name && n.name.toLowerCase().includes(q)) ||
+            (n.municipality && n.municipality.toLowerCase().includes(q))
+        )
+        .slice(0, 8);
     }
 
-    // Name or Municipality matches (DO NOT match highlight to avoid false hits like Maasbruggen -> Brugge)
-    return availableNodes
-      .filter(
-        (n) =>
-          (n.name && n.name.toLowerCase().includes(q)) ||
-          (n.municipality && n.municipality.toLowerCase().includes(q))
-      )
-      .slice(0, 6);
+    return results.map((n) => enrichKnooppuntLocality(n));
   }, [headerSearchQuery, availableNodes]);
 
   // Place & Address search (cities like Brugge, Gent, addresses, etc.)
@@ -618,16 +662,26 @@ export default function App() {
                       className="w-full text-left px-3 py-2 hover:bg-slate-700/80 transition flex items-center justify-between group cursor-pointer"
                     >
                       <div className="flex items-center gap-2.5 min-w-0">
-                        <span className="w-7 h-7 rounded-full bg-emerald-500 text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-xs">
+                        <span className="w-8 h-8 rounded-full bg-emerald-500 text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-xs group-hover:scale-105 transition-transform">
                           {node.ref}
                         </span>
                         <div className="truncate">
-                          <div className="text-xs font-semibold text-white group-hover:text-emerald-300 transition truncate">
-                            {node.name || `Knooppunt ${node.ref}`}
+                          <div className="text-xs font-bold text-white group-hover:text-emerald-300 transition truncate flex items-center gap-1.5">
+                            <span>{node.name || `Knooppunt ${node.ref}`}</span>
+                            {node.municipality && (
+                              <span className="text-[10px] bg-emerald-950/80 text-emerald-300 px-1.5 py-0.5 rounded font-medium border border-emerald-700/60 shrink-0">
+                                {node.municipality}
+                              </span>
+                            )}
                           </div>
-                          <div className="text-[11px] text-slate-400 truncate">
-                            {node.municipality ? `${node.municipality} • ` : ''}
-                            {node.region || 'Fietsnetwerk'}
+                          <div className="text-[11px] text-slate-400 truncate flex items-center gap-1 mt-0.5">
+                            <span>{node.region || 'Fietsnetwerk'}</span>
+                            {node.highlight && (
+                              <>
+                                <span>&bull;</span>
+                                <span className="text-amber-300 font-medium truncate">{node.highlight}</span>
+                              </>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -665,6 +719,15 @@ export default function App() {
 
         {/* Header Right Actions */}
         <div className="flex items-center gap-2 sm:gap-3">
+          <button
+            onClick={() => setIsOfflineManagerOpen(true)}
+            className="flex items-center gap-1.5 px-2.5 sm:px-3 py-2 bg-emerald-950/70 hover:bg-emerald-900/90 text-emerald-300 border border-emerald-700/60 text-xs font-semibold rounded-md transition cursor-pointer shadow-xs tablet-touch-friendly-btn"
+            title="Volledige dataset België & Nederland offline beheren & synchroniseren"
+          >
+            <HardDrive className="w-3.5 h-3.5 text-emerald-400" />
+            <span className="hidden sm:inline">Offline Grid (BE/NL)</span>
+          </button>
+
           <button
             onClick={() => setIsDataModalOpen(true)}
             className="flex items-center gap-1.5 px-2.5 sm:px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-medium rounded-md transition cursor-pointer shadow-xs tablet-touch-friendly-btn"
@@ -832,6 +895,12 @@ export default function App() {
         onClose={() => setIsDataModalOpen(false)}
         availableNodesCount={availableNodes.length}
         onImportNodes={handleAddNewNodes}
+      />
+
+      <OfflineDataManagerModal
+        isOpen={isOfflineManagerOpen}
+        onClose={() => setIsOfflineManagerOpen(false)}
+        onDataUpdated={refreshNodesFromCache}
       />
     </div>
   );

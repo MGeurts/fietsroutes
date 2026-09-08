@@ -4,6 +4,7 @@ import { KnooppuntNode, MapTileProvider } from '../types';
 import { fetchKnooppuntenInBBox, fetchKnooppuntenAroundPoint } from '../services/overpassService';
 import { calculateHaversineDistanceKm } from '../services/routingService';
 import { searchPlacesAndAddresses, isKnooppuntQuery, PlaceSearchResult } from '../services/geocodingService';
+import { enrichKnooppuntLocality } from '../services/localityService';
 import { Search, Loader2, Layers, Crosshair, ZoomIn, ZoomOut, Compass, Sparkles, Undo2, Redo2, X, Info, Check, PanelLeftClose, PanelLeftOpen, MapPin, Key, ExternalLink, HelpCircle, Database } from 'lucide-react';
 
 export interface SearchedAddressItem {
@@ -1528,7 +1529,8 @@ export const MapPlanner: React.FC<MapPlannerProps> = ({
             {/* List of candidates: Knooppunten */}
             {searchCandidates.nodes && searchCandidates.nodes.length > 0 && (
               <div className="p-3 overflow-y-auto divide-y divide-slate-100 space-y-1">
-                {searchCandidates.nodes.map((node, index) => {
+                {searchCandidates.nodes.map((rawNode, index) => {
+                  const node = enrichKnooppuntLocality(rawNode);
                   const mapCenter = mapInstanceRef.current?.getCenter();
                   const distKm = mapCenter
                     ? Math.round(
@@ -1550,13 +1552,15 @@ export const MapPlanner: React.FC<MapPlannerProps> = ({
                           {node.ref}
                         </div>
                         <div className="min-w-0">
-                          <div className="font-bold text-slate-900 text-sm group-hover:text-emerald-900 truncate">
-                            {node.name || `Knooppunt ${node.ref}`}
-                          </div>
-                          <div className="text-xs text-slate-500 truncate">
+                          <div className="font-bold text-slate-900 text-sm group-hover:text-emerald-900 truncate flex items-center gap-1.5">
+                            <span>{node.name || `Knooppunt ${node.ref}`}</span>
                             {node.municipality && (
-                              <span className="font-medium text-slate-700">{node.municipality} &bull; </span>
+                              <span className="text-[10px] bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded font-medium border border-emerald-300 shrink-0">
+                                {node.municipality}
+                              </span>
                             )}
+                          </div>
+                          <div className="text-xs text-slate-500 truncate mt-0.5">
                             <span>{node.region || 'Fietsnetwerk'}</span>
                           </div>
                           {node.highlight && (

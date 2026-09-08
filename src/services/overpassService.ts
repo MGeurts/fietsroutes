@@ -1,4 +1,5 @@
 import { KnooppuntNode } from '../types';
+import { enrichKnooppuntLocality } from './localityService';
 
 interface OverpassElement {
   type: string;
@@ -103,14 +104,18 @@ export async function fetchKnooppuntenInBBox(
         );
         if (isDuplicateNearby) continue;
 
-        nodes.push({
+        const baseNode: KnooppuntNode = {
           id: `osm-${el.id}`,
           ref: cleanRef,
           lat: el.lat,
           lng: el.lon,
-          name: el.tags?.name || `Knooppunt ${cleanRef}`,
-          region: el.tags?.operator || (el.lat < 51.05 && el.lon > 5.2 ? 'Belgisch Limburg' : 'OSM Knooppuntennetwerk')
-        });
+          name: el.tags?.name,
+          municipality: el.tags?.['addr:city'] || el.tags?.city,
+          region: el.tags?.operator,
+          highlight: el.tags?.description || el.tags?.note,
+        };
+
+        nodes.push(enrichKnooppuntLocality(baseNode));
       }
 
       if (nodes.length > 0) {
