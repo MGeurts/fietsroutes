@@ -33,7 +33,7 @@ This application allows cyclists to compose routes by clicking numbered junction
 
 ## 🌟 Features & Capabilities
 
-- **Interactive Junction Planning**: Click adjacent nodes on the map to automatically calculate connecting cycle paths, total mileage, and estimated riding time.
+- **Verified junction planning**: A leg is rendered only when a build-time verified RCN corridor exists for those exact endpoints. Missing data is shown as “geen route”, never as a general bicycle route or a synthetic line.
 - **Dynamic OSM Overpass Discovery**: Fetch live knooppunt nodes across the Netherlands and Belgium directly from OpenStreetMap with a single click ("*Scan knooppunten in dit kaartvenster*").
 - **Multiple High-Quality Map Layers**:
   - OpenStreetMap Standard
@@ -130,6 +130,14 @@ pnpm install
 yarn install
 # or
 bun install
+```
+
+### Build or update the official network dataset
+
+Run this on a development machine or in CI, never on Antagonist hosting. It validates `rcn` route relations and writes `public/data/benelux_network.json`; relations without verified endpoint geometry are excluded rather than guessed.
+
+```bash
+npm run build:network
 ```
 
 ### 3. Start the Development Server

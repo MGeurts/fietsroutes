@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { KnooppuntNode, RouteLeg, ElevationPoint, BikeType, MapTileProvider, PlannedRoute } from './types';
 import { INITIAL_NODES } from './data/knooppuntenData';
-import { calculateBicycleLeg, estimateElevationProfile, downloadGpxFile } from './services/routingService';
+import { calculateBicycleLeg, estimateElevationProfile, downloadGpxFile, UnknownKnooppuntenConnectionError } from './services/routingService';
 import { getAllCachedNodes, saveNodesToCache } from './services/knooppuntenCacheService';
 import { searchPlacesAndAddresses, isKnooppuntQuery, PlaceSearchResult, PRELOADED_MAJOR_PLACES } from './services/geocodingService';
 import { MapPlanner } from './components/MapPlanner';
@@ -13,6 +13,7 @@ import { LaravelAntagonistModal } from './components/LaravelAntagonistModal';
 import { GpxImportModal } from './components/GpxImportModal';
 import { OfflineDataManagerModal } from './components/OfflineDataManagerModal';
 import { enrichKnooppuntLocality } from './services/localityService';
+import { loadPrepackagedOfficialNetwork } from './services/networkDataService';
 import { Map, List, Bike, Sparkles, Navigation, Undo2, Redo2, X, Search, MapPin, Database, HardDrive, Wifi, WifiOff } from 'lucide-react';
 
 export default function App() {
@@ -27,6 +28,8 @@ export default function App() {
   const [totalDistanceKm, setTotalDistanceKm] = useState<number>(0);
   const [elevationGainM, setElevationGainM] = useState<number>(0);
   const [elevationPoints, setElevationPoints] = useState<ElevationPoint[]>([]);
+  const [elevationAvailable, setElevationAvailable] = useState(false);
+  const [routeError, setRouteError] = useState<string | null>(null);
   const [selectedBike, setSelectedBike] = useState<BikeType>('ebike');
   // Default to cyclosm (dedicated cycling map, 100% free, no API key required, no watermark)
   const [activeTileProvider, setActiveTileProvider] = useState<MapTileProvider>(() => {
@@ -85,6 +88,8 @@ export default function App() {
         setTotalDistanceKm(0);
         setElevationGainM(0);
         setElevationPoints([]);
+        setElevationAvailable(false);
+        setRouteError(null);
         return;
       }
 
@@ -92,15 +97,28 @@ export default function App() {
       let allCoords: [number, number][] = [];
       let totalDist = 0;
 
-      for (let i = 0; i < selectedNodes.length - 1; i++) {
-        const from = selectedNodes[i];
-        const to = selectedNodes[i + 1];
-        const leg = await calculateBicycleLeg(from, to);
+      try {
+        for (let i = 0; i < selectedNodes.length - 1; i++) {
+          const from = selectedNodes[i];
+          const to = selectedNodes[i + 1];
+          const leg = await calculateBicycleLeg(from, to);
+          if (isCancelled) return;
+          calculatedLegs.push(leg);
+          totalDist += leg.distanceKm;
+          allCoords = allCoords.concat(leg.coordinates);
+        }
+      } catch (error) {
         if (isCancelled) return;
-
-        calculatedLegs.push(leg);
-        totalDist += leg.distanceKm;
-        allCoords = allCoords.concat(leg.coordinates);
+        setRouteLegs([]);
+        setFullCoordinates(selectedNodes.map((node) => [node.lat, node.lng]));
+        setTotalDistanceKm(0);
+        setElevationGainM(0);
+        setElevationPoints([]);
+        setElevationAvailable(false);
+        setRouteError(error instanceof UnknownKnooppuntenConnectionError
+          ? error.message
+          : 'De officiële knooppuntenroute kon niet worden berekend.');
+        return;
       }
 
       if (isCancelled) return;
@@ -113,6 +131,8 @@ export default function App() {
       setTotalDistanceKm(roundedDist);
       setElevationGainM(elev.totalAscent);
       setElevationPoints(elev.points);
+      setElevationAvailable(elev.available);
+      setRouteError(null);
     }
 
     computeFullRoute();
@@ -275,11 +295,21 @@ export default function App() {
   useEffect(() => {
     getAllCachedNodes()
       .then(async (cached) => {
+        // Register verified edges even when nodes were already cached during an earlier session.
+        const network = await loadPrepackagedOfficialNetwork();
+        if (network?.nodes.length) {
+          handleAddNewNodes(network.nodes);
+        }
         if (cached && cached.length > 50) {
           handleAddNewNodes(cached);
         } else {
-          // If cache has few/no nodes, try loading pre-packaged benelux dataset
+          // Live/browser Overpass discovery only adds markers; it can never turn a
+          // discovered proximity into a route edge.
           try {
+            if (network && network.nodes.length > 0) {
+              await saveNodesToCache(network.nodes);
+              return;
+            }
             const res = await fetch('/data/benelux_knooppunten.json');
             if (res.ok) {
               const nodes: KnooppuntNode[] = await res.json();
@@ -794,6 +824,8 @@ export default function App() {
             totalDistanceKm={totalDistanceKm}
             elevationGainM={elevationGainM}
             elevationPoints={elevationPoints}
+            elevationAvailable={elevationAvailable}
+            routeError={routeError}
             selectedBike={selectedBike}
             onChangeBike={setSelectedBike}
             onRemoveNode={handleRemoveNode}

@@ -1,5 +1,6 @@
 import { KnooppuntNode, RouteLeg, ElevationPoint, PlannedRoute } from '../types';
-import { getOfficialGisCorridor } from '../data/officialGisCorridors';
+import { ElevationProfileResult } from '../types';
+import { getOfficialEdgeBetween } from './officialNetworkService';
 
 // In-memory cache for resolved legs to make route rendering instantaneous
 const legCache = new Map<string, RouteLeg>();
@@ -20,15 +21,18 @@ export function calculateHaversineDistanceKm(lat1: number, lon1: number, lat2: n
 }
 
 /**
- * Calculate real bicycle routing geometry between two knooppunten following
- * official pre-validated GIS corridors curated directly by tourism boards (Toerisme Limburg / Visit Limburg RCN).
- * 
- * Strategy:
- * 1. Check local pre-validated official GIS corridor database (OFFICIAL_GIS_CORRIDORS).
- * 2. If not found in seed database, query BRouter cycling/trekking engine which strictly prioritizes
- *    OpenStreetMap 'route_bicycle_rcn=yes' (Regional Cycle Network relations).
- * 3. Graceful fallback to OSM routed-bike or curved topological path.
+ * Resolve a leg that is known to exist in the verified cycle-junction network.
+ *
+ * This deliberately has no BRouter, OSRM, straight-line, or synthetic fallback: a general
+ * bicycle route is not evidence of a signed junction-network connection.
  */
+export class UnknownKnooppuntenConnectionError extends Error {
+  constructor(fromRef: string, toRef: string) {
+    super(`Geen officiële fietsknooppuntenverbinding gevonden tussen ${fromRef} en ${toRef}.`);
+    this.name = 'UnknownKnooppuntenConnectionError';
+  }
+}
+
 export async function calculateBicycleLeg(
   fromNode: KnooppuntNode,
   toNode: KnooppuntNode
@@ -38,167 +42,27 @@ export async function calculateBicycleLeg(
     return legCache.get(cacheKey)!;
   }
 
-  // 1. Check pre-validated official tourism board GIS database
-  const officialCorridor = getOfficialGisCorridor(fromNode.ref, toNode.ref);
-  if (officialCorridor && officialCorridor.coordinates.length > 1) {
-    const startCoord = officialCorridor.coordinates[0];
-    const endCoord = officialCorridor.coordinates[officialCorridor.coordinates.length - 1];
-    const isStartNear = Math.hypot(startCoord[0] - fromNode.lat, startCoord[1] - fromNode.lng) < 0.02; // ~2km
-    const isEndNear = Math.hypot(endCoord[0] - toNode.lat, endCoord[1] - toNode.lng) < 0.02;
+  const edge = getOfficialEdgeBetween(fromNode, toNode);
+  if (!edge) throw new UnknownKnooppuntenConnectionError(fromNode.ref, toNode.ref);
 
-    // Only use pre-baked corridor if it physically corresponds to these specific nodes
-    if (isStartNear && isEndNear) {
-      const leg: RouteLeg = {
-        fromNode,
-        toNode,
-        distanceKm: officialCorridor.distanceKm,
-        coordinates: officialCorridor.coordinates,
-      };
-      legCache.set(cacheKey, leg);
-      return leg;
-    }
-  }
-
-  const straightDist = calculateHaversineDistanceKm(fromNode.lat, fromNode.lng, toNode.lat, toNode.lng);
-
-  // 2. Query BRouter Cycling Network Engine (strictly prioritizes route_bicycle_rcn=yes relations)
-  try {
-    const brouterUrl = `https://brouter.de/brouter?lonlats=${fromNode.lng},${fromNode.lat}|${toNode.lng},${toNode.lat}&profile=trekking&format=geojson`;
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 4500);
-
-    const res = await fetch(brouterUrl, { signal: controller.signal });
-    clearTimeout(timeoutId);
-
-    if (res.ok) {
-      const data = await res.json();
-      if (data.features && data.features[0] && data.features[0].geometry) {
-        const feature = data.features[0];
-        const rawCoords: [number, number][] = feature.geometry.coordinates; // [lng, lat]
-        const leafletCoords: [number, number][] = rawCoords.map(([lng, lat]) => [
-          Math.round(lat * 100000) / 100000,
-          Math.round(lng * 100000) / 100000
-        ]);
-        const trackLengthMeters = parseFloat(feature.properties?.['track-length'] || '0');
-        const distKm = trackLengthMeters > 0
-          ? Math.round((trackLengthMeters / 1000) * 10) / 10
-          : Math.round(straightDist * 1.2 * 10) / 10;
-
-        const leg: RouteLeg = {
-          fromNode,
-          toNode,
-          distanceKm: distKm,
-          coordinates: leafletCoords
-        };
-        legCache.set(cacheKey, leg);
-        return leg;
-      }
-    }
-  } catch {
-    // BRouter error or timeout, proceed to fallback
-  }
-
-  // 3. Fallback: OpenStreetMap routed-bike service
-  try {
-    const url = `https://routing.openstreetmap.de/routed-bike/route/v1/driving/${fromNode.lng},${fromNode.lat};${toNode.lng},${toNode.lat}?overview=full&geometries=geojson&steps=true`;
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 3500);
-
-    const res = await fetch(url, { signal: controller.signal });
-    clearTimeout(timeoutId);
-
-    if (res.ok) {
-      const data = await res.json();
-      if (data.routes && data.routes[0]) {
-        const route = data.routes[0];
-        const rawCoords: [number, number][] = route.geometry.coordinates; // [lng, lat]
-        const leafletCoords: [number, number][] = rawCoords.map(([lng, lat]) => [lat, lng]);
-        const distanceKm = Math.round((route.distance / 1000) * 10) / 10;
-
-        const leg: RouteLeg = {
-          fromNode,
-          toNode,
-          distanceKm: distanceKm > 0 ? distanceKm : Math.round(straightDist * 1.2 * 10) / 10,
-          coordinates: leafletCoords
-        };
-        legCache.set(cacheKey, leg);
-        return leg;
-      }
-    }
-  } catch {
-    // Fallback on network delay/error
-  }
-
-  // 4. Fallback: create realistic curved topological track
-  const roadFactor = 1.22;
-  const distanceKm = Math.round(straightDist * roadFactor * 10) / 10;
-  
-  const coords: [number, number][] = [];
-  const steps = 7;
-  const perpLat = -(toNode.lng - fromNode.lng) * 0.05;
-  const perpLng = (toNode.lat - fromNode.lat) * 0.05;
-
-  for (let i = 0; i <= steps; i++) {
-    const t = i / steps;
-    const curve = Math.sin(t * Math.PI) * 0.4;
-    const lat = fromNode.lat + (toNode.lat - fromNode.lat) * t + perpLat * curve;
-    const lng = fromNode.lng + (toNode.lng - fromNode.lng) * t + perpLng * curve;
-    coords.push([lat, lng]);
-  }
-
-  const fallbackLeg: RouteLeg = {
+  const leg: RouteLeg = {
     fromNode,
     toNode,
-    distanceKm: Math.max(0.4, distanceKm),
-    coordinates: coords
+    distanceKm: edge.distanceKm,
+    coordinates: edge.coordinates,
+    instructions: `Geverifieerde corridor: ${edge.source}`,
   };
-  legCache.set(cacheKey, fallbackLeg);
-  return fallbackLeg;
+  legCache.set(cacheKey, leg);
+  return leg;
 }
 
 /**
  * Estimate elevation profile across route
  */
-export function estimateElevationProfile(coordinates: [number, number][], totalDistKm: number): {
-  points: ElevationPoint[];
-  totalAscent: number;
-} {
-  if (coordinates.length === 0) return { points: [], totalAscent: 0 };
-
-  const points: ElevationPoint[] = [];
-  let totalAscent = 0;
-  const samples = Math.min(30, coordinates.length);
-  const step = Math.max(1, Math.floor(coordinates.length / samples));
-
-  let prevElev = 45; // baseline elevation (Limburg/Kempen average)
-  
-  for (let i = 0; i < coordinates.length; i += step) {
-    const [lat, lng] = coordinates[i];
-    const dist = (i / coordinates.length) * totalDistKm;
-    
-    // Realistic regional topography modeling:
-    // South Limburg (lat < 50.88, lng > 5.7) has rolling hills (Cauberg, Vaals up to 320m)
-    // Kempen / Zutendaal plateau sits around 60m-100m (Hesselsberg, Mechelse Heide)
-    // Flanders / Holland plains sit 5m-30m
-    let base = 40;
-    if (lat < 50.88 && lng > 5.75) {
-      base = 110 + Math.sin(lat * 150) * 60 + Math.cos(lng * 120) * 50;
-    } else if (lat > 50.93 && lat < 51.05 && lng > 5.55 && lng < 5.72) {
-      // Hoge Kempen plateau
-      base = 75 + Math.sin((lat - 50.95) * 200) * 25;
-    } else {
-      base = 35 + Math.sin(lat * 80 + lng * 60) * 15;
-    }
-    
-    const elev = Math.max(5, Math.round(base));
-    if (points.length > 0 && elev > prevElev) {
-      totalAscent += (elev - prevElev);
-    }
-    prevElev = elev;
-    points.push({ distance: Math.round(dist * 10) / 10, elevation: elev });
-  }
-
-  return { points, totalAscent: Math.round(totalAscent) };
+export function estimateElevationProfile(_coordinates: [number, number][], _totalDistKm: number): ElevationProfileResult {
+  // Never display fabricated height values. The offline importer may attach surveyed DEM
+  // samples in a future dataset version; until then the UI explicitly marks elevation unknown.
+  return { points: [], totalAscent: 0, available: false };
 }
 
 /**
