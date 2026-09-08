@@ -22,9 +22,11 @@ interface OSMResponse { elements: OSMElement[]; }
 const SECTORS: Bbox[] = GRID_SECTORS.map((sector) => sector.bbox);
 const MAX_CELL_SIZE_DEGREES = 0.25;
 const RELATIONS_PER_GEOMETRY_REQUEST = 20;
-const RETRIES_PER_ENDPOINT = 2;
+// Try each independent public endpoint once. A second attempt at an unresponsive
+// endpoint only makes the command look stuck; the next provider is a better retry.
+const RETRIES_PER_ENDPOINT = 1;
 const REQUEST_PAUSE_MS = 250;
-const REQUEST_TIMEOUT_MS = 45_000;
+const REQUEST_TIMEOUT_MS = 12_000;
 const ENDPOINT_TOLERANCE_DEGREES = 0.0045; // ~500 m: only a data-validation tolerance, never a route fallback.
 
 const OVERPASS_ENDPOINTS = [

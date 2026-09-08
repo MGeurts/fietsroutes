@@ -134,11 +134,13 @@ bun install
 
 ### Build or update the official network dataset
 
-Run this on a development machine or in CI, never on Antagonist hosting. It validates `rcn` route relations and writes `public/data/benelux_network.json`; relations without verified endpoint geometry are excluded rather than guessed. The importer discovers relations in small cells and retries three public Overpass services, so a full Benelux build can take several minutes. It leaves no partial file behind when a provider fails.
+Run this on a development machine or in CI, never on Antagonist hosting. It validates `rcn` route relations and writes `public/data/benelux_network.json`; relations without verified endpoint geometry are excluded rather than guessed. The importer discovers relations in small cells and falls back across three public Overpass services, so a full Benelux build can take several minutes. An unreachable provider is abandoned after 12 seconds, and no partial file is written when all providers fail.
 
 ```bash
 npm run build:network
 ```
+
+If your local network cannot reach Overpass, use **Actions → Build official cycle-network dataset → Run workflow** after this workflow has been merged. The manual workflow runs the same validation on GitHub-hosted infrastructure and commits `public/data/benelux_network.json` only when it successfully completes.
 
 ### 3. Start the Development Server
 
