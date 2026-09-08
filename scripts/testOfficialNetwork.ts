@@ -50,6 +50,33 @@ async function main() {
   const multiHopLeg = await calculateBicycleLeg(pathNodes[0], pathNodes[2]);
   assert.equal(multiHopLeg.distanceKm, 2, 'non-adjacent selected nodes must use verified intermediate corridors');
   assert.equal(multiHopLeg.coordinates.length, 3, 'joined route geometry must not duplicate the shared junction coordinate');
+
+  const topologyNodes = [
+    { id: 'topology-a', ref: '20', lat: 52, lng: 5 },
+    { id: 'topology-c', ref: '22', lat: 52, lng: 5.02 },
+  ];
+  registerOfficialNetworkDataset({
+    version: 1,
+    generatedAt: new Date().toISOString(),
+    nodes: topologyNodes,
+    edges: [],
+    topology: {
+      vertices: [
+        { id: 'v-a', lat: 52, lng: 5 },
+        { id: 'v-b', lat: 52, lng: 5.01 },
+        { id: 'v-c', lat: 52, lng: 5.02 },
+      ],
+      edges: [
+        { from: 'v-a', to: 'v-b', distanceKm: 1, coordinates: [[52, 5], [52, 5.01]], source: 'official test' },
+        { from: 'v-b', to: 'v-c', distanceKm: 1, coordinates: [[52, 5.01], [52, 5.02]], source: 'official test' },
+      ],
+      anchors: { 'topology-a': 'v-a', 'topology-c': 'v-c' },
+    },
+  });
+  const topologyLeg = await calculateBicycleLeg(topologyNodes[0], topologyNodes[1]);
+  assert.equal(topologyLeg.distanceKm, 2, 'official trajectory segments must route between their anchored junctions');
+  assert.equal(topologyLeg.coordinates.length, 3, 'official trajectory segments must retain their joined geometry');
+  assert.equal(topologyLeg.instructions, 'Geverifieerde knooppuntenroute via officiële trajectsegmenten.');
   console.log('Official-network regression tests passed.');
 }
 

@@ -28,6 +28,8 @@ export interface OfficialNetworkGraph {
 let importedEdges = new Map<string, OfficialNetworkDatasetEdge>();
 let importedNodes = new Map<string, KnooppuntNode>();
 let importedAdjacency = new Map<string, Map<string, OfficialNetworkEdge>>();
+let officialTopologyAdjacency = new Map<string, Map<string, OfficialNetworkEdge>>();
+let officialTopologyAnchors = new Map<string, string>();
 
 function edgeKey(from: string, to: string): string {
   return `${from}\u0000${to}`;
@@ -68,6 +70,19 @@ export function registerOfficialNetworkDataset(dataset: OfficialNetworkDataset):
   importedEdges = next;
   importedNodes = nextNodes;
   importedAdjacency = nextAdjacency;
+  const topologyAdjacency = new Map<string, Map<string, OfficialNetworkEdge>>();
+  for (const edge of dataset.topology?.edges || []) {
+    if (edge.coordinates.length < 2 || edge.distanceKm <= 0) continue;
+    const add = (from: string, to: string, coordinates: [number, number][]) => {
+      const neighbours = topologyAdjacency.get(from) || new Map<string, OfficialNetworkEdge>();
+      neighbours.set(to, { fromKey: from, toKey: to, distanceKm: edge.distanceKm, coordinates, source: edge.source });
+      topologyAdjacency.set(from, neighbours);
+    };
+    add(edge.from, edge.to, edge.coordinates);
+    add(edge.to, edge.from, [...edge.coordinates].reverse());
+  }
+  officialTopologyAdjacency = topologyAdjacency;
+  officialTopologyAnchors = new Map(Object.entries(dataset.topology?.anchors || {}));
 }
 
 /**
@@ -121,16 +136,8 @@ export interface OfficialNetworkPath {
   nodes: KnooppuntNode[];
 }
 
-/**
- * Find the shortest path over imported, verified corridors only. This is a junction
- * network path finder, not a generic bicycle router: every returned segment is an
- * explicit edge from the static build-time dataset.
- */
-export function findOfficialNetworkPath(from: KnooppuntNode, to: KnooppuntNode): OfficialNetworkPath | null {
-  const startKey = getNodeKey(from);
-  const targetKey = getNodeKey(to);
-  if (startKey === targetKey || !importedAdjacency.has(startKey) || !importedAdjacency.has(targetKey)) return null;
-
+function shortestPath(startKey: string, targetKey: string, adjacency: Map<string, Map<string, OfficialNetworkEdge>>): OfficialNetworkEdge[] | null {
+  if (startKey === targetKey || !adjacency.has(startKey) || !adjacency.has(targetKey)) return null;
   const distances = new Map<string, number>([[startKey, 0]]);
   const previous = new Map<string, { key: string; edge: OfficialNetworkEdge }>();
   const queue: { key: string; distance: number }[] = [{ key: startKey, distance: 0 }];
@@ -163,12 +170,11 @@ export function findOfficialNetworkPath(from: KnooppuntNode, to: KnooppuntNode):
     }
     return first;
   };
-
   while (queue.length > 0) {
     const current = pop()!;
     if (current.distance !== distances.get(current.key)) continue;
     if (current.key === targetKey) break;
-    for (const [nextKey, edge] of importedAdjacency.get(current.key) || []) {
+    for (const [nextKey, edge] of adjacency.get(current.key) || []) {
       const nextDistance = current.distance + edge.distanceKm;
       if (nextDistance >= (distances.get(nextKey) ?? Infinity)) continue;
       distances.set(nextKey, nextDistance);
@@ -177,7 +183,6 @@ export function findOfficialNetworkPath(from: KnooppuntNode, to: KnooppuntNode):
     }
   }
   if (!previous.has(targetKey)) return null;
-
   const edges: OfficialNetworkEdge[] = [];
   let key = targetKey;
   while (key !== startKey) {
@@ -186,7 +191,28 @@ export function findOfficialNetworkPath(from: KnooppuntNode, to: KnooppuntNode):
     edges.unshift(step.edge);
     key = step.key;
   }
-  const nodes = [from, ...edges.slice(0, -1).map((edge) => importedNodes.get(edge.toKey)!).filter(Boolean), to];
+  return edges;
+}
+
+/**
+ * Find the shortest path over imported, verified corridors only. This is a junction
+ * network path finder, not a generic bicycle router: every returned segment is an
+ * explicit edge from the static build-time dataset.
+ */
+export function findOfficialNetworkPath(from: KnooppuntNode, to: KnooppuntNode): OfficialNetworkPath | null {
+  const startKey = getNodeKey(from);
+  const targetKey = getNodeKey(to);
+  if (startKey === targetKey) return null;
+  const topologyEdges = shortestPath(
+    officialTopologyAnchors.get(startKey) || '',
+    officialTopologyAnchors.get(targetKey) || '',
+    officialTopologyAdjacency,
+  );
+  const edges = topologyEdges || shortestPath(startKey, targetKey, importedAdjacency);
+  if (!edges) return null;
+  const nodes = topologyEdges
+    ? [from, to]
+    : [from, ...edges.slice(0, -1).map((edge) => importedNodes.get(edge.toKey)!).filter(Boolean), to];
   return { edges, nodes };
 }
 

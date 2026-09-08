@@ -39,11 +39,34 @@ export interface OfficialNetworkDatasetEdge {
   verifiedAt: string;
 }
 
+/** A detailed official segment graph, currently supplied by Rijkswaterstaat for NL. */
+export interface OfficialNetworkTopologyVertex {
+  id: string;
+  lat: number;
+  lng: number;
+}
+
+export interface OfficialNetworkTopologyEdge {
+  from: string;
+  to: string;
+  distanceKm: number;
+  coordinates: [number, number][];
+  source: string;
+}
+
+export interface OfficialNetworkTopology {
+  vertices: OfficialNetworkTopologyVertex[];
+  edges: OfficialNetworkTopologyEdge[];
+  /** Maps a stable OSM knooppunt id to its verified topology vertex. */
+  anchors: Record<string, string>;
+}
+
 export interface OfficialNetworkDataset {
   version: 1;
   generatedAt: string;
   nodes: KnooppuntNode[];
   edges: OfficialNetworkDatasetEdge[];
+  topology?: OfficialNetworkTopology;
 }
 
 export interface PlannedRoute {

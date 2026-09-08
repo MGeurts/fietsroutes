@@ -58,12 +58,16 @@ export async function calculateBicycleLeg(
   const path = findOfficialNetworkPath(fromNode, toNode);
   if (!path) throw new UnknownKnooppuntenConnectionError(fromNode.ref, toNode.ref);
 
+  const viaRefs = path.nodes.slice(1, -1).map((node) => node.ref);
+
   const leg: RouteLeg = {
     fromNode,
     toNode,
     distanceKm: Math.round(path.edges.reduce((total, segment) => total + segment.distanceKm, 0) * 100) / 100,
     coordinates: path.edges.flatMap((segment, index) => index === 0 ? segment.coordinates : segment.coordinates.slice(1)),
-    instructions: `Geverifieerde knooppuntenroute via ${path.nodes.slice(1, -1).map((node) => node.ref).join(' → ')}.`,
+    instructions: viaRefs.length > 0
+      ? `Geverifieerde knooppuntenroute via ${viaRefs.join(' → ')}.`
+      : 'Geverifieerde knooppuntenroute via officiële trajectsegmenten.',
   };
   legCache.set(cacheKey, leg);
   return leg;

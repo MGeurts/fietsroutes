@@ -13,7 +13,13 @@ import readline from 'node:readline';
 import { spawn } from 'node:child_process';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
-import type { KnooppuntNode, OfficialNetworkDataset, OfficialNetworkDatasetEdge } from '../src/types';
+import type {
+  KnooppuntNode,
+  OfficialNetworkDataset,
+  OfficialNetworkDatasetEdge,
+  OfficialNetworkTopology,
+  OfficialNetworkTopologyVertex,
+} from '../src/types';
 
 interface PbfSource { filename: string; label: string; url: string; }
 interface OplNode { id: number; lat: number; lng: number; tags: Record<string, string>; }
@@ -29,6 +35,25 @@ const INFERRED_ENDPOINT_TOLERANCE_DEGREES = 0.001; // Geometry endpoint to one u
 const SEGMENT_JOIN_TOLERANCE_DEGREES = 0.00001; // Ways must actually meet; never bridge a visible gap.
 const JUNCTION_INDEX_CELL_DEGREES = 0.01;
 const MAX_UNMAPPED_GEOMETRY_GAP_KM = 1;
+const DUTCH_NETWORK_WFS = 'https://geo.rijkswaterstaat.nl/services/ogc/gdr/fietsareaal/wfs';
+const DUTCH_NETWORK_PAGE_SIZE = 1_000;
+// RWS and OSM place a marker at the same signed junction. Keep this deliberately
+// small: an approximate nearby junction must never be silently substituted.
+const DUTCH_TOPOLOGY_ANCHOR_DISTANCE_KM = 0.075;
+
+interface WfsFeature {
+  geometry?: { type?: string; coordinates?: unknown };
+  properties?: { gid?: number | string };
+}
+
+interface WfsResponse {
+  features?: WfsFeature[];
+}
+
+interface SourceBuildResult {
+  rejected: number;
+  junctionNodes: Map<number, OplNode>;
+}
 
 function close(a: [number, number], b: [number, number], tolerance = SEGMENT_JOIN_TOLERANCE_DEGREES): boolean {
   return Math.hypot(a[0] - b[0], a[1] - b[1]) <= tolerance;
@@ -183,6 +208,113 @@ function edgeDistanceKm(coordinates: [number, number][]): number {
   return Math.round(distance * 100) / 100;
 }
 
+function toDatasetNode(node: OplNode): KnooppuntNode | null {
+  const ref = getKnooppuntRef(node);
+  if (!ref) return null;
+  return { id: `osm-${node.id}`, ref, lat: node.lat, lng: node.lng, name: node.tags.name };
+}
+
+function topologyVertexId(coordinate: [number, number]): string {
+  return `nl:${coordinate[0].toFixed(6)}:${coordinate[1].toFixed(6)}`;
+}
+
+function asLineStrings(feature: WfsFeature): [number, number][][] {
+  const { geometry } = feature;
+  if (!geometry?.coordinates) return [];
+  const isCoordinate = (value: unknown): value is [number, number] => Array.isArray(value)
+    && value.length >= 2 && typeof value[0] === 'number' && typeof value[1] === 'number';
+  if (geometry.type === 'LineString' && Array.isArray(geometry.coordinates) && geometry.coordinates.every(isCoordinate)) {
+    return [geometry.coordinates.map(([lng, lat]) => [lat, lng])];
+  }
+  if (geometry.type === 'MultiLineString' && Array.isArray(geometry.coordinates)) {
+    return geometry.coordinates
+      .filter((line): line is unknown[] => Array.isArray(line) && line.every(isCoordinate))
+      .map((line) => (line as [number, number][]).map(([lng, lat]) => [lat, lng]));
+  }
+  return [];
+}
+
+async function fetchDutchNetworkFeatures(): Promise<WfsFeature[]> {
+  const features: WfsFeature[] = [];
+  for (let startIndex = 0; ; startIndex += DUTCH_NETWORK_PAGE_SIZE) {
+    const parameters = new URLSearchParams({
+      SERVICE: 'WFS', VERSION: '2.0.0', REQUEST: 'GetFeature',
+      TYPENAMES: 'fietsareaal:fietsnetwerken_vrij', OUTPUTFORMAT: 'application/json',
+      SRSNAME: 'EPSG:4326', COUNT: String(DUTCH_NETWORK_PAGE_SIZE), STARTINDEX: String(startIndex),
+    });
+    let response: Response | undefined;
+    let failure: unknown;
+    for (let attempt = 1; attempt <= 3; attempt += 1) {
+      try {
+        response = await fetch(`${DUTCH_NETWORK_WFS}?${parameters}`, { signal: AbortSignal.timeout(120_000) });
+        if (response.ok) break;
+        failure = new Error(`HTTP ${response.status}`);
+      } catch (error) {
+        failure = error;
+      }
+    }
+    if (!response?.ok) throw new Error(`Rijkswaterstaat WFS niet bereikbaar bij pagina ${startIndex}: ${String(failure)}`);
+    const page = await response.json() as WfsResponse;
+    const pageFeatures = page.features || [];
+    features.push(...pageFeatures);
+    console.log(`Nederlandse officiële trajecten: ${features.length} segmenten opgehaald...`);
+    if (pageFeatures.length < DUTCH_NETWORK_PAGE_SIZE) return features;
+  }
+}
+
+function buildDutchOfficialTopology(junctionNodes: Map<number, OplNode>): Promise<OfficialNetworkTopology> {
+  return (async () => {
+    console.log('Downloading officiële Nederlandse fietsknooppunttrajecten (Rijkswaterstaat)...');
+    const features = await fetchDutchNetworkFeatures();
+    const vertices = new Map<string, OfficialNetworkTopologyVertex>();
+    const edges = new Map<string, OfficialNetworkTopology['edges'][number]>();
+    for (const feature of features) {
+      for (const coordinates of asLineStrings(feature)) {
+        if (coordinates.length < 2 || hasUnmappedGeometryGap(coordinates)) continue;
+        const from = topologyVertexId(coordinates[0]);
+        const to = topologyVertexId(coordinates[coordinates.length - 1]);
+        if (from === to) continue;
+        vertices.set(from, { id: from, lat: coordinates[0][0], lng: coordinates[0][1] });
+        vertices.set(to, { id: to, lat: coordinates[coordinates.length - 1][0], lng: coordinates[coordinates.length - 1][1] });
+        const key = [from, to].sort().join('|');
+        if (edges.has(key)) continue;
+        edges.set(key, {
+          from, to, coordinates, distanceKm: edgeDistanceKm(coordinates),
+          source: `Rijkswaterstaat fietsnetwerken_vrij ${feature.properties?.gid ?? 'segment'}`,
+        });
+      }
+    }
+
+    const vertexIndex = new Map<string, OfficialNetworkTopologyVertex[]>();
+    for (const vertex of vertices.values()) {
+      const bucket = vertexIndex.get(junctionCell(vertex.lat, vertex.lng)) || [];
+      bucket.push(vertex);
+      vertexIndex.set(junctionCell(vertex.lat, vertex.lng), bucket);
+    }
+    const anchors: Record<string, string> = {};
+    for (const junction of junctionNodes.values()) {
+      const row = Math.floor(junction.lat / JUNCTION_INDEX_CELL_DEGREES);
+      const column = Math.floor(junction.lng / JUNCTION_INDEX_CELL_DEGREES);
+      let closest: OfficialNetworkTopologyVertex | undefined;
+      let closestDistance = DUTCH_TOPOLOGY_ANCHOR_DISTANCE_KM;
+      for (let rowOffset = -1; rowOffset <= 1; rowOffset += 1) {
+        for (let columnOffset = -1; columnOffset <= 1; columnOffset += 1) {
+          for (const vertex of vertexIndex.get(`${row + rowOffset}:${column + columnOffset}`) || []) {
+            const candidateDistance = edgeDistanceKm([[junction.lat, junction.lng], [vertex.lat, vertex.lng]]);
+            if (candidateDistance <= closestDistance) {
+              closest = vertex;
+              closestDistance = candidateDistance;
+            }
+          }
+        }
+      }
+      if (closest) anchors[`osm-${junction.id}`] = closest.id;
+    }
+    console.log(`Nederland: ${features.length} officiële trajecten; ${vertices.size} netwerkpunten en ${Object.keys(anchors).length} veilig gekoppelde knooppunten.`);
+    return { vertices: [...vertices.values()], edges: [...edges.values()], anchors };
+  })();
+}
+
 /** An OSM way normally has dense geometry. A larger gap would render as an invented straight line. */
 function hasUnmappedGeometryGap(coordinates: [number, number][]): boolean {
   for (let index = 1; index < coordinates.length; index += 1) {
@@ -278,7 +410,7 @@ async function readJunctions(junctionFile: string): Promise<Map<number, OplNode>
   return nodes;
 }
 
-async function processSource(source: PbfSource, pbfFile: string, workingDirectory: string, datasetNodes: Map<string, KnooppuntNode>, edges: Map<string, OfficialNetworkDatasetEdge>): Promise<number> {
+async function processSource(source: PbfSource, pbfFile: string, workingDirectory: string, datasetNodes: Map<string, KnooppuntNode>, edges: Map<string, OfficialNetworkDatasetEdge>): Promise<SourceBuildResult> {
   const stem = path.basename(source.filename, '.osm.pbf');
   const relationsFile = path.join(workingDirectory, `${stem}-relations.opl`);
   const junctionsFile = path.join(workingDirectory, `${stem}-junctions.opl`);
@@ -297,11 +429,15 @@ async function processSource(source: PbfSource, pbfFile: string, workingDirector
   console.log(`Extracting ${ids.size} ${source.label} route members with their referenced nodes...`);
   await runOsmium(['getid', '--add-referenced', '--remove-tags', '--id-file', idsFile, '--output-format', 'opl', '--output', payloadFile, pbfFile], true);
   const { nodes, ways } = await readPayload(payloadFile);
-  for (const node of junctionNodes.values()) nodes.set(node.id, node);
+  for (const node of junctionNodes.values()) {
+    nodes.set(node.id, node);
+    const datasetNode = toDatasetNode(node);
+    if (datasetNode) datasetNodes.set(String(datasetNode.id), datasetNode);
+  }
   const rejected = consumeVerifiedEdges(relations, nodes, ways, buildJunctionIndex(junctionNodes.values()), datasetNodes, edges);
   console.log(`${source.label}: ${relations.length} relations examined; ${junctionNodes.size} junctions, ${nodes.size} nodes and ${ways.size} ways retained.`);
   fs.rmSync(relationsFile, { force: true }); fs.rmSync(junctionsFile, { force: true }); fs.rmSync(idsFile, { force: true }); fs.rmSync(payloadFile, { force: true });
-  return rejected;
+  return { rejected, junctionNodes };
 }
 
 async function main(): Promise<void> {
@@ -311,13 +447,19 @@ async function main(): Promise<void> {
     const datasetNodes = new Map<string, KnooppuntNode>();
     const edges = new Map<string, OfficialNetworkDatasetEdge>();
     let rejected = 0;
-    for (const source of PBF_SOURCES) rejected += await processSource(source, await downloadPbf(source, workingDirectory), workingDirectory, datasetNodes, edges);
+    let dutchJunctionNodes = new Map<number, OplNode>();
+    for (const source of PBF_SOURCES) {
+      const result = await processSource(source, await downloadPbf(source, workingDirectory), workingDirectory, datasetNodes, edges);
+      rejected += result.rejected;
+      if (source.label === 'Netherlands') dutchJunctionNodes = result.junctionNodes;
+    }
     if (edges.size === 0) throw new Error('Geen verifieerbare RCN-routes gevonden; er wordt geen lege dataset geschreven.');
-    const dataset: OfficialNetworkDataset = { version: 1, generatedAt: new Date().toISOString(), nodes: [...datasetNodes.values()], edges: [...edges.values()] };
+    const topology = await buildDutchOfficialTopology(dutchJunctionNodes);
+    const dataset: OfficialNetworkDataset = { version: 1, generatedAt: new Date().toISOString(), nodes: [...datasetNodes.values()], edges: [...edges.values()], topology };
     const output = path.join(process.cwd(), 'public', 'data', 'benelux_network.json');
     fs.mkdirSync(path.dirname(output), { recursive: true });
     fs.writeFileSync(output, JSON.stringify(dataset));
-    console.log(`Wrote ${dataset.nodes.length} nodes and ${dataset.edges.length} verified edges; rejected ${rejected} relations.`);
+    console.log(`Wrote ${dataset.nodes.length} nodes, ${dataset.edges.length} verified OSM edges and ${topology.edges.length} official Netherlands trajectory segments; rejected ${rejected} relations.`);
   } finally {
     fs.rmSync(workingDirectory, { recursive: true, force: true });
   }
