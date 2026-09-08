@@ -22,7 +22,9 @@ interface OSMResponse { elements: OSMElement[]; }
 const SECTORS: Bbox[] = GRID_SECTORS.map((sector) => sector.bbox);
 const MAX_CELL_SIZE_DEGREES = 0.25;
 const MIN_DISCOVERY_CELL_SIZE_DEGREES = 0.0625;
-const RELATIONS_PER_GEOMETRY_REQUEST = 20;
+// Process a small group and discard its raw OSM response before downloading the next one.
+// Keeping every recursive response alive exhausts the default GitHub Actions Node heap.
+const RELATIONS_PER_GEOMETRY_REQUEST = 5;
 // Try each independent public endpoint once. A second attempt at an unresponsive
 // endpoint only makes the command look stuck; the next provider is a better retry.
 const RETRIES_PER_ENDPOINT = 1;
@@ -129,19 +131,21 @@ async function discoverRelationIds(cells: Bbox[]): Promise<number[]> {
   return [...ids];
 }
 
-async function fetchRelationGeometries(relationIds: number[]): Promise<OSMResponse[]> {
+async function fetchRelationGeometries(
+  relationIds: number[],
+  consume: (response: OSMResponse) => void,
+): Promise<void> {
   const batches = chunks(relationIds, RELATIONS_PER_GEOMETRY_REQUEST);
-  const responses: OSMResponse[] = [];
   for (let index = 0; index < batches.length; index += 1) {
     const ids = batches[index];
     console.log(`Downloading geometry ${index + 1}/${batches.length} (${ids.length} relations)...`);
-    responses.push(await queryOverpass(
+    const response = await queryOverpass(
       `[out:json][timeout:120]; relation(id:${ids.join(',')}); out body; >; out body;`,
       `relation batch ${index + 1}/${batches.length}`,
-    ));
+    );
+    consume(response);
     await pause(REQUEST_PAUSE_MS);
   }
-  return responses;
 }
 
 function buildCoordinates(relation: OSMRelation, ways: Map<number, OSMWay>, nodes: Map<number, OSMNode>, from: OSMNode, to: OSMNode): [number, number][] | null {
@@ -177,20 +181,18 @@ function edgeDistanceKm(coordinates: [number, number][]): number {
   return Math.round(distance * 100) / 100;
 }
 
-async function main(): Promise<void> {
-  const cells = SECTORS.flatMap(splitIntoCells);
-  const relationIds = await discoverRelationIds(cells);
-  if (relationIds.length === 0) {
-    throw new Error('No officiële RCN-relaties gevonden. Controleer de Overpass-antwoorden; er wordt geen lege dataset geschreven.');
-  }
-  console.log(`Found ${relationIds.length} unique RCN relations.`);
-  const all = await fetchRelationGeometries(relationIds);
-  const elements = all.flatMap((response) => response.elements);
-  const osmNodes = new Map(elements.filter((element): element is OSMNode => element.type === 'node').map((node) => [node.id, node]));
-  const ways = new Map(elements.filter((element): element is OSMWay => element.type === 'way').map((way) => [way.id, way]));
-  const relations = elements.filter((element): element is OSMRelation => element.type === 'relation');
-  const datasetNodes = new Map<string, KnooppuntNode>();
-  const edges = new Map<string, OfficialNetworkDatasetEdge>();
+function consumeVerifiedEdges(
+  response: OSMResponse,
+  datasetNodes: Map<string, KnooppuntNode>,
+  edges: Map<string, OfficialNetworkDatasetEdge>,
+): number {
+  const osmNodes = new Map(response.elements
+    .filter((element): element is OSMNode => element.type === 'node')
+    .map((node) => [node.id, node]));
+  const ways = new Map(response.elements
+    .filter((element): element is OSMWay => element.type === 'way')
+    .map((way) => [way.id, way]));
+  const relations = response.elements.filter((element): element is OSMRelation => element.type === 'relation');
   let rejected = 0;
 
   for (const relation of relations) {
@@ -217,6 +219,22 @@ async function main(): Promise<void> {
       source: `OpenStreetMap RCN relation ${relation.id}`, verifiedAt: new Date().toISOString(),
     });
   }
+  return rejected;
+}
+
+async function main(): Promise<void> {
+  const cells = SECTORS.flatMap(splitIntoCells);
+  const relationIds = await discoverRelationIds(cells);
+  if (relationIds.length === 0) {
+    throw new Error('No officiële RCN-relaties gevonden. Controleer de Overpass-antwoorden; er wordt geen lege dataset geschreven.');
+  }
+  console.log(`Found ${relationIds.length} unique RCN relations.`);
+  const datasetNodes = new Map<string, KnooppuntNode>();
+  const edges = new Map<string, OfficialNetworkDatasetEdge>();
+  let rejected = 0;
+  await fetchRelationGeometries(relationIds, (response) => {
+    rejected += consumeVerifiedEdges(response, datasetNodes, edges);
+  });
 
   const dataset: OfficialNetworkDataset = {
     version: 1, generatedAt: new Date().toISOString(), nodes: [...datasetNodes.values()], edges: [...edges.values()],
