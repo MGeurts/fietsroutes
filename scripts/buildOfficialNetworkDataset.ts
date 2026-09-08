@@ -24,7 +24,7 @@ const MAX_CELL_SIZE_DEGREES = 0.25;
 const MIN_DISCOVERY_CELL_SIZE_DEGREES = 0.0625;
 // Process a small group and discard its raw OSM response before downloading the next one.
 // Keeping every recursive response alive exhausts the default GitHub Actions Node heap.
-const RELATIONS_PER_GEOMETRY_REQUEST = 5;
+const RELATIONS_PER_GEOMETRY_REQUEST = 2;
 // Try each independent public endpoint once. A second attempt at an unresponsive
 // endpoint only makes the command look stuck; the next provider is a better retry.
 const RETRIES_PER_ENDPOINT = 1;
@@ -140,7 +140,16 @@ async function fetchRelationGeometries(
     const ids = batches[index];
     console.log(`Downloading geometry ${index + 1}/${batches.length} (${ids.length} relations)...`);
     const response = await queryOverpass(
-      `[out:json][timeout:120]; relation(id:${ids.join(',')}); out body; >; out body;`,
+      // Do not use recursive `>` here: an unexpected nested route relation can expand
+      // into an entire regional network and exhaust the runner heap. We only need the
+      // route relation itself, its direct way members, and their geometry/end-point nodes.
+      `[out:json][timeout:120];
+       relation(id:${ids.join(',')})->.routes;
+       way(r.routes)->.routeWays;
+       node(r.routes)->.routeNodes;
+       node(w.routeWays)->.geometryNodes;
+       (.routes;.routeWays;.routeNodes;.geometryNodes;);
+       out body;`,
       `relation batch ${index + 1}/${batches.length}`,
     );
     consume(response);
