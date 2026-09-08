@@ -7,7 +7,8 @@ export interface KnooppuntNode {
   municipality?: string;
   region?: string; // e.g. "Belgisch Limburg", "Nederlands Limburg", "Antwerpen"
   highlight?: string; // e.g. "Fietsen door het Water", "Nationaal Park Hoge Kempen"
-  connections?: string[]; // connected node numbers
+  /** Legacy display data only. Routing never reads this field. */
+  connections?: string[];
 }
 
 export interface RouteLeg {
@@ -21,6 +22,28 @@ export interface RouteLeg {
 export interface ElevationPoint {
   distance: number; // km from start
   elevation: number; // meters
+}
+
+export interface ElevationProfileResult {
+  points: ElevationPoint[];
+  totalAscent: number;
+  available: boolean;
+}
+
+export interface OfficialNetworkDatasetEdge {
+  from: string;
+  to: string;
+  distanceKm: number;
+  coordinates: [number, number][];
+  source: string;
+  verifiedAt: string;
+}
+
+export interface OfficialNetworkDataset {
+  version: 1;
+  generatedAt: string;
+  nodes: KnooppuntNode[];
+  edges: OfficialNetworkDatasetEdge[];
 }
 
 export interface PlannedRoute {

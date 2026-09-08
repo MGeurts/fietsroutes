@@ -8,6 +8,7 @@ import {
 } from './knooppuntenCacheService';
 import { enrichKnooppuntLocality } from './localityService';
 import { INITIAL_NODES } from '../data/knooppuntenData';
+import { loadPrepackagedOfficialNetwork } from './networkDataService';
 
 export interface GridSectorInfo {
   id: string;
@@ -333,12 +334,19 @@ export async function importPrepackagedBeneluxDataset(
   let nodesToImport: KnooppuntNode[] = [];
 
   try {
-    const res = await fetch('/data/benelux_knooppunten.json');
-    if (res.ok) {
-      nodesToImport = await res.json();
-    }
+    const network = await loadPrepackagedOfficialNetwork();
+    if (network?.nodes.length) nodesToImport = network.nodes;
   } catch {
-    // ignore
+    // Fall through to the legacy node-only dataset.
+  }
+
+  if (nodesToImport.length === 0) {
+    try {
+      const res = await fetch('/data/benelux_knooppunten.json');
+      if (res.ok) nodesToImport = await res.json();
+    } catch {
+      // ignore
+    }
   }
 
   if (!nodesToImport || nodesToImport.length === 0) {

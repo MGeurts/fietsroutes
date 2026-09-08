@@ -29,6 +29,8 @@ interface RoutePanelProps {
   totalDistanceKm: number;
   elevationGainM: number;
   elevationPoints: ElevationPoint[];
+  elevationAvailable: boolean;
+  routeError: string | null;
   selectedBike: BikeType;
   onChangeBike: (bike: BikeType) => void;
   onRemoveNode: (index: number) => void;
@@ -64,6 +66,8 @@ export const RoutePanel: React.FC<RoutePanelProps> = ({
   totalDistanceKm,
   elevationGainM,
   elevationPoints,
+  elevationAvailable,
+  routeError,
   selectedBike,
   onChangeBike,
   onRemoveNode,
@@ -134,7 +138,7 @@ export const RoutePanel: React.FC<RoutePanelProps> = ({
             <div className="h-5 w-px bg-slate-200" />
             <div title="Hoogtemeters klimmen">
               <span className="text-[9px] text-slate-400 block uppercase font-bold leading-tight">Hoogte</span>
-              <span className="font-bold text-slate-700 text-xs sm:text-sm">+{elevationGainM}m</span>
+              <span className="font-bold text-slate-700 text-xs sm:text-sm">{elevationAvailable ? `+${elevationGainM}m` : 'n/b'}</span>
             </div>
             <div className="h-5 w-px bg-slate-200" />
             <div title="Aantal knooppunten">
@@ -247,17 +251,17 @@ export const RoutePanel: React.FC<RoutePanelProps> = ({
             <button
               type="button"
               onClick={() => setActiveTab('elevation')}
-              disabled={totalDistanceKm <= 0}
+              disabled={totalDistanceKm <= 0 || !elevationAvailable}
               className={`py-1 rounded-md text-[11px] font-bold transition cursor-pointer flex flex-col items-center justify-center leading-tight disabled:opacity-40 disabled:cursor-not-allowed ${
                 activeTab === 'elevation'
                   ? 'bg-white text-emerald-800 shadow-xs'
                   : 'text-slate-600 hover:text-slate-900'
               }`}
-              title={totalDistanceKm > 0 ? "Toon interactief hoogteprofiel" : "Plan eerst knooppunten om hoogteprofiel te bekijken"}
+              title={elevationAvailable ? "Toon interactief hoogteprofiel" : "Hoogtegegevens zijn nog niet beschikbaar in de offline dataset"}
             >
               <span>Hoogte</span>
               <span className={`text-[10px] ${activeTab === 'elevation' ? 'text-emerald-700 font-semibold' : 'text-slate-400 font-normal'}`}>
-                {totalDistanceKm > 0 ? `(+${elevationGainM}m)` : '(0m)'}
+                {elevationAvailable ? `(+${elevationGainM}m)` : '(niet beschikbaar)'}
               </span>
             </button>
           </div>
@@ -327,8 +331,14 @@ export const RoutePanel: React.FC<RoutePanelProps> = ({
           )}
         </div>
 
+        {routeError && (
+          <div className="p-2.5 rounded-md bg-amber-50 border border-amber-200 text-[11px] leading-relaxed text-amber-950">
+            <strong>Route niet beschikbaar.</strong> {routeError}
+          </div>
+        )}
+
         {/* Tab 2: Hoogteprofiel view */}
-        {activeTab === 'elevation' && totalDistanceKm > 0 ? (
+        {activeTab === 'elevation' && totalDistanceKm > 0 && elevationAvailable ? (
           <div className="bg-white p-3 rounded-lg border border-slate-200 shadow-xs space-y-2">
             <div className="flex items-center justify-between pb-1 border-b border-slate-100 text-xs">
               <span className="font-bold text-slate-800">Hoogteprofiel van route</span>
