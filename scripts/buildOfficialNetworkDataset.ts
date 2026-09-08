@@ -21,18 +21,20 @@ interface OSMResponse { elements: OSMElement[]; }
 // relation ids in small cells first, then download their geometry in bounded batches.
 const SECTORS: Bbox[] = GRID_SECTORS.map((sector) => sector.bbox);
 const MAX_CELL_SIZE_DEGREES = 0.25;
+const MIN_DISCOVERY_CELL_SIZE_DEGREES = 0.0625;
 const RELATIONS_PER_GEOMETRY_REQUEST = 20;
 // Try each independent public endpoint once. A second attempt at an unresponsive
 // endpoint only makes the command look stuck; the next provider is a better retry.
 const RETRIES_PER_ENDPOINT = 1;
 const REQUEST_PAUSE_MS = 250;
-const REQUEST_TIMEOUT_MS = 12_000;
+const REQUEST_TIMEOUT_MS = 30_000;
 const ENDPOINT_TOLERANCE_DEGREES = 0.0045; // ~500 m: only a data-validation tolerance, never a route fallback.
 
 const OVERPASS_ENDPOINTS = [
   'https://overpass-api.de/api/interpreter',
   'https://overpass.private.coffee/api/interpreter',
   'https://overpass.kumi.systems/api/interpreter',
+  'https://maps.mail.ru/osm/tools/overpass/api/interpreter',
 ];
 
 function close(a: [number, number], b: [number, number]): boolean {
@@ -43,15 +45,15 @@ function pause(milliseconds: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
 
-function splitIntoCells([south, west, north, east]: Bbox): Bbox[] {
+function splitIntoCells([south, west, north, east]: Bbox, maximumSize = MAX_CELL_SIZE_DEGREES): Bbox[] {
   const cells: Bbox[] = [];
-  for (let cellSouth = south; cellSouth < north; cellSouth += MAX_CELL_SIZE_DEGREES) {
-    for (let cellWest = west; cellWest < east; cellWest += MAX_CELL_SIZE_DEGREES) {
+  for (let cellSouth = south; cellSouth < north; cellSouth += maximumSize) {
+    for (let cellWest = west; cellWest < east; cellWest += maximumSize) {
       cells.push([
         Number(cellSouth.toFixed(6)),
         Number(cellWest.toFixed(6)),
-        Number(Math.min(cellSouth + MAX_CELL_SIZE_DEGREES, north).toFixed(6)),
-        Number(Math.min(cellWest + MAX_CELL_SIZE_DEGREES, east).toFixed(6)),
+        Number(Math.min(cellSouth + maximumSize, north).toFixed(6)),
+        Number(Math.min(cellWest + maximumSize, east).toFixed(6)),
       ]);
     }
   }
@@ -92,17 +94,36 @@ async function queryOverpass(query: string, label: string): Promise<OSMResponse>
 
 async function discoverRelationIds(cells: Bbox[]): Promise<number[]> {
   const ids = new Set<number>();
+
+  async function discoverCell(bbox: Bbox, label: string): Promise<void> {
+    const [south, west, north, east] = bbox;
+    try {
+      const response = await queryOverpass(
+        `[out:json][timeout:90]; relation["type"="route"]["route"="bicycle"]["network"="rcn"]["network:type"="node_network"](${south},${west},${north},${east}); out ids;`,
+        bbox.join(','),
+      );
+      for (const element of response.elements) {
+        if (element.type === 'relation') ids.add(element.id);
+      }
+    } catch (error) {
+      const height = north - south;
+      const width = east - west;
+      if (height <= MIN_DISCOVERY_CELL_SIZE_DEGREES && width <= MIN_DISCOVERY_CELL_SIZE_DEGREES) throw error;
+
+      const smallerSize = Math.max(MIN_DISCOVERY_CELL_SIZE_DEGREES, Math.min(height, width) / 2);
+      const children = splitIntoCells(bbox, smallerSize);
+      console.warn(`Retrying ${label} as ${children.length} smaller cells after Overpass timeout.`);
+      for (let index = 0; index < children.length; index += 1) {
+        await discoverCell(children[index], `${label}.${index + 1}`);
+        await pause(REQUEST_PAUSE_MS);
+      }
+    }
+  }
+
   for (let index = 0; index < cells.length; index += 1) {
     const bbox = cells[index];
     console.log(`Discovering ${index + 1}/${cells.length}: ${bbox.join(', ')}...`);
-    const [south, west, north, east] = bbox;
-    const response = await queryOverpass(
-      `[out:json][timeout:90]; relation["type"="route"]["route"="bicycle"]["network"="rcn"]["network:type"="node_network"](${south},${west},${north},${east}); out ids;`,
-      bbox.join(','),
-    );
-    for (const element of response.elements) {
-      if (element.type === 'relation') ids.add(element.id);
-    }
+    await discoverCell(bbox, String(index + 1));
     await pause(REQUEST_PAUSE_MS);
   }
   return [...ids];

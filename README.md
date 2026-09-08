@@ -134,7 +134,7 @@ bun install
 
 ### Build or update the official network dataset
 
-Run this on a development machine or in CI, never on Antagonist hosting. It validates `rcn` route relations and writes `public/data/benelux_network.json`; relations without verified endpoint geometry are excluded rather than guessed. The importer discovers relations in small cells and falls back across three public Overpass services, so a full Benelux build can take several minutes. An unreachable provider is abandoned after 12 seconds, and no partial file is written when all providers fail.
+Run this on a development machine or in CI, never on Antagonist hosting. It validates `rcn` route relations and writes `public/data/benelux_network.json`; relations without verified endpoint geometry are excluded rather than guessed. The importer discovers relations in small cells and falls back across four public Overpass services, so a full Benelux build can take several minutes. A slow cell is retried as smaller cells; an unreachable provider is abandoned after 30 seconds, and no partial file is written when all providers fail.
 
 ```bash
 npm run build:network
