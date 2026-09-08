@@ -45,6 +45,7 @@ interface RoutePanelProps {
   redoNodeRef?: string;
   onOpenStrookje: () => void;
   onExportGpx: () => void;
+  canExportRoute: boolean;
   onOpenRoundTrip: () => void;
   onOpenGpxImport: () => void;
   onOpenLaravelModal: () => void;
@@ -81,6 +82,7 @@ export const RoutePanel: React.FC<RoutePanelProps> = ({
   redoNodeRef,
   onOpenStrookje,
   onExportGpx,
+  canExportRoute,
   onOpenRoundTrip,
   onOpenGpxImport,
 }) => {
@@ -189,7 +191,7 @@ export const RoutePanel: React.FC<RoutePanelProps> = ({
         <div className="p-2 bg-slate-50/60 flex items-center gap-1.5">
           <button
             onClick={onOpenStrookje}
-            disabled={selectedNodes.length === 0}
+            disabled={!canExportRoute}
             className="flex-1 flex items-center justify-center gap-1 py-1.5 px-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-md text-xs font-semibold shadow-2xs transition active:scale-95 disabled:opacity-40 cursor-pointer"
             title="Print strookje voor stuur"
           >
@@ -199,7 +201,7 @@ export const RoutePanel: React.FC<RoutePanelProps> = ({
 
           <button
             onClick={onExportGpx}
-            disabled={selectedNodes.length === 0}
+            disabled={!canExportRoute}
             className="flex-1 flex items-center justify-center gap-1 py-1.5 px-2 bg-slate-900 hover:bg-slate-800 text-white rounded-md text-xs font-semibold shadow-2xs transition active:scale-95 disabled:opacity-40 cursor-pointer"
             title="Download GPX bestand"
           >

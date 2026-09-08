@@ -110,7 +110,9 @@ export default function App() {
       } catch (error) {
         if (isCancelled) return;
         setRouteLegs([]);
-        setFullCoordinates(selectedNodes.map((node) => [node.lat, node.lng]));
+        // Never draw a line between selected nodes when no verified network edge exists.
+        // Leaflet would render those waypoints as misleading straight-line routing.
+        setFullCoordinates([]);
         setTotalDistanceKm(0);
         setElevationGainM(0);
         setElevationPoints([]);
@@ -358,7 +360,10 @@ export default function App() {
 
   // GPX Export
   const handleExportGpx = () => {
-    if (selectedNodes.length === 0) return;
+    const hasCompleteRoute = selectedNodes.length >= 2
+      && routeLegs.length === selectedNodes.length - 1
+      && !routeError;
+    if (!hasCompleteRoute) return;
     const currentRoute: PlannedRoute = {
       id: `route-${Date.now()}`,
       name: routeName || 'Fietsroute',
@@ -781,7 +786,7 @@ export default function App() {
 
           <button
             onClick={handleExportGpx}
-            disabled={selectedNodes.length === 0}
+            disabled={selectedNodes.length < 2 || routeLegs.length !== selectedNodes.length - 1 || Boolean(routeError)}
             className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-xs sm:text-sm font-medium px-3 sm:px-3.5 py-2 rounded-md transition-colors shadow-sm cursor-pointer tablet-touch-friendly-btn"
             title="Download GPX bestand"
           >
@@ -840,6 +845,7 @@ export default function App() {
             redoNodeRef={redoNodeRef}
             onOpenStrookje={() => setIsStrookjeOpen(true)}
             onExportGpx={handleExportGpx}
+            canExportRoute={selectedNodes.length >= 2 && routeLegs.length === selectedNodes.length - 1 && !routeError}
             onOpenRoundTrip={() => setIsRoundTripOpen(true)}
             onOpenGpxImport={() => setIsGpxImportOpen(true)}
             onOpenLaravelModal={() => setIsLaravelModalOpen(true)}

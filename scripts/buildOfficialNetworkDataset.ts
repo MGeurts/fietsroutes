@@ -17,28 +17,108 @@ interface OSMRelation { type: 'relation'; id: number; tags?: Record<string, stri
 type OSMElement = OSMNode | OSMWay | OSMRelation;
 interface OSMResponse { elements: OSMElement[]; }
 
-// Keep requests small enough for public Overpass instances and process them sequentially.
+// Public Overpass instances reject the large recursive query for an entire province. Discover
+// relation ids in small cells first, then download their geometry in bounded batches.
 const SECTORS: Bbox[] = GRID_SECTORS.map((sector) => sector.bbox);
+const MAX_CELL_SIZE_DEGREES = 0.25;
+const RELATIONS_PER_GEOMETRY_REQUEST = 20;
+const RETRIES_PER_ENDPOINT = 2;
+const REQUEST_PAUSE_MS = 250;
+const REQUEST_TIMEOUT_MS = 45_000;
 const ENDPOINT_TOLERANCE_DEGREES = 0.0045; // ~500 m: only a data-validation tolerance, never a route fallback.
+
+const OVERPASS_ENDPOINTS = [
+  'https://overpass-api.de/api/interpreter',
+  'https://overpass.private.coffee/api/interpreter',
+  'https://overpass.kumi.systems/api/interpreter',
+];
 
 function close(a: [number, number], b: [number, number]): boolean {
   return Math.hypot(a[0] - b[0], a[1] - b[1]) <= ENDPOINT_TOLERANCE_DEGREES;
 }
 
-async function fetchSector(bbox: Bbox): Promise<OSMResponse> {
-  const [south, west, north, east] = bbox;
-  const query = `[out:json][timeout:180];
-    relation["type"="route"]["route"="bicycle"]["network"="rcn"]["network:type"="node_network"](${south},${west},${north},${east});
-    out body; >; out body;`;
-  const endpoints = ['https://overpass-api.de/api/interpreter', 'https://overpass.kumi.systems/api/interpreter'];
-  for (const endpoint of endpoints) {
-    const response = await fetch(endpoint, {
-      method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: `data=${encodeURIComponent(query)}`,
-    });
-    if (response.ok) return response.json() as Promise<OSMResponse>;
+function pause(milliseconds: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
+function splitIntoCells([south, west, north, east]: Bbox): Bbox[] {
+  const cells: Bbox[] = [];
+  for (let cellSouth = south; cellSouth < north; cellSouth += MAX_CELL_SIZE_DEGREES) {
+    for (let cellWest = west; cellWest < east; cellWest += MAX_CELL_SIZE_DEGREES) {
+      cells.push([
+        Number(cellSouth.toFixed(6)),
+        Number(cellWest.toFixed(6)),
+        Number(Math.min(cellSouth + MAX_CELL_SIZE_DEGREES, north).toFixed(6)),
+        Number(Math.min(cellWest + MAX_CELL_SIZE_DEGREES, east).toFixed(6)),
+      ]);
+    }
   }
-  throw new Error(`Overpass did not return a response for ${bbox.join(',')}`);
+  return cells;
+}
+
+function chunks<T>(values: T[], size: number): T[][] {
+  return Array.from({ length: Math.ceil(values.length / size) }, (_, index) => values.slice(index * size, (index + 1) * size));
+}
+
+async function queryOverpass(query: string, label: string): Promise<OSMResponse> {
+  const errors: string[] = [];
+  for (const endpoint of OVERPASS_ENDPOINTS) {
+    for (let attempt = 1; attempt <= RETRIES_PER_ENDPOINT; attempt += 1) {
+      try {
+        const response = await fetch(endpoint, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'User-Agent': 'fietsroutes-network-builder/1.1',
+          },
+          body: `data=${encodeURIComponent(query)}`,
+          signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+        });
+        if (response.ok) return response.json() as Promise<OSMResponse>;
+
+        const detail = (await response.text()).replace(/\s+/g, ' ').slice(0, 180);
+        errors.push(`${endpoint}: HTTP ${response.status}${detail ? ` (${detail})` : ''}`);
+        if (response.status !== 429 && response.status < 500) break;
+      } catch (error) {
+        errors.push(`${endpoint}: ${error instanceof Error ? error.message : String(error)}`);
+      }
+      if (attempt < RETRIES_PER_ENDPOINT) await pause(1000 * attempt);
+    }
+  }
+  throw new Error(`Overpass query failed for ${label}. ${errors.join(' | ')}`);
+}
+
+async function discoverRelationIds(cells: Bbox[]): Promise<number[]> {
+  const ids = new Set<number>();
+  for (let index = 0; index < cells.length; index += 1) {
+    const bbox = cells[index];
+    console.log(`Discovering ${index + 1}/${cells.length}: ${bbox.join(', ')}...`);
+    const [south, west, north, east] = bbox;
+    const response = await queryOverpass(
+      `[out:json][timeout:90]; relation["type"="route"]["route"="bicycle"]["network"="rcn"]["network:type"="node_network"](${south},${west},${north},${east}); out ids;`,
+      bbox.join(','),
+    );
+    for (const element of response.elements) {
+      if (element.type === 'relation') ids.add(element.id);
+    }
+    await pause(REQUEST_PAUSE_MS);
+  }
+  return [...ids];
+}
+
+async function fetchRelationGeometries(relationIds: number[]): Promise<OSMResponse[]> {
+  const batches = chunks(relationIds, RELATIONS_PER_GEOMETRY_REQUEST);
+  const responses: OSMResponse[] = [];
+  for (let index = 0; index < batches.length; index += 1) {
+    const ids = batches[index];
+    console.log(`Downloading geometry ${index + 1}/${batches.length} (${ids.length} relations)...`);
+    responses.push(await queryOverpass(
+      `[out:json][timeout:120]; relation(id:${ids.join(',')}); out body; >; out body;`,
+      `relation batch ${index + 1}/${batches.length}`,
+    ));
+    await pause(REQUEST_PAUSE_MS);
+  }
+  return responses;
 }
 
 function buildCoordinates(relation: OSMRelation, ways: Map<number, OSMWay>, nodes: Map<number, OSMNode>, from: OSMNode, to: OSMNode): [number, number][] | null {
@@ -75,11 +155,13 @@ function edgeDistanceKm(coordinates: [number, number][]): number {
 }
 
 async function main(): Promise<void> {
-  const all: OSMResponse[] = [];
-  for (const bbox of SECTORS) {
-    console.log(`Fetching ${bbox.join(', ')}...`);
-    all.push(await fetchSector(bbox));
+  const cells = SECTORS.flatMap(splitIntoCells);
+  const relationIds = await discoverRelationIds(cells);
+  if (relationIds.length === 0) {
+    throw new Error('No officiële RCN-relaties gevonden. Controleer de Overpass-antwoorden; er wordt geen lege dataset geschreven.');
   }
+  console.log(`Found ${relationIds.length} unique RCN relations.`);
+  const all = await fetchRelationGeometries(relationIds);
   const elements = all.flatMap((response) => response.elements);
   const osmNodes = new Map(elements.filter((element): element is OSMNode => element.type === 'node').map((node) => [node.id, node]));
   const ways = new Map(elements.filter((element): element is OSMWay => element.type === 'way').map((way) => [way.id, way]));
