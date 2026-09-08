@@ -140,6 +140,8 @@ Run this on a development machine or in CI, never on Antagonist hosting. It vali
 npm run build:network
 ```
 
+If your local network cannot reach Overpass, use **Actions → Build official cycle-network dataset → Run workflow** after this workflow has been merged. The manual workflow runs the same validation on GitHub-hosted infrastructure and commits `public/data/benelux_network.json` only when it successfully completes.
+
 ### 3. Start the Development Server
 
 ```bash

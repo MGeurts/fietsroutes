@@ -1,0 +1,44 @@
+name: Build official cycle-network dataset
+
+on:
+  workflow_dispatch:
+
+# The workflow is manual by design. It changes the tracked static dataset only after a
+# repository maintainer explicitly starts it from the Actions page.
+permissions:
+  contents: write
+
+concurrency:
+  group: build-network-dataset-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Download and validate RCN network
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+
+    steps:
+      - name: Check out selected branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install build dependencies
+        run: npm install --ignore-scripts --no-package-lock
+
+      - name: Build verified Benelux network
+        run: npm run build:network
+
+      - name: Commit generated dataset
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add public/data/benelux_network.json
+          git diff --cached --quiet || git commit -m "data: update official Benelux cycle network"
+          git push
