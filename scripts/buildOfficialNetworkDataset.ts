@@ -6,8 +6,7 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
-import { KnooppuntNode, OfficialNetworkDataset, OfficialNetworkDatasetEdge } from '../src/types';
-import { GRID_SECTORS } from '../src/services/offlineDataService';
+import type { KnooppuntNode, OfficialNetworkDataset, OfficialNetworkDatasetEdge } from '../src/types';
 
 type Bbox = [number, number, number, number];
 interface OSMNode { type: 'node'; id: number; lat: number; lon: number; tags?: Record<string, string>; }
@@ -19,7 +18,21 @@ interface OSMResponse { elements: OSMElement[]; }
 
 // Public Overpass instances reject the large recursive query for an entire province. Discover
 // relation ids in small cells first, then download their geometry in bounded batches.
-const SECTORS: Bbox[] = GRID_SECTORS.map((sector) => sector.bbox);
+// Keep this build script independent of browser services. Importing the application data
+// layer also evaluates its GIS corridor modules, which wastes the constrained CI heap.
+const SECTORS: Bbox[] = [
+  [50.72, 5.08, 51.30, 5.85], [51.02, 4.22, 51.52, 5.20],
+  [50.72, 2.52, 51.40, 3.50], [50.70, 3.45, 51.30, 4.28],
+  [50.68, 4.10, 51.05, 5.12], [50.55, 4.12, 50.82, 5.02],
+  [50.15, 5.15, 50.80, 6.45], [49.95, 4.42, 50.65, 5.22],
+  [49.95, 3.15, 50.75, 4.65], [49.50, 5.20, 50.40, 6.05],
+  [50.72, 5.55, 51.75, 6.25], [51.28, 4.20, 51.85, 6.00],
+  [51.20, 3.35, 51.75, 4.30], [51.70, 3.90, 52.32, 5.15],
+  [51.92, 4.80, 52.32, 5.55], [52.25, 4.50, 53.20, 5.35],
+  [51.72, 5.05, 52.55, 6.85], [52.10, 5.90, 52.75, 7.10],
+  [52.25, 5.15, 52.85, 5.95], [52.60, 6.15, 53.25, 7.05],
+  [52.80, 4.80, 53.55, 6.45], [53.05, 6.15, 53.58, 7.25],
+];
 const MAX_CELL_SIZE_DEGREES = 0.25;
 const MIN_DISCOVERY_CELL_SIZE_DEGREES = 0.0625;
 // Process a small group and discard its raw OSM response before downloading the next one.
