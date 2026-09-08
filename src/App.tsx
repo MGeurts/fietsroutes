@@ -242,10 +242,11 @@ export default function App() {
     });
   }, []);
 
-  // Add/synchronize dynamically discovered nodes from Overpass with spatial deduplication
-  const handleAddNewNodes = useCallback((newNodes: KnooppuntNode[]) => {
+  // Merge nodes with spatial deduplication. Cached nodes must never replace an identity
+  // from the verified network dataset: its OSM id is the key used by the route graph.
+  const handleAddNewNodes = useCallback((newNodes: KnooppuntNode[], preserveOfficialIdentity = false) => {
     if (!newNodes || newNodes.length === 0) return;
-    saveNodesToCache(newNodes).catch(() => {});
+    if (!preserveOfficialIdentity) saveNodesToCache(newNodes).catch(() => {});
     setAvailableNodes((prev) => {
       const updated = [...prev];
       for (const node of newNodes) {
@@ -258,8 +259,12 @@ export default function App() {
         );
 
         if (existingIdx >= 0) {
+          const existing = updated[existingIdx];
+          if (preserveOfficialIdentity && String(existing.id).startsWith('osm-')) {
+            continue;
+          }
           updated[existingIdx] = {
-            ...updated[existingIdx],
+            ...existing,
             lat: node.lat,
             lng: node.lng,
             id: node.id,
@@ -286,7 +291,7 @@ export default function App() {
     try {
       const cached = await getAllCachedNodes();
       if (cached && cached.length > 0) {
-        handleAddNewNodes(cached);
+        handleAddNewNodes(cached, true);
       }
     } catch (err) {
       console.warn('Kon lokale knooppunten-cache niet verversen:', err);
@@ -303,7 +308,7 @@ export default function App() {
           handleAddNewNodes(network.nodes);
         }
         if (cached && cached.length > 50) {
-          handleAddNewNodes(cached);
+          handleAddNewNodes(cached, true);
         } else {
           // Live/browser Overpass discovery only adds markers; it can never turn a
           // discovered proximity into a route edge.
