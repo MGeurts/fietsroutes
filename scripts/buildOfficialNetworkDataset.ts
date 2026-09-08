@@ -24,10 +24,13 @@ const PBF_SOURCES: PbfSource[] = [
   { label: 'Belgium', filename: 'belgium-latest.osm.pbf', url: 'https://download.geofabrik.de/europe/belgium-latest.osm.pbf' },
   { label: 'Netherlands', filename: 'netherlands-latest.osm.pbf', url: 'https://download.geofabrik.de/europe/netherlands-latest.osm.pbf' },
 ];
-const ENDPOINT_TOLERANCE_DEGREES = 0.0045; // Validation only (~500 m), never a routing fallback.
+const EXPLICIT_ENDPOINT_TOLERANCE_DEGREES = 0.0045; // Tag-defined endpoints only (~500 m).
+const INFERRED_ENDPOINT_TOLERANCE_DEGREES = 0.001; // Geometry endpoint to one unique junction (~110 m).
+const SEGMENT_JOIN_TOLERANCE_DEGREES = 0.00001; // Ways must actually meet; never bridge a visible gap.
+const JUNCTION_INDEX_CELL_DEGREES = 0.01;
 
-function close(a: [number, number], b: [number, number]): boolean {
-  return Math.hypot(a[0] - b[0], a[1] - b[1]) <= ENDPOINT_TOLERANCE_DEGREES;
+function close(a: [number, number], b: [number, number], tolerance = SEGMENT_JOIN_TOLERANCE_DEGREES): boolean {
+  return Math.hypot(a[0] - b[0], a[1] - b[1]) <= tolerance;
 }
 
 function decodeOpl(value: string): string {
@@ -101,24 +104,70 @@ function getKnooppuntRef(node: OplNode): string | undefined {
   return undefined;
 }
 
-function buildCoordinates(relation: OplRelation, ways: Map<number, OplWay>, nodes: Map<number, OplNode>, from: OplNode, to: OplNode): [number, number][] | null {
+function buildCoordinates(relation: OplRelation, ways: Map<number, OplWay>, nodes: Map<number, OplNode>): [number, number][] | null {
   const segments = relation.wayMemberIds
     .map((wayId) => ways.get(wayId)?.nodeIds.map((nodeId) => nodes.get(nodeId)).filter((node): node is OplNode => Boolean(node)).map((node) => [node.lat, node.lng] as [number, number]))
     .filter((segment): segment is [number, number][] => Boolean(segment && segment.length > 1));
   if (segments.length !== relation.wayMemberIds.length || segments.length === 0) return null;
 
-  const start: [number, number] = [from.lat, from.lng];
-  const finish: [number, number] = [to.lat, to.lng];
   const first = segments.shift()!;
-  let coordinates = close(first[0], start) ? first : close(first[first.length - 1], start) ? [...first].reverse() : [];
-  if (coordinates.length === 0) return null;
+  let coordinates = first;
   for (const segment of segments) {
     const tail = coordinates[coordinates.length - 1];
     const next = close(tail, segment[0]) ? segment : close(tail, segment[segment.length - 1]) ? [...segment].reverse() : null;
     if (!next) return null;
     coordinates = coordinates.concat(next.slice(1));
   }
-  return close(coordinates[coordinates.length - 1], finish) ? coordinates : null;
+  return coordinates;
+}
+
+function junctionCell(lat: number, lng: number): string {
+  return `${Math.floor(lat / JUNCTION_INDEX_CELL_DEGREES)}:${Math.floor(lng / JUNCTION_INDEX_CELL_DEGREES)}`;
+}
+
+function buildJunctionIndex(nodes: Iterable<OplNode>): Map<string, OplNode[]> {
+  const index = new Map<string, OplNode[]>();
+  for (const node of nodes) {
+    if (!getKnooppuntRef(node)) continue;
+    const key = junctionCell(node.lat, node.lng);
+    const bucket = index.get(key) || [];
+    bucket.push(node);
+    index.set(key, bucket);
+  }
+  return index;
+}
+
+function findUniqueJunction(coordinate: [number, number], index: Map<string, OplNode[]>): OplNode | null {
+  const [lat, lng] = coordinate;
+  const row = Math.floor(lat / JUNCTION_INDEX_CELL_DEGREES);
+  const column = Math.floor(lng / JUNCTION_INDEX_CELL_DEGREES);
+  const candidates: OplNode[] = [];
+  for (let rowOffset = -1; rowOffset <= 1; rowOffset += 1) {
+    for (let columnOffset = -1; columnOffset <= 1; columnOffset += 1) {
+      for (const node of index.get(`${row + rowOffset}:${column + columnOffset}`) || []) {
+        if (close(coordinate, [node.lat, node.lng], INFERRED_ENDPOINT_TOLERANCE_DEGREES)) candidates.push(node);
+      }
+    }
+  }
+  return candidates.length === 1 ? candidates[0] : null;
+}
+
+function resolveEndpoints(relation: OplRelation, coordinates: [number, number][], nodes: Map<number, OplNode>, junctionIndex: Map<string, OplNode[]>): { from: OplNode; to: OplNode; coordinates: [number, number][] } | null {
+  const explicit = relation.nodeMemberIds.map((id) => nodes.get(id)).filter((node): node is OplNode => Boolean(node && getKnooppuntRef(node)));
+  const start = coordinates[0];
+  const finish = coordinates[coordinates.length - 1];
+  if (explicit.length > 1) {
+    const from = explicit[0];
+    const to = explicit[explicit.length - 1];
+    if (from.id === to.id) return null;
+    if (close(start, [from.lat, from.lng], EXPLICIT_ENDPOINT_TOLERANCE_DEGREES) && close(finish, [to.lat, to.lng], EXPLICIT_ENDPOINT_TOLERANCE_DEGREES)) return { from, to, coordinates };
+    if (close(start, [to.lat, to.lng], EXPLICIT_ENDPOINT_TOLERANCE_DEGREES) && close(finish, [from.lat, from.lng], EXPLICIT_ENDPOINT_TOLERANCE_DEGREES)) return { from, to, coordinates: [...coordinates].reverse() };
+    return null;
+  }
+  const from = findUniqueJunction(start, junctionIndex);
+  const to = findUniqueJunction(finish, junctionIndex);
+  if (!from || !to || from.id === to.id) return null;
+  return { from, to, coordinates };
 }
 
 function edgeDistanceKm(coordinates: [number, number][]): number {
@@ -172,7 +221,7 @@ async function readRelations(relationFile: string): Promise<OplRelation[]> {
   await readOplLines(relationFile, (line) => {
     if (!line.startsWith('r')) return;
     const relation = parseRelation(line);
-    if (relation && isRcnCycleRelation(relation) && relation.nodeMemberIds.length > 1 && relation.wayMemberIds.length > 0) relations.push(relation);
+    if (relation && isRcnCycleRelation(relation) && relation.wayMemberIds.length > 0) relations.push(relation);
   });
   return relations;
 }
@@ -187,17 +236,17 @@ async function readPayload(payloadFile: string): Promise<{ nodes: Map<number, Op
   return { nodes, ways };
 }
 
-function consumeVerifiedEdges(relations: OplRelation[], nodes: Map<number, OplNode>, ways: Map<number, OplWay>, datasetNodes: Map<string, KnooppuntNode>, edges: Map<string, OfficialNetworkDatasetEdge>): number {
+function consumeVerifiedEdges(relations: OplRelation[], nodes: Map<number, OplNode>, ways: Map<number, OplWay>, junctionIndex: Map<string, OplNode[]>, datasetNodes: Map<string, KnooppuntNode>, edges: Map<string, OfficialNetworkDatasetEdge>): number {
   let rejected = 0;
   for (const relation of relations) {
-    const endpoints = relation.nodeMemberIds.map((id) => nodes.get(id)).filter((node): node is OplNode => Boolean(node && getKnooppuntRef(node)));
-    const from = endpoints[0];
-    const to = endpoints[endpoints.length - 1];
-    const fromRef = from && getKnooppuntRef(from);
-    const toRef = to && getKnooppuntRef(to);
-    if (!from || !to || !fromRef || !toRef || from.id === to.id) { rejected += 1; continue; }
-    const coordinates = buildCoordinates(relation, ways, nodes, from, to);
-    if (!coordinates || coordinates.length < 2) { rejected += 1; continue; }
+    const geometry = buildCoordinates(relation, ways, nodes);
+    if (!geometry || geometry.length < 2) { rejected += 1; continue; }
+    const resolved = resolveEndpoints(relation, geometry, nodes, junctionIndex);
+    if (!resolved) { rejected += 1; continue; }
+    const { from, to, coordinates } = resolved;
+    const fromRef = getKnooppuntRef(from);
+    const toRef = getKnooppuntRef(to);
+    if (!fromRef || !toRef) { rejected += 1; continue; }
     const fromId = `osm-${from.id}`;
     const toId = `osm-${to.id}`;
     const key = [fromId, toId].sort().join('|');
@@ -209,24 +258,39 @@ function consumeVerifiedEdges(relations: OplRelation[], nodes: Map<number, OplNo
   return rejected;
 }
 
+async function readJunctions(junctionFile: string): Promise<Map<number, OplNode>> {
+  const nodes = new Map<number, OplNode>();
+  await readOplLines(junctionFile, (line) => {
+    if (!line.startsWith('n')) return;
+    const node = parseNode(line);
+    if (node && getKnooppuntRef(node)) nodes.set(node.id, node);
+  });
+  return nodes;
+}
+
 async function processSource(source: PbfSource, pbfFile: string, workingDirectory: string, datasetNodes: Map<string, KnooppuntNode>, edges: Map<string, OfficialNetworkDatasetEdge>): Promise<number> {
   const stem = path.basename(source.filename, '.osm.pbf');
   const relationsFile = path.join(workingDirectory, `${stem}-relations.opl`);
+  const junctionsFile = path.join(workingDirectory, `${stem}-junctions.opl`);
   const idsFile = path.join(workingDirectory, `${stem}-ids.txt`);
   const payloadFile = path.join(workingDirectory, `${stem}-payload.opl`);
   console.log(`Selecting ${source.label} RCN route relations with Osmium...`);
   await runOsmium(['tags-filter', '--omit-referenced', '--output-format', 'opl', '--output', relationsFile, pbfFile, 'r/network=rcn']);
+  await runOsmium(['tags-filter', '--omit-referenced', '--output-format', 'opl', '--output', junctionsFile, pbfFile, 'n/rcn_ref', 'n/network:type=node_network', 'n/network=rcn']);
   const relations = await readRelations(relationsFile);
+  const junctionNodes = await readJunctions(junctionsFile);
   if (relations.length === 0) throw new Error(`Geen RCN-fietsrelaties gevonden in ${source.label}.`);
+  if (junctionNodes.size === 0) throw new Error(`Geen RCN-knooppunten gevonden in ${source.label}.`);
   const ids = new Set<string>();
   for (const relation of relations) { relation.nodeMemberIds.forEach((id) => ids.add(`n${id}`)); relation.wayMemberIds.forEach((id) => ids.add(`w${id}`)); }
   fs.writeFileSync(idsFile, [...ids].join('\n'));
   console.log(`Extracting ${ids.size} ${source.label} route members with their referenced nodes...`);
   await runOsmium(['getid', '--add-referenced', '--remove-tags', '--id-file', idsFile, '--output-format', 'opl', '--output', payloadFile, pbfFile], true);
   const { nodes, ways } = await readPayload(payloadFile);
-  const rejected = consumeVerifiedEdges(relations, nodes, ways, datasetNodes, edges);
-  console.log(`${source.label}: ${relations.length} relations examined; ${nodes.size} nodes and ${ways.size} ways retained.`);
-  fs.rmSync(relationsFile, { force: true }); fs.rmSync(idsFile, { force: true }); fs.rmSync(payloadFile, { force: true });
+  for (const node of junctionNodes.values()) nodes.set(node.id, node);
+  const rejected = consumeVerifiedEdges(relations, nodes, ways, buildJunctionIndex(junctionNodes.values()), datasetNodes, edges);
+  console.log(`${source.label}: ${relations.length} relations examined; ${junctionNodes.size} junctions, ${nodes.size} nodes and ${ways.size} ways retained.`);
+  fs.rmSync(relationsFile, { force: true }); fs.rmSync(junctionsFile, { force: true }); fs.rmSync(idsFile, { force: true }); fs.rmSync(payloadFile, { force: true });
   return rejected;
 }
 
