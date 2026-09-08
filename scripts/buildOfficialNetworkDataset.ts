@@ -133,11 +133,22 @@ function edgeDistanceKm(coordinates: [number, number][]): number {
   return Math.round(distance * 100) / 100;
 }
 
-function runOsmium(args: string[]): Promise<void> {
+function runOsmium(args: string[], allowMissingReferences = false): Promise<void> {
   return new Promise((resolve, reject) => {
     const child = spawn('osmium', args, { stdio: 'inherit' });
     child.once('error', (error) => reject(new Error(`Osmium kon niet starten. Installeer osmium-tool: ${error.message}`)));
-    child.once('exit', (code) => code === 0 ? resolve() : reject(new Error(`Osmium stopte met exitcode ${code ?? 'onbekend'}.`)));
+    child.once('exit', (code) => {
+      if (code === 0) { resolve(); return; }
+      // Geofabrik country extracts intentionally omit members outside their boundary.
+      // `getid` still writes all present objects, but returns 1 for those references.
+      // The geometry validation below rejects every relation needing a missing member.
+      if (code === 1 && allowMissingReferences) {
+        console.warn('Osmium meldt ontbrekende grensreferenties; onvolledige relaties worden overgeslagen.');
+        resolve();
+        return;
+      }
+      reject(new Error(`Osmium stopte met exitcode ${code ?? 'onbekend'}.`));
+    });
   });
 }
 
@@ -211,7 +222,7 @@ async function processSource(source: PbfSource, pbfFile: string, workingDirector
   for (const relation of relations) { relation.nodeMemberIds.forEach((id) => ids.add(`n${id}`)); relation.wayMemberIds.forEach((id) => ids.add(`w${id}`)); }
   fs.writeFileSync(idsFile, [...ids].join('\n'));
   console.log(`Extracting ${ids.size} ${source.label} route members with their referenced nodes...`);
-  await runOsmium(['getid', '--add-referenced', '--remove-tags', '--id-file', idsFile, '--output-format', 'opl', '--output', payloadFile, pbfFile]);
+  await runOsmium(['getid', '--add-referenced', '--remove-tags', '--id-file', idsFile, '--output-format', 'opl', '--output', payloadFile, pbfFile], true);
   const { nodes, ways } = await readPayload(payloadFile);
   const rejected = consumeVerifiedEdges(relations, nodes, ways, datasetNodes, edges);
   console.log(`${source.label}: ${relations.length} relations examined; ${nodes.size} nodes and ${ways.size} ways retained.`);
