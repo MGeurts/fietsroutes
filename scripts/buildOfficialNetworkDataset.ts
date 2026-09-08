@@ -28,6 +28,7 @@ const EXPLICIT_ENDPOINT_TOLERANCE_DEGREES = 0.0045; // Tag-defined endpoints onl
 const INFERRED_ENDPOINT_TOLERANCE_DEGREES = 0.001; // Geometry endpoint to one unique junction (~110 m).
 const SEGMENT_JOIN_TOLERANCE_DEGREES = 0.00001; // Ways must actually meet; never bridge a visible gap.
 const JUNCTION_INDEX_CELL_DEGREES = 0.01;
+const MAX_UNMAPPED_GEOMETRY_GAP_KM = 1;
 
 function close(a: [number, number], b: [number, number], tolerance = SEGMENT_JOIN_TOLERANCE_DEGREES): boolean {
   return Math.hypot(a[0] - b[0], a[1] - b[1]) <= tolerance;
@@ -182,6 +183,14 @@ function edgeDistanceKm(coordinates: [number, number][]): number {
   return Math.round(distance * 100) / 100;
 }
 
+/** An OSM way normally has dense geometry. A larger gap would render as an invented straight line. */
+function hasUnmappedGeometryGap(coordinates: [number, number][]): boolean {
+  for (let index = 1; index < coordinates.length; index += 1) {
+    if (edgeDistanceKm([coordinates[index - 1], coordinates[index]]) > MAX_UNMAPPED_GEOMETRY_GAP_KM) return true;
+  }
+  return false;
+}
+
 function runOsmium(args: string[], allowMissingReferences = false): Promise<void> {
   return new Promise((resolve, reject) => {
     const child = spawn('osmium', args, { stdio: 'inherit' });
@@ -241,6 +250,7 @@ function consumeVerifiedEdges(relations: OplRelation[], nodes: Map<number, OplNo
   for (const relation of relations) {
     const geometry = buildCoordinates(relation, ways, nodes);
     if (!geometry || geometry.length < 2) { rejected += 1; continue; }
+    if (hasUnmappedGeometryGap(geometry)) { rejected += 1; continue; }
     const resolved = resolveEndpoints(relation, geometry, nodes, junctionIndex);
     if (!resolved) { rejected += 1; continue; }
     const { from, to, coordinates } = resolved;
