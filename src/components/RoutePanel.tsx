@@ -429,6 +429,7 @@ export const RoutePanel: React.FC<RoutePanelProps> = ({
                 <div className="space-y-1.5">
                   {selectedNodes.map((node, index) => {
                     const nextLeg = routeLegs[index];
+                    const nextLegNeedsReview = nextLeg?.isVerified === false;
                     const isStart = index === 0;
                     const isEnd = index === selectedNodes.length - 1;
                     const isInBetween = !isStart && !isEnd;
@@ -517,10 +518,22 @@ export const RoutePanel: React.FC<RoutePanelProps> = ({
 
                         {/* Distance connector badge between nodes */}
                         {nextLeg && (
-                          <div className="flex items-center gap-2 pl-4 py-0.5 text-[10px] font-semibold text-emerald-700">
-                            <div className="w-0.5 h-2 bg-emerald-300 ml-3" />
-                            <span className="bg-emerald-50 px-1.5 py-0.2 rounded text-[10px] border border-emerald-100">
+                          <div
+                            className={`flex items-center gap-2 pl-4 py-0.5 text-[10px] font-semibold ${
+                              nextLegNeedsReview ? 'text-amber-950' : 'text-emerald-700'
+                            }`}
+                          >
+                            <div className={`w-0.5 h-2 ml-3 ${nextLegNeedsReview ? 'bg-amber-300' : 'bg-emerald-300'}`} />
+                            <span
+                              className={`px-1.5 py-0.2 rounded text-[10px] border ${
+                                nextLegNeedsReview
+                                  ? 'bg-amber-50 border-amber-200'
+                                  : 'bg-emerald-50 border-emerald-100'
+                              }`}
+                              title={nextLegNeedsReview ? 'Controle nodig: berekend met live fietsroutering.' : undefined}
+                            >
                               + {nextLeg.distanceKm} km naar KP {selectedNodes[index + 1]?.ref}
+                              {nextLegNeedsReview && ' · Controle nodig'}
                             </span>
                           </div>
                         )}
