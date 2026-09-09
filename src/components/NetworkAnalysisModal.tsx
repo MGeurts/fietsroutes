@@ -42,6 +42,20 @@ function statusClass(status: OfficialNetworkValidationEntry['status']): string {
   return 'bg-rose-950/70 border-rose-700 text-rose-300';
 }
 
+function geometryLabel(source: RouteConnectionAnalysis['geometrySource']): string | null {
+  if (source === 'official') return 'Exacte officiële geometrie';
+  if (source === 'official-declared') return 'Officiële relatie, live wegvorm';
+  if (source === 'brouter') return 'BRouter-fallback';
+  if (source === 'osm-router') return 'OpenStreetMap-routerfallback';
+  return null;
+}
+
+function geometryClass(source: RouteConnectionAnalysis['geometrySource']): string {
+  if (source === 'official') return 'bg-emerald-950/70 border-emerald-700 text-emerald-300';
+  if (source === 'official-declared') return 'bg-orange-950/70 border-orange-700 text-orange-300';
+  return 'bg-amber-950/70 border-amber-700 text-amber-300';
+}
+
 export const NetworkAnalysisModal: React.FC<NetworkAnalysisModalProps> = ({ isOpen, onClose, focusNode, connection }) => {
   const [report, setReport] = useState<OfficialNetworkValidationReport | null>(null);
   const [loading, setLoading] = useState(false);
@@ -64,16 +78,27 @@ export const NetworkAnalysisModal: React.FC<NetworkAnalysisModalProps> = ({ isOp
   const selectedEntry = useMemo(() => connection?.relationId === undefined
     ? null
     : report?.entries.find((entry) => entry.relationId === connection.relationId) || null, [report, connection]);
+  const connectionUsesVerifiedGeometry = connection?.geometrySource === 'official';
   const entries = useMemo(() => connection
     ? selectedEntry ? [selectedEntry] : []
     : (report?.entries || [])
       .filter((entry) => isNearFocus(entry, focus, radiusKm))
       .sort((a, b) => a.status.localeCompare(b.status) || a.relationId - b.relationId), [report, focus, radiusKm, connection, selectedEntry]);
-  const localSummary = useMemo(() => ({
-    verified: entries.filter((entry) => entry.status === 'verified-geometry').length,
-    topology: entries.filter((entry) => entry.status === 'declared-topology').length,
-    unresolved: entries.filter((entry) => entry.status === 'rejected').length,
-  }), [entries]);
+  const localSummary = useMemo(() => {
+    if (connection && selectedEntry) {
+      const status = connectionUsesVerifiedGeometry ? 'verified-geometry' : selectedEntry.status;
+      return {
+        verified: status === 'verified-geometry' ? 1 : 0,
+        topology: status === 'declared-topology' ? 1 : 0,
+        unresolved: status === 'rejected' ? 1 : 0,
+      };
+    }
+    return {
+      verified: entries.filter((entry) => entry.status === 'verified-geometry').length,
+      topology: entries.filter((entry) => entry.status === 'declared-topology').length,
+      unresolved: entries.filter((entry) => entry.status === 'rejected').length,
+    };
+  }, [connection, connectionUsesVerifiedGeometry, entries, selectedEntry]);
 
   if (!isOpen) return null;
 
@@ -96,6 +121,11 @@ export const NetworkAnalysisModal: React.FC<NetworkAnalysisModalProps> = ({ isOp
             <div className="rounded-xl border border-slate-700 bg-slate-950/40 p-3 mb-5 text-sm text-slate-300">
               <strong className="text-white">{connection.fromNode.name || `Knooppunt ${connection.fromNode.ref}`}</strong> → <strong className="text-white">{connection.toNode.name || `Knooppunt ${connection.toNode.ref}`}</strong>
               <span className="block mt-1 text-xs text-slate-500">Getekend door: {connection.source}</span>
+              {geometryLabel(connection.geometrySource) && (
+                <span className={`inline-flex mt-2 text-xs font-semibold border rounded-full px-2 py-0.5 ${geometryClass(connection.geometrySource)}`}>
+                  {geometryLabel(connection.geometrySource)}
+                </span>
+              )}
             </div>
           ) : (
             <div className="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between mb-5">
@@ -130,17 +160,23 @@ export const NetworkAnalysisModal: React.FC<NetworkAnalysisModalProps> = ({ isOp
               </div>
               <p className="text-xs text-slate-500 mb-3">Dataset gebouwd {new Date(report.generatedAt).toLocaleString('nl-BE')}. {connection ? `${entries.length} gekoppelde relatie.` : `${entries.length} relaties binnen ${radiusKm} km.`}</p>
               <div className="space-y-2">
-                {entries.map((entry) => (
+                {entries.map((entry) => {
+                  const displayedStatus = connection && connectionUsesVerifiedGeometry ? 'verified-geometry' : entry.status;
+                  const rawStatusDiffers = displayedStatus !== entry.status;
+                  return (
                   <article key={`${entry.country}-${entry.relationId}`} className="rounded-xl border border-slate-700 bg-slate-950/40 p-3">
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className={`text-xs font-semibold border rounded-full px-2 py-0.5 ${statusClass(entry.status)}`}>{statusLabel(entry.status)}</span>
+                      <span className={`text-xs font-semibold border rounded-full px-2 py-0.5 ${statusClass(displayedStatus)}`}>{statusLabel(displayedStatus)}</span>
                       <a className="inline-flex items-center gap-1 text-sm font-semibold text-cyan-300 hover:text-cyan-200" href={`https://www.openstreetmap.org/relation/${entry.relationId}`} target="_blank" rel="noreferrer">Relatie {entry.relationId}<ExternalLink className="w-3.5 h-3.5" /></a>
                       <span className="text-sm text-slate-300">{entry.from && entry.to ? `${entry.from.ref} → ${entry.to.ref}` : entry.ref || 'geen bruikbare eindpunten'}</span>
                       <span className="text-xs text-slate-500">{entry.country}</span>
                     </div>
-                    {entry.reason && <p className="mt-2 text-sm text-slate-400">{entry.reason}</p>}
+                    {rawStatusDiffers ? (
+                      <p className="mt-2 text-sm text-slate-400">De kaart gebruikt een lokaal gevalideerde corridor met exacte wegvorm. De ruwe PBF-import kon die oorspronkelijke OSM-relatie niet zelfstandig als één aaneengesloten lijn samenstellen.</p>
+                    ) : entry.reason && <p className="mt-2 text-sm text-slate-400">{entry.reason}</p>}
                   </article>
-                ))}
+                  );
+                })}
                 {entries.length === 0 && <div className="rounded-xl border border-slate-700 p-5 text-center text-slate-400"><FileSearch className="w-6 h-6 mx-auto mb-2" />{connection ? 'Voor deze getekende verbinding is geen analyse-item beschikbaar.' : 'Geen relaties met veilig gekoppelde eindpunten binnen deze straal. Relaties zonder geverifieerde locatie worden bewust niet op nummer alleen geplaatst.'}</div>}
               </div>
             </>

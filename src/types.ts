@@ -36,6 +36,8 @@ export interface RouteConnectionAnalysis {
   fromNode: KnooppuntNode;
   toNode: KnooppuntNode;
   source: string;
+  /** The actual geometry shown on the map, independent of the raw OSM relation status. */
+  geometrySource?: RouteGeometrySource;
   relationId?: number;
 }
 

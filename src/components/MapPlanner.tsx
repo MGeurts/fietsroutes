@@ -60,15 +60,15 @@ function routeStyle(source: RouteGeometrySource): L.PolylineOptions {
   // An orange dash remains an official node-to-node relation, but its road shape
   // had to be fetched live and must never look equivalent to verified geometry.
   if (source === 'official-declared') {
-    return { color: '#c2410c', dashArray: '14 8', weight: 5.5, opacity: 0.98, lineCap: 'round', lineJoin: 'round' };
+    return { color: '#f97316', dashArray: '2 15', weight: 7, opacity: 1, lineCap: 'round', lineJoin: 'round' };
   }
   if (source === 'brouter') {
-    return { color: '#a16207', dashArray: '3 9', weight: 5.5, opacity: 0.98, lineCap: 'round', lineJoin: 'round' };
+    return { color: '#a16207', dashArray: '12 18', weight: 6, opacity: 1, lineCap: 'round', lineJoin: 'round' };
   }
   if (source === 'osm-router') {
-    return { color: '#7c3aed', dashArray: '10 5 2 5', weight: 5.5, opacity: 0.98, lineCap: 'round', lineJoin: 'round' };
+    return { color: '#7c3aed', dashArray: '10 6 2 6', weight: 6, opacity: 1, lineCap: 'round', lineJoin: 'round' };
   }
-  return { color: '#dc2626', weight: 5.5, opacity: 0.95, lineCap: 'round', lineJoin: 'round' };
+  return { color: '#dc2626', weight: 6, opacity: 1, lineCap: 'round', lineJoin: 'round' };
 }
 
 // Marker pin SVGs matching authentic cycling maps (screenshot)
@@ -1460,6 +1460,19 @@ export const MapPlanner: React.FC<MapPlannerProps> = ({
 
       {/* Map Canvas */}
       <div ref={mapContainerRef} className="w-full h-full z-0" />
+
+      {routeLegs.length > 0 && (
+        <aside className="hidden md:block absolute bottom-6 right-24 z-[1000] pointer-events-none rounded-lg border border-slate-300 bg-white/95 backdrop-blur px-3 py-2 shadow-lg text-[10px] text-slate-700">
+          <div className="flex items-center gap-2 font-semibold">
+            <i className="inline-block w-7 border-t-[4px] border-red-600" />
+            Officiële geometrie
+          </div>
+          <div className="mt-1 flex items-center gap-2 font-semibold">
+            <i className="inline-block w-7 border-t-[5px] border-dotted border-orange-500" />
+            Officiële relatie, live wegvorm
+          </div>
+        </aside>
+      )}
 
       {/* Map Floating Right Navigation Buttons - Professional Polish Theme */}
       <div className="absolute bottom-6 right-6 map-floating-actions-compact z-[1000] flex flex-col gap-2 pointer-events-auto">
