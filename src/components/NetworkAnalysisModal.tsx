@@ -22,12 +22,11 @@ function distanceKm(a: { lat: number; lng: number }, b: { lat: number; lng: numb
 }
 
 function isNearFocus(entry: OfficialNetworkValidationEntry, focus: KnooppuntNode, radiusKm: number): boolean {
-  if ([entry.from, entry.to].some((endpoint) => endpoint && distanceKm(focus, endpoint) <= radiusKm)) return true;
-  // An unresolved relation has no safe coordinates.  Its `ref` may still name
-  // the focused junction (for example 29-560), so retain it for investigation
-  // without pretending that its location was validated.
-  const refs = (entry.ref || '').split(/[-–]/).map((value) => value.trim());
-  return refs.includes(focus.ref);
+  // A knooppunt number is not globally unique: "29" occurs in many regions.
+  // Only coordinates of endpoints that were validated by the importer may place
+  // a relation in a regional analysis.  A ref such as "29-560" alone is never
+  // sufficient evidence that the relation belongs to Genk.
+  return [entry.from, entry.to].some((endpoint) => endpoint && distanceKm(focus, endpoint) <= radiusKm);
 }
 
 function statusLabel(status: OfficialNetworkValidationEntry['status']): string {
@@ -123,7 +122,7 @@ export const NetworkAnalysisModal: React.FC<NetworkAnalysisModalProps> = ({ isOp
                     {entry.reason && <p className="mt-2 text-sm text-slate-400">{entry.reason}</p>}
                   </article>
                 ))}
-                {entries.length === 0 && <div className="rounded-xl border border-slate-700 p-5 text-center text-slate-400"><FileSearch className="w-6 h-6 mx-auto mb-2" />Geen relaties met veilig gekoppelde eindpunten binnen deze straal.</div>}
+                {entries.length === 0 && <div className="rounded-xl border border-slate-700 p-5 text-center text-slate-400"><FileSearch className="w-6 h-6 mx-auto mb-2" />Geen relaties met veilig gekoppelde eindpunten binnen deze straal. Relaties zonder geverifieerde locatie worden bewust niet op nummer alleen geplaatst.</div>}
               </div>
             </>
           )}
