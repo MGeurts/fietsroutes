@@ -142,6 +142,43 @@ async function main() {
     globalThis.fetch = originalFetch;
   }
 
+  // A complete-geometry subset must never overrule the declared OSM node network.
+  // The selected route should retain the official intermediate node, even if its
+  // own geometry still has to be obtained from the live bicycle router.
+  const topologyPriorityNodes = [
+    { id: 'priority-a', ref: '50', lat: 51, lng: 4 },
+    { id: 'priority-b', ref: '51', lat: 51, lng: 4.01 },
+    { id: 'priority-c', ref: '52', lat: 51, lng: 4.02 },
+    { id: 'priority-detour', ref: '53', lat: 51.04, lng: 4.01 },
+  ];
+  registerOfficialNetworkDataset({
+    version: 1,
+    generatedAt: new Date().toISOString(),
+    nodes: topologyPriorityNodes,
+    edges: [
+      { from: 'priority-a', to: 'priority-detour', distanceKm: 1, coordinates: [[51, 4], [51.04, 4.01]], source: 'incomplete test subset', verifiedAt: 'test' },
+      { from: 'priority-detour', to: 'priority-c', distanceKm: 1, coordinates: [[51.04, 4.01], [51, 4.02]], source: 'incomplete test subset', verifiedAt: 'test' },
+    ],
+    declaredConnections: [
+      { from: 'priority-a', to: 'priority-b', source: 'OSM relation 50-51' },
+      { from: 'priority-b', to: 'priority-c', source: 'OSM relation 51-52' },
+    ],
+  });
+  let topologyPriorityRouterCalls = 0;
+  globalThis.fetch = async () => {
+    topologyPriorityRouterCalls += 1;
+    return new Response(JSON.stringify({
+      features: [{ geometry: { coordinates: [[4, 51], [4.01, 51]] }, properties: { 'track-length': 1000 } }],
+    }), { status: 200, headers: { 'content-type': 'application/json' } });
+  };
+  try {
+    const topologyPriorityLeg = await calculateBicycleLeg(topologyPriorityNodes[0], topologyPriorityNodes[2]);
+    assert.equal(topologyPriorityRouterCalls, 2, 'declared OSM topology must be selected before the incomplete geometry subset');
+    assert.match(topologyPriorityLeg.instructions || '', /51/, 'the declared OSM intermediate node must be preserved');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+
   const fallbackNodes = [
     { id: 'fallback-a', ref: '30', lat: 53, lng: 5 },
     { id: 'fallback-b', ref: '31', lat: 53, lng: 5.01 },

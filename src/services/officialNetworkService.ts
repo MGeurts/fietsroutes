@@ -265,9 +265,14 @@ export function findOfficialNetworkPath(from: KnooppuntNode, to: KnooppuntNode):
     officialTopologyAnchors.get(targetKey) || '',
     officialTopologyAdjacency,
   );
-  const importedEdges = shortestPath(startKey, targetKey, importedAdjacency);
-  const declaredEdges = importedEdges ? null : shortestPath(startKey, targetKey, declaredNetworkAdjacency);
-  const edges = topologyEdges || importedEdges || declaredEdges;
+  // A relation explicitly declaring node A--B is the authoritative network
+  // topology, even when its way members cannot be assembled into one safe line.
+  // The former verified-only search could choose a detour (or no route) through
+  // its much smaller subset and skip valid intermediate knooppunten entirely.
+  // Geometry quality is dealt with per selected hop below; it must not change
+  // which official node-network path is selected.
+  const declaredEdges = topologyEdges ? null : shortestPath(startKey, targetKey, declaredNetworkAdjacency);
+  const edges = topologyEdges || declaredEdges;
   if (!edges) return null;
   const nodes = topologyEdges
     ? [from, to]

@@ -20,6 +20,8 @@ import type {
   OfficialNetworkDatasetEdge,
   OfficialNetworkTopology,
   OfficialNetworkTopologyVertex,
+  OfficialNetworkValidationEntry,
+  OfficialNetworkValidationReport,
 } from '../src/types';
 
 interface PbfSource { filename: string; label: string; url: string; }
@@ -53,8 +55,8 @@ interface WfsResponse {
 }
 
 interface SourceBuildResult {
-  rejected: number;
   junctionNodes: Map<number, OplNode>;
+  validation: OfficialNetworkValidationEntry[];
 }
 
 function close(a: [number, number], b: [number, number], tolerance = SEGMENT_JOIN_TOLERANCE_DEGREES): boolean {
@@ -435,13 +437,16 @@ async function readPayload(payloadFile: string): Promise<{ nodes: Map<number, Op
   return { nodes, ways };
 }
 
-function consumeVerifiedEdges(relations: OplRelation[], nodes: Map<number, OplNode>, ways: Map<number, OplWay>, junctionIndex: Map<string, OplNode[]>, junctionsByRef: Map<string, OplNode[]>, datasetNodes: Map<string, KnooppuntNode>, edges: Map<string, OfficialNetworkDatasetEdge>, declaredConnections: Map<string, OfficialNetworkDeclaredConnection>): number {
-  let rejected = 0;
+function consumeVerifiedEdges(relations: OplRelation[], country: string, nodes: Map<number, OplNode>, ways: Map<number, OplWay>, junctionIndex: Map<string, OplNode[]>, junctionsByRef: Map<string, OplNode[]>, datasetNodes: Map<string, KnooppuntNode>, edges: Map<string, OfficialNetworkDatasetEdge>, declaredConnections: Map<string, OfficialNetworkDeclaredConnection>): OfficialNetworkValidationEntry[] {
+  const validation: OfficialNetworkValidationEntry[] = [];
   for (const relation of relations) {
     // Route relations with explicit endpoint nodes remain useful topology, even when
     // their way members are malformed or split. Their geometry is *not* invented;
     // the client will obtain it per declared Node-to-Node hop when necessary.
     const declared = getExplicitEndpoints(relation, nodes) || getRefTagEndpoints(relation, nodes, ways, junctionsByRef);
+    const report = (status: OfficialNetworkValidationEntry['status'], reason?: string) => {
+      validation.push({ relationId: relation.id, country, ref: relation.tags.ref, status, reason });
+    };
     if (declared) {
       const fromId = `osm-${declared.from.id}`;
       const toId = `osm-${declared.to.id}`;
@@ -454,23 +459,45 @@ function consumeVerifiedEdges(relations: OplRelation[], nodes: Map<number, OplNo
       });
     }
     const geometry = buildCoordinates(relation, ways, nodes);
-    if (!geometry || geometry.length < 2) { rejected += 1; continue; }
-    if (hasUnmappedGeometryGap(geometry)) { rejected += 1; continue; }
+    if (!geometry || geometry.length < 2) {
+      report(declared ? 'declared-topology' : 'rejected', declared
+        ? 'Way members ontbreken of vormen geen aaneengesloten geometrie; de expliciete knooppuntrelatie blijft behouden.'
+        : 'Way members ontbreken of vormen geen aaneengesloten geometrie, en er zijn geen veilige knooppunteinden.');
+      continue;
+    }
+    if (hasUnmappedGeometryGap(geometry)) {
+      report(declared ? 'declared-topology' : 'rejected', declared
+        ? 'De geometrie bevat een onverklaarde onderbreking; de expliciete knooppuntrelatie blijft behouden.'
+        : 'De geometrie bevat een onverklaarde onderbreking en er zijn geen veilige knooppunteinden.');
+      continue;
+    }
     const resolved = resolveEndpoints(relation, geometry, nodes, junctionIndex);
-    if (!resolved) { rejected += 1; continue; }
+    if (!resolved) {
+      report(declared ? 'declared-topology' : 'rejected', declared
+        ? 'De routegeometrie eindigt niet veilig op de knooppunten; de expliciete knooppuntrelatie blijft behouden.'
+        : 'De routegeometrie kan niet eenduidig aan twee knooppunten worden gekoppeld.');
+      continue;
+    }
     const { from, to, coordinates } = resolved;
     const fromRef = getKnooppuntRef(from);
     const toRef = getKnooppuntRef(to);
-    if (!fromRef || !toRef) { rejected += 1; continue; }
+    if (!fromRef || !toRef) {
+      report(declared ? 'declared-topology' : 'rejected', 'Een geometrisch eindpunt heeft geen bruikbare knooppuntreferentie.');
+      continue;
+    }
     const fromId = `osm-${from.id}`;
     const toId = `osm-${to.id}`;
     const key = [fromId, toId].sort().join('|');
-    if (edges.has(key)) continue;
+    if (edges.has(key)) {
+      report('verified-geometry');
+      continue;
+    }
     datasetNodes.set(fromId, { id: fromId, ref: fromRef, lat: from.lat, lng: from.lng, name: from.tags.name });
     datasetNodes.set(toId, { id: toId, ref: toRef, lat: to.lat, lng: to.lng, name: to.tags.name });
     edges.set(key, { from: fromId, to: toId, coordinates, distanceKm: edgeDistanceKm(coordinates), source: `OpenStreetMap RCN relation ${relation.id}`, verifiedAt: new Date().toISOString() });
+    report('verified-geometry');
   }
-  return rejected;
+  return validation;
 }
 
 async function readJunctions(junctionFile: string): Promise<Map<number, OplNode>> {
@@ -507,10 +534,30 @@ async function processSource(source: PbfSource, pbfFile: string, workingDirector
     const datasetNode = toDatasetNode(node);
     if (datasetNode) datasetNodes.set(String(datasetNode.id), datasetNode);
   }
-  const rejected = consumeVerifiedEdges(relations, nodes, ways, buildJunctionIndex(junctionNodes.values()), buildJunctionRefIndex(junctionNodes.values()), datasetNodes, edges, declaredConnections);
+  const validation = consumeVerifiedEdges(relations, source.label, nodes, ways, buildJunctionIndex(junctionNodes.values()), buildJunctionRefIndex(junctionNodes.values()), datasetNodes, edges, declaredConnections);
   console.log(`${source.label}: ${relations.length} relations examined; ${junctionNodes.size} junctions, ${nodes.size} nodes and ${ways.size} ways retained.`);
   fs.rmSync(relationsFile, { force: true }); fs.rmSync(junctionsFile, { force: true }); fs.rmSync(idsFile, { force: true }); fs.rmSync(payloadFile, { force: true });
-  return { rejected, junctionNodes };
+  return { junctionNodes, validation };
+}
+
+function createValidationReport(entries: OfficialNetworkValidationEntry[]): OfficialNetworkValidationReport {
+  const reasons: Record<string, number> = {};
+  for (const entry of entries) {
+    if (!entry.reason) continue;
+    reasons[entry.reason] = (reasons[entry.reason] || 0) + 1;
+  }
+  return {
+    version: 1,
+    generatedAt: new Date().toISOString(),
+    summary: {
+      examined: entries.length,
+      verifiedGeometry: entries.filter((entry) => entry.status === 'verified-geometry').length,
+      declaredTopology: entries.filter((entry) => entry.status === 'declared-topology').length,
+      rejected: entries.filter((entry) => entry.status === 'rejected').length,
+      reasons,
+    },
+    entries,
+  };
 }
 
 async function main(): Promise<void> {
@@ -520,20 +567,23 @@ async function main(): Promise<void> {
     const datasetNodes = new Map<string, KnooppuntNode>();
     const edges = new Map<string, OfficialNetworkDatasetEdge>();
     const declaredConnections = new Map<string, OfficialNetworkDeclaredConnection>();
-    let rejected = 0;
+    const validationEntries: OfficialNetworkValidationEntry[] = [];
     let dutchJunctionNodes = new Map<number, OplNode>();
     for (const source of PBF_SOURCES) {
       const result = await processSource(source, await downloadPbf(source, workingDirectory), workingDirectory, datasetNodes, edges, declaredConnections);
-      rejected += result.rejected;
+      validationEntries.push(...result.validation);
       if (source.label === 'Netherlands') dutchJunctionNodes = result.junctionNodes;
     }
     if (edges.size === 0) throw new Error('Geen verifieerbare RCN-routes gevonden; er wordt geen lege dataset geschreven.');
     const topology = await buildDutchOfficialTopology(dutchJunctionNodes);
     const dataset: OfficialNetworkDataset = { version: 1, generatedAt: new Date().toISOString(), nodes: [...datasetNodes.values()], edges: [...edges.values()], declaredConnections: [...declaredConnections.values()], topology };
     const output = path.join(process.cwd(), 'public', 'data', 'benelux_network.json');
+    const validationOutput = path.join(process.cwd(), 'public', 'data', 'benelux_network_validation.json');
     fs.mkdirSync(path.dirname(output), { recursive: true });
     fs.writeFileSync(output, JSON.stringify(dataset));
-    console.log(`Wrote ${dataset.nodes.length} nodes, ${dataset.edges.length} verified OSM edges, ${declaredConnections.size} declared OSM connections and ${topology.edges.length} official Netherlands trajectory segments; rejected ${rejected} relations.`);
+    const validationReport = createValidationReport(validationEntries);
+    fs.writeFileSync(validationOutput, JSON.stringify(validationReport));
+    console.log(`Wrote ${dataset.nodes.length} nodes, ${dataset.edges.length} verified OSM edges, ${declaredConnections.size} declared OSM connections and ${topology.edges.length} official Netherlands trajectory segments; ${validationReport.summary.declaredTopology} topology-only and ${validationReport.summary.rejected} rejected relations are documented in benelux_network_validation.json.`);
   } finally {
     fs.rmSync(workingDirectory, { recursive: true, force: true });
   }

@@ -57,6 +57,32 @@ export interface OfficialNetworkDeclaredConnection {
   source: string;
 }
 
+/**
+ * Build-time evidence for an OSM route relation.  This stays separate from the
+ * browser dataset so the planner remains small, while every skipped relation can
+ * be inspected in the generated validation report.
+ */
+export interface OfficialNetworkValidationEntry {
+  relationId: number;
+  country: string;
+  ref?: string;
+  status: 'verified-geometry' | 'declared-topology' | 'rejected';
+  reason?: string;
+}
+
+export interface OfficialNetworkValidationReport {
+  version: 1;
+  generatedAt: string;
+  summary: {
+    examined: number;
+    verifiedGeometry: number;
+    declaredTopology: number;
+    rejected: number;
+    reasons: Record<string, number>;
+  };
+  entries: OfficialNetworkValidationEntry[];
+}
+
 /** A detailed official segment graph, currently supplied by Rijkswaterstaat for NL. */
 export interface OfficialNetworkTopologyVertex {
   id: string;

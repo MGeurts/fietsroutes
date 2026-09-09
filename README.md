@@ -134,7 +134,7 @@ bun install
 
 ### Build or update the official network dataset
 
-Run this on a development machine or in CI, never on Antagonist hosting. It validates `rcn` route relations and writes `public/data/benelux_network.json`; relations without verified endpoint geometry are excluded rather than guessed. The importer downloads the public [Geofabrik Belgium](https://download.geofabrik.de/europe/belgium.html) and [Netherlands](https://download.geofabrik.de/europe/netherlands.html) OpenStreetMap extracts and processes them on disk with `osmium-tool`; it never asks Overpass for a country-wide JSON response. Install `osmium-tool` first (`sudo apt-get install osmium-tool` on Ubuntu). The download is roughly 2 GB and can take a while.
+Run this on a development machine or in CI, never on Antagonist hosting. It validates `rcn` route relations and writes `public/data/benelux_network.json`. An explicit OSM node-to-node relation remains in the graph even if its route geometry cannot safely be assembled; the planner obtains that individual line from a clearly marked live bicycle-router fallback. Every examined relation is documented in `public/data/benelux_network_validation.json` as `verified-geometry`, `declared-topology`, or `rejected`, including the reason for the latter two. The importer downloads the public [Geofabrik Belgium](https://download.geofabrik.de/europe/belgium.html) and [Netherlands](https://download.geofabrik.de/europe/netherlands.html) OpenStreetMap extracts and processes them on disk with `osmium-tool`; it never asks Overpass for a country-wide JSON response. Install `osmium-tool` first (`sudo apt-get install osmium-tool` on Ubuntu). The download is roughly 2 GB and can take a while.
 
 ```bash
 npm run build:network
