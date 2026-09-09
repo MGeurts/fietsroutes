@@ -33,6 +33,7 @@ const PBF_SOURCES: PbfSource[] = [
 ];
 const EXPLICIT_ENDPOINT_TOLERANCE_DEGREES = 0.0045; // Tag-defined endpoints only (~500 m).
 const INFERRED_ENDPOINT_TOLERANCE_DEGREES = 0.001; // Geometry endpoint to one unique junction (~110 m).
+const REF_ENDPOINT_TOLERANCE_DEGREES = 0.01; // Relation ref is authoritative; geometry only chooses the local duplicate ref.
 const SEGMENT_JOIN_TOLERANCE_DEGREES = 0.00001; // Ways must actually meet; never bridge a visible gap.
 const JUNCTION_INDEX_CELL_DEGREES = 0.01;
 const MAX_UNMAPPED_GEOMETRY_GAP_KM = 1;
@@ -164,6 +165,18 @@ function buildJunctionIndex(nodes: Iterable<OplNode>): Map<string, OplNode[]> {
   return index;
 }
 
+function buildJunctionRefIndex(nodes: Iterable<OplNode>): Map<string, OplNode[]> {
+  const index = new Map<string, OplNode[]>();
+  for (const node of nodes) {
+    const ref = getKnooppuntRef(node);
+    if (!ref) continue;
+    const bucket = index.get(ref) || [];
+    bucket.push(node);
+    index.set(ref, bucket);
+  }
+  return index;
+}
+
 function findUniqueJunction(coordinate: [number, number], index: Map<string, OplNode[]>): OplNode | null {
   const [lat, lng] = coordinate;
   const row = Math.floor(lat / JUNCTION_INDEX_CELL_DEGREES);
@@ -185,6 +198,44 @@ function getExplicitEndpoints(relation: OplRelation, nodes: Map<number, OplNode>
   const from = explicit[0];
   const to = explicit[explicit.length - 1];
   return from.id === to.id ? null : { from, to };
+}
+
+/**
+ * Standard Node Network route relations normally advertise the two end-node labels in
+ * `ref=29-30`.  Most relations do not also include those junction nodes as members.
+ * We accept that authoritative topology only when each ref can be located near an end
+ * of a member way, preventing a repeated number elsewhere in Belgium/NL from matching.
+ */
+function getRefTagEndpoints(relation: OplRelation, nodes: Map<number, OplNode>, ways: Map<number, OplWay>, junctionsByRef: Map<string, OplNode[]>): { from: OplNode; to: OplNode } | null {
+  const match = /^\s*([^\-–]+?)\s*[-–]\s*([^\-–]+?)\s*$/.exec(relation.tags.ref || '');
+  if (!match) return null;
+  const fromCandidates = junctionsByRef.get(match[1].trim()) || [];
+  const toCandidates = junctionsByRef.get(match[2].trim()) || [];
+  if (fromCandidates.length === 0 || toCandidates.length === 0) return null;
+  const wayEnds = relation.wayMemberIds.flatMap((wayId) => {
+    const ids = ways.get(wayId)?.nodeIds;
+    const first = ids?.[0] === undefined ? undefined : nodes.get(ids[0]);
+    const last = !ids?.length ? undefined : nodes.get(ids[ids.length - 1]);
+    return [first, last].filter((node): node is OplNode => Boolean(node));
+  });
+  if (wayEnds.length === 0) return null;
+  const nearest = (candidates: OplNode[]): OplNode | null => {
+    let closest: OplNode | null = null;
+    let closestDistance = REF_ENDPOINT_TOLERANCE_DEGREES;
+    for (const candidate of candidates) {
+      for (const endpoint of wayEnds) {
+        const candidateDistance = Math.hypot(candidate.lat - endpoint.lat, candidate.lng - endpoint.lng);
+        if (candidateDistance <= closestDistance) {
+          closest = candidate;
+          closestDistance = candidateDistance;
+        }
+      }
+    }
+    return closest;
+  };
+  const from = nearest(fromCandidates);
+  const to = nearest(toCandidates);
+  return from && to && from.id !== to.id ? { from, to } : null;
 }
 
 function resolveEndpoints(relation: OplRelation, coordinates: [number, number][], nodes: Map<number, OplNode>, junctionIndex: Map<string, OplNode[]>): { from: OplNode; to: OplNode; coordinates: [number, number][] } | null {
@@ -384,13 +435,13 @@ async function readPayload(payloadFile: string): Promise<{ nodes: Map<number, Op
   return { nodes, ways };
 }
 
-function consumeVerifiedEdges(relations: OplRelation[], nodes: Map<number, OplNode>, ways: Map<number, OplWay>, junctionIndex: Map<string, OplNode[]>, datasetNodes: Map<string, KnooppuntNode>, edges: Map<string, OfficialNetworkDatasetEdge>, declaredConnections: Map<string, OfficialNetworkDeclaredConnection>): number {
+function consumeVerifiedEdges(relations: OplRelation[], nodes: Map<number, OplNode>, ways: Map<number, OplWay>, junctionIndex: Map<string, OplNode[]>, junctionsByRef: Map<string, OplNode[]>, datasetNodes: Map<string, KnooppuntNode>, edges: Map<string, OfficialNetworkDatasetEdge>, declaredConnections: Map<string, OfficialNetworkDeclaredConnection>): number {
   let rejected = 0;
   for (const relation of relations) {
     // Route relations with explicit endpoint nodes remain useful topology, even when
     // their way members are malformed or split. Their geometry is *not* invented;
     // the client will obtain it per declared Node-to-Node hop when necessary.
-    const declared = getExplicitEndpoints(relation, nodes);
+    const declared = getExplicitEndpoints(relation, nodes) || getRefTagEndpoints(relation, nodes, ways, junctionsByRef);
     if (declared) {
       const fromId = `osm-${declared.from.id}`;
       const toId = `osm-${declared.to.id}`;
@@ -456,7 +507,7 @@ async function processSource(source: PbfSource, pbfFile: string, workingDirector
     const datasetNode = toDatasetNode(node);
     if (datasetNode) datasetNodes.set(String(datasetNode.id), datasetNode);
   }
-  const rejected = consumeVerifiedEdges(relations, nodes, ways, buildJunctionIndex(junctionNodes.values()), datasetNodes, edges, declaredConnections);
+  const rejected = consumeVerifiedEdges(relations, nodes, ways, buildJunctionIndex(junctionNodes.values()), buildJunctionRefIndex(junctionNodes.values()), datasetNodes, edges, declaredConnections);
   console.log(`${source.label}: ${relations.length} relations examined; ${junctionNodes.size} junctions, ${nodes.size} nodes and ${ways.size} ways retained.`);
   fs.rmSync(relationsFile, { force: true }); fs.rmSync(junctionsFile, { force: true }); fs.rmSync(idsFile, { force: true }); fs.rmSync(payloadFile, { force: true });
   return { rejected, junctionNodes };
