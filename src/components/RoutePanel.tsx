@@ -30,6 +30,7 @@ interface RoutePanelProps {
   elevationGainM: number;
   elevationPoints: ElevationPoint[];
   elevationAvailable: boolean;
+  elevationLoading: boolean;
   routeError: string | null;
   selectedBike: BikeType;
   onChangeBike: (bike: BikeType) => void;
@@ -68,6 +69,7 @@ export const RoutePanel: React.FC<RoutePanelProps> = ({
   elevationGainM,
   elevationPoints,
   elevationAvailable,
+  elevationLoading,
   routeError,
   selectedBike,
   onChangeBike,
@@ -140,7 +142,9 @@ export const RoutePanel: React.FC<RoutePanelProps> = ({
             <div className="h-5 w-px bg-slate-200" />
             <div title="Hoogtemeters klimmen">
               <span className="text-[9px] text-slate-400 block uppercase font-bold leading-tight">Hoogte</span>
-              <span className="font-bold text-slate-700 text-xs sm:text-sm">{elevationAvailable ? `+${elevationGainM}m` : 'n/b'}</span>
+              <span className="font-bold text-slate-700 text-xs sm:text-sm">
+                {elevationAvailable ? `+${elevationGainM}m` : elevationLoading ? '…' : 'n/b'}
+              </span>
             </div>
             <div className="h-5 w-px bg-slate-200" />
             <div title="Aantal knooppunten">
@@ -259,11 +263,15 @@ export const RoutePanel: React.FC<RoutePanelProps> = ({
                   ? 'bg-white text-emerald-800 shadow-xs'
                   : 'text-slate-600 hover:text-slate-900'
               }`}
-              title={elevationAvailable ? "Toon interactief hoogteprofiel" : "Hoogtegegevens zijn nog niet beschikbaar in de offline dataset"}
+              title={elevationAvailable
+                ? 'Toon interactief hoogteprofiel'
+                : elevationLoading
+                  ? 'Hoogtegegevens worden opgehaald…'
+                  : 'Hoogtegegevens konden niet worden opgehaald. Controleer je internetverbinding.'}
             >
               <span>Hoogte</span>
               <span className={`text-[10px] ${activeTab === 'elevation' ? 'text-emerald-700 font-semibold' : 'text-slate-400 font-normal'}`}>
-                {elevationAvailable ? `(+${elevationGainM}m)` : '(niet beschikbaar)'}
+                {elevationAvailable ? `(+${elevationGainM}m)` : elevationLoading ? '(laden…)': '(niet beschikbaar)'}
               </span>
             </button>
           </div>

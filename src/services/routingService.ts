@@ -180,13 +180,88 @@ export async function calculateBicycleLeg(
   return leg;
 }
 
+const MAX_ELEVATION_SAMPLES = 100;
+const ELEVATION_SAMPLE_SPACING_KM = 0.15;
+
+type ElevationSample = { latitude: number; longitude: number; distanceKm: number };
+
+function sampleRouteForElevation(coordinates: [number, number][]): ElevationSample[] {
+  if (coordinates.length < 2) return [];
+
+  const cumulativeDistances = [0];
+  for (let index = 1; index < coordinates.length; index += 1) {
+    const [previousLat, previousLng] = coordinates[index - 1];
+    const [currentLat, currentLng] = coordinates[index];
+    cumulativeDistances.push(
+      cumulativeDistances[index - 1]
+      + calculateHaversineDistanceKm(previousLat, previousLng, currentLat, currentLng),
+    );
+  }
+
+  const routeLengthKm = cumulativeDistances[cumulativeDistances.length - 1];
+  if (!Number.isFinite(routeLengthKm) || routeLengthKm <= 0) return [];
+
+  const sampleCount = Math.min(
+    MAX_ELEVATION_SAMPLES,
+    Math.max(2, Math.ceil(routeLengthKm / ELEVATION_SAMPLE_SPACING_KM) + 1),
+  );
+
+  return Array.from({ length: sampleCount }, (_, sampleIndex) => {
+    const targetDistanceKm = (routeLengthKm * sampleIndex) / (sampleCount - 1);
+    let coordinateIndex = 1;
+    while (coordinateIndex < cumulativeDistances.length - 1 && cumulativeDistances[coordinateIndex] < targetDistanceKm) {
+      coordinateIndex += 1;
+    }
+
+    const segmentStartDistanceKm = cumulativeDistances[coordinateIndex - 1];
+    const segmentLengthKm = cumulativeDistances[coordinateIndex] - segmentStartDistanceKm;
+    const progress = segmentLengthKm > 0
+      ? (targetDistanceKm - segmentStartDistanceKm) / segmentLengthKm
+      : 0;
+    const [startLat, startLng] = coordinates[coordinateIndex - 1];
+    const [endLat, endLng] = coordinates[coordinateIndex];
+
+    return {
+      latitude: startLat + (endLat - startLat) * progress,
+      longitude: startLng + (endLng - startLng) * progress,
+      distanceKm: targetDistanceKm,
+    };
+  });
+}
+
 /**
- * Estimate elevation profile across route
+ * Retrieve a terrain-based height profile for the rendered route. The public
+ * Open-Meteo endpoint accepts at most 100 positions per request, so long routes
+ * are sampled at even distances. No height is shown when the service is offline.
  */
-export function estimateElevationProfile(_coordinates: [number, number][], _totalDistKm: number): ElevationProfileResult {
-  // Never display fabricated height values. The offline importer may attach surveyed DEM
-  // samples in a future dataset version; until then the UI explicitly marks elevation unknown.
-  return { points: [], totalAscent: 0, available: false };
+export async function fetchElevationProfile(
+  coordinates: [number, number][],
+  totalDistanceKm: number,
+): Promise<ElevationProfileResult> {
+  const samples = sampleRouteForElevation(coordinates);
+  if (samples.length < 2) return { points: [], totalAscent: 0, available: false };
+
+  const params = new URLSearchParams({
+    latitude: samples.map((sample) => sample.latitude.toFixed(6)).join(','),
+    longitude: samples.map((sample) => sample.longitude.toFixed(6)).join(','),
+  });
+  const response = await fetchJson(`https://api.open-meteo.com/v1/elevation?${params}`, 10_000) as {
+    elevation?: unknown;
+  } | null;
+  const elevations = response?.elevation;
+  if (!Array.isArray(elevations) || elevations.length !== samples.length || elevations.some((value) => !Number.isFinite(value))) {
+    return { points: [], totalAscent: 0, available: false };
+  }
+
+  const points = samples.map((sample, index) => ({
+    distance: Math.round((sample.distanceKm / samples[samples.length - 1].distanceKm) * totalDistanceKm * 100) / 100,
+    elevation: Math.round(Number(elevations[index])),
+  }));
+  const totalAscent = Math.round(points.reduce((ascent, point, index) => (
+    index === 0 ? ascent : ascent + Math.max(0, point.elevation - points[index - 1].elevation)
+  ), 0));
+
+  return { points, totalAscent, available: true };
 }
 
 /**

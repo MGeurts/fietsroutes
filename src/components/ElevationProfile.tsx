@@ -99,6 +99,18 @@ export const ElevationProfile: React.FC<ElevationProfileProps> = ({
         <span>{Math.round(totalDistanceKm / 2)} km</span>
         <span>{totalDistanceKm} km ({elevationPoints[elevationPoints.length - 1]?.elevation || minElev}m)</span>
       </div>
+
+      <p className="text-[9px] text-slate-400">
+        Terreinhoogte: Copernicus DEM via{' '}
+        <a
+          href="https://open-meteo.com/en/docs/elevation-api"
+          target="_blank"
+          rel="noreferrer"
+          className="underline hover:text-slate-600"
+        >
+          Open-Meteo
+        </a>
+      </p>
     </div>
   );
 };

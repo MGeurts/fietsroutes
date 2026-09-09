@@ -51,7 +51,7 @@ This application allows cyclists to compose routes by clicking numbered junction
 - **Automatic Round-Trip Generator (*Rondrit Generator*)**:
   - Automatically calculates smooth, circular loop routes returning to your departure point based on a target distance (e.g. 20 km, 35 km, 60 km, 80 km).
 - **Elevation Profiles**:
-  - Visual SVG elevation graph displaying min/max elevation in meters (NAP/TAW) and total climbing meters.
+  - Visual SVG elevation graph displaying min/max terrain elevation and total climbing meters, sampled live from Copernicus DEM via Open-Meteo (no server-side Node.js required).
 - **Bicycle Profiles**:
   - Choose between *Stadsfiets* (16 km/h), *E-Bike* (22 km/h), *Toer- / Gravelbike* (24 km/h), or *Racefiets* (28 km/h) for accurate travel time calculation.
 - **PHP & Laravel Ready**:

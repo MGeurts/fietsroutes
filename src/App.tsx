@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { KnooppuntNode, RouteConnectionAnalysis, RouteLeg, ElevationPoint, BikeType, MapTileProvider, PlannedRoute } from './types';
 import { INITIAL_NODES } from './data/knooppuntenData';
-import { calculateBicycleLeg, estimateElevationProfile, downloadGpxFile, UnknownKnooppuntenConnectionError } from './services/routingService';
+import { calculateBicycleLeg, fetchElevationProfile, downloadGpxFile, UnknownKnooppuntenConnectionError } from './services/routingService';
 import { getAllCachedNodes, saveNodesToCache } from './services/knooppuntenCacheService';
 import { searchPlacesAndAddresses, isKnooppuntQuery, PlaceSearchResult, PRELOADED_MAJOR_PLACES } from './services/geocodingService';
 import { MapPlanner } from './components/MapPlanner';
@@ -30,6 +30,7 @@ export default function App() {
   const [elevationGainM, setElevationGainM] = useState<number>(0);
   const [elevationPoints, setElevationPoints] = useState<ElevationPoint[]>([]);
   const [elevationAvailable, setElevationAvailable] = useState(false);
+  const [elevationLoading, setElevationLoading] = useState(false);
   const [routeError, setRouteError] = useState<string | null>(null);
   const [selectedBike, setSelectedBike] = useState<BikeType>('ebike');
   // Default to cyclosm (dedicated cycling map, 100% free, no API key required, no watermark)
@@ -92,9 +93,17 @@ export default function App() {
         setElevationGainM(0);
         setElevationPoints([]);
         setElevationAvailable(false);
+        setElevationLoading(false);
         setRouteError(null);
         return;
       }
+
+      // Keep the old profile from being shown while the newly selected route is
+      // resolving and its terrain samples are loading.
+      setElevationGainM(0);
+      setElevationPoints([]);
+      setElevationAvailable(false);
+      setElevationLoading(true);
 
       const calculatedLegs: RouteLeg[] = [];
       let allCoords: [number, number][] = [];
@@ -116,31 +125,35 @@ export default function App() {
         // withheld; clearing the full route made a later invalid choice appear to erase
         // already validated connections.
         const partialDistance = Math.round(totalDist * 10) / 10;
-        const partialElevation = estimateElevationProfile(allCoords, partialDistance);
         setRouteLegs(calculatedLegs);
         setFullCoordinates(allCoords);
         setTotalDistanceKm(partialDistance);
-        setElevationGainM(partialElevation.totalAscent);
-        setElevationPoints(partialElevation.points);
-        setElevationAvailable(partialElevation.available);
         setRouteError(error instanceof UnknownKnooppuntenConnectionError
           ? error.message
           : 'De officiële knooppuntenroute kon niet worden berekend.');
+        const partialElevation = await fetchElevationProfile(allCoords, partialDistance);
+        if (isCancelled) return;
+        setElevationGainM(partialElevation.totalAscent);
+        setElevationPoints(partialElevation.points);
+        setElevationAvailable(partialElevation.available);
+        setElevationLoading(false);
         return;
       }
 
       if (isCancelled) return;
 
       const roundedDist = Math.round(totalDist * 10) / 10;
-      const elev = estimateElevationProfile(allCoords, roundedDist);
-
       setRouteLegs(calculatedLegs);
       setFullCoordinates(allCoords);
       setTotalDistanceKm(roundedDist);
+      setRouteError(null);
+
+      const elev = await fetchElevationProfile(allCoords, roundedDist);
+      if (isCancelled) return;
       setElevationGainM(elev.totalAscent);
       setElevationPoints(elev.points);
       setElevationAvailable(elev.available);
-      setRouteError(null);
+      setElevationLoading(false);
     }
 
     computeFullRoute();
@@ -853,6 +866,7 @@ export default function App() {
             elevationGainM={elevationGainM}
             elevationPoints={elevationPoints}
             elevationAvailable={elevationAvailable}
+            elevationLoading={elevationLoading}
             routeError={routeError}
             selectedBike={selectedBike}
             onChangeBike={setSelectedBike}

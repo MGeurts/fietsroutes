@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { INITIAL_NODES } from '../src/data/knooppuntenData';
 import { buildKnooppuntenGraph } from '../src/services/roundTripService';
-import { calculateBicycleLeg, estimateElevationProfile, UnknownKnooppuntenConnectionError } from '../src/services/routingService';
+import { calculateBicycleLeg, fetchElevationProfile, UnknownKnooppuntenConnectionError } from '../src/services/routingService';
 import { getNodeKey, registerOfficialNetworkDataset } from '../src/services/officialNetworkService';
 
 const node = (ref: string) => {
@@ -35,9 +35,23 @@ async function main() {
   assert.equal(graph.adjacency.get(getNodeKey(kp64))?.has(getNodeKey(kp62)), false, 'the graph must not infer proximity edges');
   assert.equal(graph.adjacency.get(getNodeKey(kp64))?.has(getNodeKey(kp251)), true, 'the graph must retain verified corridors');
 
-  const elevation = estimateElevationProfile(verifiedLeg.coordinates, verifiedLeg.distanceKm);
-  assert.equal(elevation.available, false, 'synthetic height must not be presented as measurement');
-  assert.deepEqual(elevation.points, []);
+  globalThis.fetch = async (input) => {
+    const requestUrl = new URL(String(input));
+    assert.equal(requestUrl.hostname, 'api.open-meteo.com', 'height profile must use the terrain-elevation endpoint');
+    const sampleCount = requestUrl.searchParams.get('latitude')?.split(',').length || 0;
+    return new Response(JSON.stringify({ elevation: Array.from({ length: sampleCount }, (_, index) => 10 + index) }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    });
+  };
+  try {
+    const elevation = await fetchElevationProfile(verifiedLeg.coordinates, verifiedLeg.distanceKm);
+    assert.equal(elevation.available, true, 'terrain samples must enable the profile');
+    assert.ok(elevation.points.length >= 2, 'a profile requires at least a start and end sample');
+    assert.equal(elevation.totalAscent, elevation.points.length - 1, 'ascent must be calculated from returned terrain heights');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 
   const pathNodes = [
     { id: 'test-a', ref: '10', lat: 51, lng: 4 },
