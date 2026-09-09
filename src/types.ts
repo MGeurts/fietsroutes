@@ -19,6 +19,15 @@ export interface RouteLeg {
   instructions?: string;
   /** False when a live bicycle router supplied road geometry because the static node graph has a gap. */
   isVerified?: boolean;
+  /** Segments are kept separate so the map can show their individual provenance. */
+  displaySegments?: RouteDisplaySegment[];
+}
+
+export type RouteGeometrySource = 'official' | 'brouter' | 'osm-router';
+
+export interface RouteDisplaySegment {
+  coordinates: [number, number][];
+  source: RouteGeometrySource;
 }
 
 export interface ElevationPoint {

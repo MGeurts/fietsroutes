@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import L from 'leaflet';
-import { KnooppuntNode, MapTileProvider } from '../types';
+import { KnooppuntNode, MapTileProvider, RouteGeometrySource, RouteLeg } from '../types';
 import { fetchKnooppuntenInBBox, fetchKnooppuntenAroundPoint } from '../services/overpassService';
 import { calculateHaversineDistanceKm } from '../services/routingService';
 import { searchPlacesAndAddresses, isKnooppuntQuery, PlaceSearchResult } from '../services/geocodingService';
@@ -26,6 +26,7 @@ interface MapPlannerProps {
   availableNodes: KnooppuntNode[];
   selectedNodes: KnooppuntNode[];
   routeCoordinates: [number, number][];
+  routeLegs: RouteLeg[];
   onNodeClick: (node: KnooppuntNode) => void;
   onAddNewNode?: (node: KnooppuntNode) => void;
   onAddNewNodes?: (nodes: KnooppuntNode[]) => void;
@@ -53,6 +54,16 @@ function calculateBearing(p1: [number, number], p2: [number, number]): number {
   return (brng + 360) % 360;
 }
 
+function routeStyle(source: RouteGeometrySource): L.PolylineOptions {
+  if (source === 'brouter') {
+    return { color: '#d97706', dashArray: '12 8', weight: 5.5, opacity: 0.95, lineCap: 'round', lineJoin: 'round' };
+  }
+  if (source === 'osm-router') {
+    return { color: '#7c3aed', dashArray: '3 8', weight: 5.5, opacity: 0.95, lineCap: 'round', lineJoin: 'round' };
+  }
+  return { color: '#dc2626', weight: 5.5, opacity: 0.95, lineCap: 'round', lineJoin: 'round' };
+}
+
 // Marker pin SVGs matching authentic cycling maps (screenshot)
 const startPinSvg = `
   <div class="flex flex-col items-center drop-shadow-sm" title="Start knooppunt">
@@ -76,6 +87,7 @@ export const MapPlanner: React.FC<MapPlannerProps> = ({
   availableNodes,
   selectedNodes,
   routeCoordinates,
+  routeLegs,
   onNodeClick,
   onAddNewNode,
   onAddNewNodes,
@@ -95,7 +107,7 @@ export const MapPlanner: React.FC<MapPlannerProps> = ({
   const baseTileLayerRef = useRef<L.TileLayer | null>(null);
   const overlayTileLayerRef = useRef<L.TileLayer | null>(null);
   const markersLayerGroupRef = useRef<L.LayerGroup | null>(null);
-  const routePolylineRef = useRef<L.Polyline | null>(null);
+  const routePolylineRef = useRef<L.LayerGroup | null>(null);
   const routeDecoratorsLayerRef = useRef<L.LayerGroup | null>(null);
   const currentLocationMarkerRef = useRef<L.Marker | null>(null);
   const currentLocationCircleRef = useRef<L.Circle | null>(null);
@@ -413,17 +425,16 @@ export const MapPlanner: React.FC<MapPlannerProps> = ({
     }
 
     if (routeCoordinates && routeCoordinates.length > 1) {
-      // Vivid red polyline matching professional cycling network applications
-      const polyline = L.polyline(routeCoordinates, {
-        color: '#dc2626', // Vibrant red route corridor
-        weight: 5.5,
-        opacity: 0.95,
-        lineCap: 'round',
-        lineJoin: 'round',
-        pane: 'activeRoutePane',
-      }).addTo(map);
-
-      routePolylineRef.current = polyline;
+      const routeLayer = L.layerGroup().addTo(map);
+      const displaySegments = routeLegs.flatMap((leg) => leg.displaySegments
+        || [{ coordinates: leg.coordinates, source: leg.isVerified === false ? 'brouter' as const : 'official' as const }]);
+      // Imported GPX tracks have no individual route legs but remain visible as a solid line.
+      if (displaySegments.length === 0) displaySegments.push({ coordinates: routeCoordinates, source: 'official' });
+      for (const segment of displaySegments) {
+        if (segment.coordinates.length < 2) continue;
+        L.polyline(segment.coordinates, { ...routeStyle(segment.source), pane: 'activeRoutePane' }).addTo(routeLayer);
+      }
+      routePolylineRef.current = routeLayer;
 
       // Add directional arrow indicators along the route (as seen in screenshot)
       const decoratorsGroup = L.layerGroup().addTo(map);
@@ -462,7 +473,7 @@ export const MapPlanner: React.FC<MapPlannerProps> = ({
         decoratorsGroup.addLayer(arrowMarker);
       }
     }
-  }, [routeCoordinates, selectedNodes]);
+  }, [routeCoordinates, routeLegs, selectedNodes]);
 
   // Fetch real knooppunten from OpenStreetMap via Overpass for current map viewport
   const handleScanBBoxForKnooppunten = useCallback(async () => {

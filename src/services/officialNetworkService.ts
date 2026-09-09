@@ -1,5 +1,6 @@
 import { KnooppuntNode, OfficialNetworkDataset, OfficialNetworkDatasetEdge } from '../types';
 import { getOfficialGisCorridor, OFFICIAL_GIS_CORRIDORS } from '../data/officialGisCorridors';
+import { INITIAL_NODES } from '../data/knooppuntenData';
 
 /** A conservative endpoint tolerance prevents a duplicate ref in another region being matched. */
 const ENDPOINT_TOLERANCE_KM = 0.35;
@@ -32,6 +33,9 @@ let declaredNetworkAdjacency = new Map<string, Map<string, OfficialNetworkEdge>>
 let officialTopologyAdjacency = new Map<string, Map<string, OfficialNetworkEdge>>();
 let officialTopologyAnchors = new Map<string, string>();
 
+/** The curated starter map covers a few local connections missing from current OSM tags. */
+const CURATED_CONNECTION_TOLERANCE_KM = 0.35;
+
 function edgeKey(from: string, to: string): string {
   return `${from}\u0000${to}`;
 }
@@ -42,6 +46,23 @@ export function registerOfficialNetworkDataset(dataset: OfficialNetworkDataset):
   const allowedNodeIds = new Set(dataset.nodes.map((node) => String(node.id)));
   const next = new Map<string, OfficialNetworkDatasetEdge>();
   const nextNodes = new Map(dataset.nodes.map((node) => [String(node.id), node]));
+  const resolveCuratedNodeKey = (curated: KnooppuntNode): string => {
+    let closest: KnooppuntNode | undefined;
+    let closestDistance = CURATED_CONNECTION_TOLERANCE_KM;
+    for (const candidate of nextNodes.values()) {
+      if (candidate.ref !== curated.ref) continue;
+      const candidateDistance = distanceKm(curated.lat, curated.lng, candidate.lat, candidate.lng);
+      if (candidateDistance <= closestDistance) {
+        closest = candidate;
+        closestDistance = candidateDistance;
+      }
+    }
+    if (closest) return getNodeKey(closest);
+    const key = getNodeKey(curated);
+    nextNodes.set(key, curated);
+    return key;
+  };
+  const curatedNodeKeys = new Map(INITIAL_NODES.map((node) => [node, resolveCuratedNodeKey(node)]));
   const nextAdjacency = new Map<string, Map<string, OfficialNetworkEdge>>();
   for (const edge of dataset.edges) {
     if (!allowedNodeIds.has(edge.from) || !allowedNodeIds.has(edge.to) || edge.coordinates.length < 2 || edge.distanceKm <= 0) continue;
@@ -74,23 +95,35 @@ export function registerOfficialNetworkDataset(dataset: OfficialNetworkDataset):
   const nextDeclaredAdjacency = new Map<string, Map<string, OfficialNetworkEdge>>(
     [...nextAdjacency].map(([key, neighbours]) => [key, new Map(neighbours)]),
   );
-  for (const connection of dataset.declaredConnections || []) {
-    const from = nextNodes.get(connection.from);
-    const to = nextNodes.get(connection.to);
-    if (!from || !to || connection.from === connection.to) continue;
-    const add = (fromKey: string, toKey: string, fromNode: KnooppuntNode, toNode: KnooppuntNode) => {
-      const neighbours = nextDeclaredAdjacency.get(fromKey) || new Map<string, OfficialNetworkEdge>();
+  const addDeclaredConnection = (fromKey: string, toKey: string, source: string) => {
+    const from = nextNodes.get(fromKey);
+    const to = nextNodes.get(toKey);
+    if (!from || !to || fromKey === toKey) return;
+    const add = (forwardKey: string, reverseKey: string, fromNode: KnooppuntNode, toNode: KnooppuntNode) => {
+      const neighbours = nextDeclaredAdjacency.get(forwardKey) || new Map<string, OfficialNetworkEdge>();
       // Complete, validated geometry always beats a topology-only relation.
-      if (!neighbours.has(toKey)) {
-        neighbours.set(toKey, {
-          fromKey, toKey, coordinates: [], source: connection.source,
+      if (!neighbours.has(reverseKey)) {
+        neighbours.set(reverseKey, {
+          fromKey: forwardKey, toKey: reverseKey, coordinates: [], source,
           distanceKm: distanceKm(fromNode.lat, fromNode.lng, toNode.lat, toNode.lng),
         });
       }
-      nextDeclaredAdjacency.set(fromKey, neighbours);
+      nextDeclaredAdjacency.set(forwardKey, neighbours);
     };
-    add(connection.from, connection.to, from, to);
-    add(connection.to, connection.from, to, from);
+    add(fromKey, toKey, from, to);
+    add(toKey, fromKey, to, from);
+  };
+  for (const connection of dataset.declaredConnections || []) {
+    addDeclaredConnection(connection.from, connection.to, connection.source);
+  }
+  for (const curated of INITIAL_NODES) {
+    const fromKey = curatedNodeKeys.get(curated);
+    if (!fromKey) continue;
+    for (const targetRef of curated.connections || []) {
+      const target = INITIAL_NODES.find((node) => node.ref === targetRef);
+      const targetKey = target && curatedNodeKeys.get(target);
+      if (targetKey) addDeclaredConnection(fromKey, targetKey, 'Samengestelde lokale knooppuntverbinding');
+    }
   }
   declaredNetworkAdjacency = nextDeclaredAdjacency;
   const topologyAdjacency = new Map<string, Map<string, OfficialNetworkEdge>>();

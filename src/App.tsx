@@ -871,6 +871,7 @@ export default function App() {
             availableNodes={availableNodes}
             selectedNodes={selectedNodes}
             routeCoordinates={fullCoordinates}
+            routeLegs={routeLegs}
             onNodeClick={handleNodeClick}
             onAddNewNode={handleAddNewNode}
             onAddNewNodes={handleAddNewNodes}

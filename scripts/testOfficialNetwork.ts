@@ -84,6 +84,32 @@ async function main() {
   assert.equal(topologyLeg.coordinates.length, 3, 'official trajectory segments must retain their joined geometry');
   assert.equal(topologyLeg.instructions, 'Geverifieerde knooppuntenroute via officiële trajectsegmenten.');
 
+  const genkLikeNodes = [
+    { id: 'genk-29', ref: '29', lat: 50.9455188, lng: 5.5460142 },
+    { id: 'genk-30', ref: '30', lat: 50.9566814, lng: 5.5336876 },
+    { id: 'genk-250', ref: '250', lat: 50.9652694, lng: 5.5186055 },
+  ];
+  registerOfficialNetworkDataset({
+    version: 1,
+    generatedAt: new Date().toISOString(),
+    nodes: genkLikeNodes,
+    edges: [{ from: 'genk-30', to: 'genk-250', distanceKm: 2, coordinates: [[50.9566814, 5.5336876], [50.9652694, 5.5186055]], source: 'test', verifiedAt: 'test' }],
+  });
+  let curatedRouterCalls = 0;
+  globalThis.fetch = async () => {
+    curatedRouterCalls += 1;
+    return new Response(JSON.stringify({
+      features: [{ geometry: { coordinates: [[5.5460142, 50.9455188], [5.5336876, 50.9566814]] }, properties: { 'track-length': 2000 } }],
+    }), { status: 200, headers: { 'content-type': 'application/json' } });
+  };
+  try {
+    const curatedLeg = await calculateBicycleLeg(genkLikeNodes[0], genkLikeNodes[2]);
+    assert.equal(curatedRouterCalls, 1, 'a curated intermediate node must prevent one direct live route over the whole leg');
+    assert.match(curatedLeg.instructions || '', /30/, 'the known local intermediate knooppunt must be retained before a direct fallback');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+
   const declaredNodes = [
     { id: 'declared-a', ref: '40', lat: 52, lng: 4 },
     { id: 'declared-b', ref: '41', lat: 52, lng: 4.01 },
