@@ -66,8 +66,18 @@ export interface OfficialNetworkValidationEntry {
   relationId: number;
   country: string;
   ref?: string;
+  /** The endpoints used by the importer, when they could be resolved safely. */
+  from?: OfficialNetworkValidationEndpoint;
+  to?: OfficialNetworkValidationEndpoint;
   status: 'verified-geometry' | 'declared-topology' | 'rejected';
   reason?: string;
+}
+
+export interface OfficialNetworkValidationEndpoint {
+  id: string;
+  ref: string;
+  lat: number;
+  lng: number;
 }
 
 export interface OfficialNetworkValidationReport {

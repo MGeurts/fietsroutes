@@ -140,7 +140,9 @@ Run this on a development machine or in CI, never on Antagonist hosting. It vali
 npm run build:network
 ```
 
-If you do not want to download the extracts locally, use **Actions → Build official cycle-network dataset → Run workflow**. The manual workflow installs Osmium on a GitHub-hosted runner and commits `public/data/benelux_network.json` only when it successfully completes. To reuse locally downloaded extracts, set `NETWORK_PBF_DIR` to the folder containing `belgium-latest.osm.pbf` and `netherlands-latest.osm.pbf`.
+If you do not want to download the extracts locally, use **Actions → Build official cycle-network dataset → Run workflow**. The manual workflow installs Osmium on a GitHub-hosted runner and commits the network dataset and validation report only when it successfully completes. To reuse locally downloaded extracts, set `NETWORK_PBF_DIR` to the folder containing `belgium-latest.osm.pbf` and `netherlands-latest.osm.pbf`.
+
+After that build, the **Analyse** button in the planner opens the local validation report. It shows OSM relation IDs, resolved endpoints, geometry status, and reasons for topology-only or unresolved relations. The default view is a 25 km radius around knooppunt 29; selecting a node first uses that node as the centre.
 
 ### 3. Start the Development Server
 

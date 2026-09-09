@@ -12,9 +12,10 @@ import { DataManagementModal } from './components/DataManagementModal';
 import { LaravelAntagonistModal } from './components/LaravelAntagonistModal';
 import { GpxImportModal } from './components/GpxImportModal';
 import { OfflineDataManagerModal } from './components/OfflineDataManagerModal';
+import { NetworkAnalysisModal } from './components/NetworkAnalysisModal';
 import { enrichKnooppuntLocality } from './services/localityService';
 import { loadPrepackagedOfficialNetwork } from './services/networkDataService';
-import { Map, List, Bike, Sparkles, Navigation, Undo2, Redo2, X, Search, MapPin, Database, HardDrive, Wifi, WifiOff } from 'lucide-react';
+import { Map, List, Bike, Sparkles, Navigation, Undo2, Redo2, X, Search, MapPin, Database, HardDrive, Wifi, WifiOff, Network } from 'lucide-react';
 
 export default function App() {
   // Available nodes in current state (preloaded + Overpass queried)
@@ -64,6 +65,7 @@ export default function App() {
   const [isLaravelModalOpen, setIsLaravelModalOpen] = useState(false);
   const [isGpxImportOpen, setIsGpxImportOpen] = useState(false);
   const [isOfflineManagerOpen, setIsOfflineManagerOpen] = useState(false);
+  const [isNetworkAnalysisOpen, setIsNetworkAnalysisOpen] = useState(false);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
 
   useEffect(() => {
@@ -793,6 +795,15 @@ export default function App() {
           </button>
 
           <button
+            onClick={() => setIsNetworkAnalysisOpen(true)}
+            className="flex items-center gap-1.5 px-2.5 sm:px-3 py-2 bg-cyan-950/70 hover:bg-cyan-900/90 text-cyan-200 border border-cyan-800/70 text-xs font-medium rounded-md transition cursor-pointer shadow-xs tablet-touch-friendly-btn"
+            title="Analyseer OSM-knooppuntrelaties en datakwaliteit"
+          >
+            <Network className="w-3.5 h-3.5 text-cyan-300" />
+            <span className="hidden lg:inline">Analyse</span>
+          </button>
+
+          <button
             onClick={handleExportGpx}
             disabled={selectedNodes.length < 2 || routeLegs.length !== selectedNodes.length - 1 || Boolean(routeError)}
             className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-xs sm:text-sm font-medium px-3 sm:px-3.5 py-2 rounded-md transition-colors shadow-sm cursor-pointer tablet-touch-friendly-btn"
@@ -960,6 +971,12 @@ export default function App() {
         isOpen={isOfflineManagerOpen}
         onClose={() => setIsOfflineManagerOpen(false)}
         onDataUpdated={refreshNodesFromCache}
+      />
+
+      <NetworkAnalysisModal
+        isOpen={isNetworkAnalysisOpen}
+        onClose={() => setIsNetworkAnalysisOpen(false)}
+        focusNode={selectedNodes[selectedNodes.length - 1]}
       />
     </div>
   );

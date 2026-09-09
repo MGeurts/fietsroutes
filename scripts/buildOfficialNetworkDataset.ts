@@ -21,6 +21,7 @@ import type {
   OfficialNetworkTopology,
   OfficialNetworkTopologyVertex,
   OfficialNetworkValidationEntry,
+  OfficialNetworkValidationEndpoint,
   OfficialNetworkValidationReport,
 } from '../src/types';
 
@@ -274,6 +275,11 @@ function toDatasetNode(node: OplNode): KnooppuntNode | null {
   return { id: `osm-${node.id}`, ref, lat: node.lat, lng: node.lng, name: node.tags.name };
 }
 
+function toValidationEndpoint(node: OplNode): OfficialNetworkValidationEndpoint | null {
+  const ref = getKnooppuntRef(node);
+  return ref ? { id: `osm-${node.id}`, ref, lat: node.lat, lng: node.lng } : null;
+}
+
 function topologyVertexId(coordinate: [number, number]): string {
   return `nl:${coordinate[0].toFixed(6)}:${coordinate[1].toFixed(6)}`;
 }
@@ -444,8 +450,12 @@ function consumeVerifiedEdges(relations: OplRelation[], country: string, nodes: 
     // their way members are malformed or split. Their geometry is *not* invented;
     // the client will obtain it per declared Node-to-Node hop when necessary.
     const declared = getExplicitEndpoints(relation, nodes) || getRefTagEndpoints(relation, nodes, ways, junctionsByRef);
-    const report = (status: OfficialNetworkValidationEntry['status'], reason?: string) => {
-      validation.push({ relationId: relation.id, country, ref: relation.tags.ref, status, reason });
+    const report = (status: OfficialNetworkValidationEntry['status'], reason?: string, endpoints?: { from: OplNode; to: OplNode }) => {
+      validation.push({
+        relationId: relation.id, country, ref: relation.tags.ref, status, reason,
+        from: endpoints && toValidationEndpoint(endpoints.from) || undefined,
+        to: endpoints && toValidationEndpoint(endpoints.to) || undefined,
+      });
     };
     if (declared) {
       const fromId = `osm-${declared.from.id}`;
@@ -462,40 +472,40 @@ function consumeVerifiedEdges(relations: OplRelation[], country: string, nodes: 
     if (!geometry || geometry.length < 2) {
       report(declared ? 'declared-topology' : 'rejected', declared
         ? 'Way members ontbreken of vormen geen aaneengesloten geometrie; de expliciete knooppuntrelatie blijft behouden.'
-        : 'Way members ontbreken of vormen geen aaneengesloten geometrie, en er zijn geen veilige knooppunteinden.');
+        : 'Way members ontbreken of vormen geen aaneengesloten geometrie, en er zijn geen veilige knooppunteinden.', declared || undefined);
       continue;
     }
     if (hasUnmappedGeometryGap(geometry)) {
       report(declared ? 'declared-topology' : 'rejected', declared
         ? 'De geometrie bevat een onverklaarde onderbreking; de expliciete knooppuntrelatie blijft behouden.'
-        : 'De geometrie bevat een onverklaarde onderbreking en er zijn geen veilige knooppunteinden.');
+        : 'De geometrie bevat een onverklaarde onderbreking en er zijn geen veilige knooppunteinden.', declared || undefined);
       continue;
     }
     const resolved = resolveEndpoints(relation, geometry, nodes, junctionIndex);
     if (!resolved) {
       report(declared ? 'declared-topology' : 'rejected', declared
         ? 'De routegeometrie eindigt niet veilig op de knooppunten; de expliciete knooppuntrelatie blijft behouden.'
-        : 'De routegeometrie kan niet eenduidig aan twee knooppunten worden gekoppeld.');
+        : 'De routegeometrie kan niet eenduidig aan twee knooppunten worden gekoppeld.', declared || undefined);
       continue;
     }
     const { from, to, coordinates } = resolved;
     const fromRef = getKnooppuntRef(from);
     const toRef = getKnooppuntRef(to);
     if (!fromRef || !toRef) {
-      report(declared ? 'declared-topology' : 'rejected', 'Een geometrisch eindpunt heeft geen bruikbare knooppuntreferentie.');
+      report(declared ? 'declared-topology' : 'rejected', 'Een geometrisch eindpunt heeft geen bruikbare knooppuntreferentie.', declared || undefined);
       continue;
     }
     const fromId = `osm-${from.id}`;
     const toId = `osm-${to.id}`;
     const key = [fromId, toId].sort().join('|');
     if (edges.has(key)) {
-      report('verified-geometry');
+      report('verified-geometry', undefined, { from, to });
       continue;
     }
     datasetNodes.set(fromId, { id: fromId, ref: fromRef, lat: from.lat, lng: from.lng, name: from.tags.name });
     datasetNodes.set(toId, { id: toId, ref: toRef, lat: to.lat, lng: to.lng, name: to.tags.name });
     edges.set(key, { from: fromId, to: toId, coordinates, distanceKm: edgeDistanceKm(coordinates), source: `OpenStreetMap RCN relation ${relation.id}`, verifiedAt: new Date().toISOString() });
-    report('verified-geometry');
+    report('verified-geometry', undefined, { from, to });
   }
   return validation;
 }
