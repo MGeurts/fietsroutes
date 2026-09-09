@@ -28,6 +28,15 @@ export type RouteGeometrySource = 'official' | 'official-declared' | 'brouter' |
 export interface RouteDisplaySegment {
   coordinates: [number, number][];
   source: RouteGeometrySource;
+  /** Evidence carried to the map click handler; never inferred from a node number alone. */
+  analysis?: RouteConnectionAnalysis;
+}
+
+export interface RouteConnectionAnalysis {
+  fromNode: KnooppuntNode;
+  toNode: KnooppuntNode;
+  source: string;
+  relationId?: number;
 }
 
 export interface ElevationPoint {

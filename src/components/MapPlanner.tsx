@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import L from 'leaflet';
-import { KnooppuntNode, MapTileProvider, RouteGeometrySource, RouteLeg } from '../types';
+import { KnooppuntNode, MapTileProvider, RouteDisplaySegment, RouteGeometrySource, RouteLeg } from '../types';
 import { fetchKnooppuntenInBBox, fetchKnooppuntenAroundPoint } from '../services/overpassService';
 import { calculateHaversineDistanceKm } from '../services/routingService';
 import { searchPlacesAndAddresses, isKnooppuntQuery, PlaceSearchResult } from '../services/geocodingService';
@@ -40,6 +40,7 @@ interface MapPlannerProps {
   isSidebarCollapsed?: boolean;
   onToggleSidebar?: () => void;
   onOpenDataModal?: () => void;
+  onRouteSegmentClick?: (segment: RouteDisplaySegment) => void;
 }
 
 // Calculate bearing angle between two coordinates
@@ -105,6 +106,7 @@ export const MapPlanner: React.FC<MapPlannerProps> = ({
   isSidebarCollapsed,
   onToggleSidebar,
   onOpenDataModal,
+  onRouteSegmentClick,
 }) => {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<L.Map | null>(null);
@@ -436,7 +438,11 @@ export const MapPlanner: React.FC<MapPlannerProps> = ({
       if (displaySegments.length === 0) displaySegments.push({ coordinates: routeCoordinates, source: 'official' });
       for (const segment of displaySegments) {
         if (segment.coordinates.length < 2) continue;
-        L.polyline(segment.coordinates, { ...routeStyle(segment.source), pane: 'activeRoutePane' }).addTo(routeLayer);
+        const line = L.polyline(segment.coordinates, { ...routeStyle(segment.source), pane: 'activeRoutePane' }).addTo(routeLayer);
+        if (onRouteSegmentClick) {
+          line.bindTooltip('Klik voor verbindingsanalyse', { sticky: true, direction: 'top' });
+          line.on('click', () => onRouteSegmentClick(segment));
+        }
       }
       routePolylineRef.current = routeLayer;
 
@@ -477,7 +483,7 @@ export const MapPlanner: React.FC<MapPlannerProps> = ({
         decoratorsGroup.addLayer(arrowMarker);
       }
     }
-  }, [routeCoordinates, routeLegs, selectedNodes]);
+  }, [routeCoordinates, routeLegs, selectedNodes, onRouteSegmentClick]);
 
   // Fetch real knooppunten from OpenStreetMap via Overpass for current map viewport
   const handleScanBBoxForKnooppunten = useCallback(async () => {

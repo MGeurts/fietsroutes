@@ -1,4 +1,4 @@
-import { KnooppuntNode, RouteGeometrySource, RouteLeg, ElevationPoint, PlannedRoute } from '../types';
+import { KnooppuntNode, RouteConnectionAnalysis, RouteDisplaySegment, RouteGeometrySource, RouteLeg, ElevationPoint, PlannedRoute } from '../types';
 import { ElevationProfileResult } from '../types';
 import { findOfficialNetworkPath, getOfficialEdgeBetween } from './officialNetworkService';
 
@@ -29,6 +29,15 @@ export class UnknownKnooppuntenConnectionError extends Error {
 }
 
 type LiveRouterResult = { coordinates: [number, number][]; distanceKm: number; source: string; geometrySource: RouteGeometrySource };
+
+function relationIdFromSource(source: string): number | undefined {
+  const value = /(?:relation|relatie)\s+(\d+)/i.exec(source)?.[1];
+  return value ? Number(value) : undefined;
+}
+
+function analysisForConnection(fromNode: KnooppuntNode, toNode: KnooppuntNode, source: string): RouteConnectionAnalysis {
+  return { fromNode, toNode, source, relationId: relationIdFromSource(source) };
+}
 
 function asLeafletCoordinates(rawCoordinates: unknown): [number, number][] | null {
   if (!Array.isArray(rawCoordinates)) return null;
@@ -102,7 +111,7 @@ export async function calculateBicycleLeg(
       coordinates: edge.coordinates,
       instructions: `Geverifieerde corridor: ${edge.source}`,
       isVerified: true,
-      displaySegments: [{ coordinates: edge.coordinates, source: 'official' }],
+      displaySegments: [{ coordinates: edge.coordinates, source: 'official', analysis: analysisForConnection(fromNode, toNode, edge.source) }],
     };
     legCache.set(cacheKey, leg);
     return leg;
@@ -112,18 +121,20 @@ export async function calculateBicycleLeg(
   if (path) {
     const viaRefs = path.nodes.slice(1, -1).map((node) => node.ref);
     if (path.requiresLiveGeometry) {
-      const segments: { coordinates: [number, number][]; distanceKm: number; source: RouteGeometrySource }[] = [];
+      const segments: (RouteDisplaySegment & { distanceKm: number })[] = [];
       for (let index = 0; index < path.edges.length; index += 1) {
         const edge = path.edges[index];
+        const segmentFrom = path.nodes[index] || fromNode;
+        const segmentTo = path.nodes[index + 1] || toNode;
         if (edge.coordinates.length >= 2) {
-          segments.push({ coordinates: edge.coordinates, distanceKm: edge.distanceKm, source: 'official' });
+          segments.push({ coordinates: edge.coordinates, distanceKm: edge.distanceKm, source: 'official', analysis: analysisForConnection(segmentFrom, segmentTo, edge.source) });
           continue;
         }
-        const liveRoute = await fetchLiveBicycleRoute(path.nodes[index], path.nodes[index + 1]);
-        if (!liveRoute) throw new UnknownKnooppuntenConnectionError(path.nodes[index].ref, path.nodes[index + 1].ref);
+        const liveRoute = await fetchLiveBicycleRoute(segmentFrom, segmentTo);
+        if (!liveRoute) throw new UnknownKnooppuntenConnectionError(segmentFrom.ref, segmentTo.ref);
         // The OSM Node-to-Node relation establishes this as an official connection.
         // Only its detailed road geometry comes from the live router.
-        segments.push({ coordinates: liveRoute.coordinates, distanceKm: liveRoute.distanceKm, source: 'official-declared' });
+        segments.push({ coordinates: liveRoute.coordinates, distanceKm: liveRoute.distanceKm, source: 'official-declared', analysis: analysisForConnection(segmentFrom, segmentTo, edge.source) });
       }
       const leg: RouteLeg = {
         fromNode, toNode,
@@ -147,7 +158,11 @@ export async function calculateBicycleLeg(
         ? `Geverifieerde knooppuntenroute via ${viaRefs.join(' → ')}.`
         : 'Geverifieerde knooppuntenroute via officiële trajectsegmenten.',
       isVerified: true,
-      displaySegments: path.edges.map((edge) => ({ coordinates: edge.coordinates, source: 'official' })),
+      displaySegments: path.edges.map((edge, index) => ({
+        coordinates: edge.coordinates,
+        source: 'official',
+        analysis: analysisForConnection(path.nodes[index] || fromNode, path.nodes[index + 1] || toNode, edge.source),
+      })),
     };
     legCache.set(cacheKey, leg);
     return leg;
@@ -159,7 +174,7 @@ export async function calculateBicycleLeg(
     fromNode, toNode, distanceKm: liveRoute.distanceKm, coordinates: liveRoute.coordinates,
     instructions: `${liveRoute.source}; knooppuntverbinding niet geverifieerd.`,
     isVerified: false,
-    displaySegments: [{ coordinates: liveRoute.coordinates, source: liveRoute.geometrySource }],
+    displaySegments: [{ coordinates: liveRoute.coordinates, source: liveRoute.geometrySource, analysis: analysisForConnection(fromNode, toNode, liveRoute.source) }],
   };
   legCache.set(cacheKey, leg);
   return leg;

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { KnooppuntNode, RouteLeg, ElevationPoint, BikeType, MapTileProvider, PlannedRoute } from './types';
+import { KnooppuntNode, RouteConnectionAnalysis, RouteLeg, ElevationPoint, BikeType, MapTileProvider, PlannedRoute } from './types';
 import { INITIAL_NODES } from './data/knooppuntenData';
 import { calculateBicycleLeg, estimateElevationProfile, downloadGpxFile, UnknownKnooppuntenConnectionError } from './services/routingService';
 import { getAllCachedNodes, saveNodesToCache } from './services/knooppuntenCacheService';
@@ -66,6 +66,7 @@ export default function App() {
   const [isGpxImportOpen, setIsGpxImportOpen] = useState(false);
   const [isOfflineManagerOpen, setIsOfflineManagerOpen] = useState(false);
   const [isNetworkAnalysisOpen, setIsNetworkAnalysisOpen] = useState(false);
+  const [selectedConnectionAnalysis, setSelectedConnectionAnalysis] = useState<RouteConnectionAnalysis | undefined>();
   const [isOnline, setIsOnline] = useState(navigator.onLine);
 
   useEffect(() => {
@@ -795,7 +796,10 @@ export default function App() {
           </button>
 
           <button
-            onClick={() => setIsNetworkAnalysisOpen(true)}
+            onClick={() => {
+              setSelectedConnectionAnalysis(undefined);
+              setIsNetworkAnalysisOpen(true);
+            }}
             className="flex items-center gap-1.5 px-2.5 sm:px-3 py-2 bg-cyan-950/70 hover:bg-cyan-900/90 text-cyan-200 border border-cyan-800/70 text-xs font-medium rounded-md transition cursor-pointer shadow-xs tablet-touch-friendly-btn"
             title="Analyseer OSM-knooppuntrelaties en datakwaliteit"
           >
@@ -896,6 +900,10 @@ export default function App() {
             isSidebarCollapsed={isSidebarCollapsed}
             onToggleSidebar={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
             onOpenDataModal={() => setIsDataModalOpen(true)}
+            onRouteSegmentClick={(segment) => {
+              setSelectedConnectionAnalysis(segment.analysis);
+              setIsNetworkAnalysisOpen(true);
+            }}
           />
         </div>
       </div>
@@ -977,6 +985,7 @@ export default function App() {
         isOpen={isNetworkAnalysisOpen}
         onClose={() => setIsNetworkAnalysisOpen(false)}
         focusNode={selectedNodes[selectedNodes.length - 1]}
+        connection={selectedConnectionAnalysis}
       />
     </div>
   );
