@@ -352,11 +352,11 @@ export const RoutePanel: React.FC<RoutePanelProps> = ({
             <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-[10px] font-semibold">
               <span className="inline-flex items-center gap-1">
                 <i className="inline-block w-5 border-t-[3px] border-red-600" />
-                Rood vol: geverifieerde officiële wegvorm
+                Rood vol: geverifieerde officiële geometrie
               </span>
               <span className="inline-flex items-center gap-1">
-                <i className="inline-block w-5 border-t-[3px] border-dashed border-orange-700" />
-                Oranje streep: officiële verbinding, wegvorm live berekend
+                <i className="inline-block w-5 border-t-[4px] border-dotted border-orange-500" />
+                Oranje stippen: officiële relatie, wegvorm live berekend
               </span>
             </div>
           </div>

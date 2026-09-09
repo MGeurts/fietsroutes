@@ -1465,11 +1465,11 @@ export const MapPlanner: React.FC<MapPlannerProps> = ({
         <aside className="hidden md:block absolute bottom-6 right-24 z-[1000] pointer-events-none rounded-lg border border-slate-300 bg-white/95 backdrop-blur px-3 py-2 shadow-lg text-[10px] text-slate-700">
           <div className="flex items-center gap-2 font-semibold">
             <i className="inline-block w-7 border-t-[4px] border-red-600" />
-            Officiële geometrie
+            Rood vol: geverifieerde officiële geometrie
           </div>
           <div className="mt-1 flex items-center gap-2 font-semibold">
             <i className="inline-block w-7 border-t-[5px] border-dotted border-orange-500" />
-            Officiële relatie, live wegvorm
+            Oranje stippen: officiële relatie, wegvorm live berekend
           </div>
         </aside>
       )}
