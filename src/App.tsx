@@ -8,14 +8,13 @@ import { MapPlanner } from './components/MapPlanner';
 import { RoutePanel } from './components/RoutePanel';
 import { StrookjePrintModal } from './components/StrookjePrintModal';
 import { RoundTripModal } from './components/RoundTripModal';
-import { DataManagementModal } from './components/DataManagementModal';
 import { LaravelAntagonistModal } from './components/LaravelAntagonistModal';
 import { GpxImportModal } from './components/GpxImportModal';
-import { OfflineDataManagerModal } from './components/OfflineDataManagerModal';
+import { NetworkDataModal } from './components/NetworkDataModal';
 import { NetworkAnalysisModal } from './components/NetworkAnalysisModal';
 import { enrichKnooppuntLocality } from './services/localityService';
 import { loadPrepackagedOfficialNetwork } from './services/networkDataService';
-import { Map, List, Bike, Sparkles, Navigation, Undo2, Redo2, X, Search, MapPin, Database, HardDrive, Wifi, WifiOff, Network } from 'lucide-react';
+import { Map, List, Bike, Sparkles, Navigation, Undo2, Redo2, X, Search, MapPin, Database, Wifi, WifiOff, Network } from 'lucide-react';
 
 export default function App() {
   // Available nodes in current state (preloaded + Overpass queried)
@@ -65,7 +64,6 @@ export default function App() {
   const [isDataModalOpen, setIsDataModalOpen] = useState(false);
   const [isLaravelModalOpen, setIsLaravelModalOpen] = useState(false);
   const [isGpxImportOpen, setIsGpxImportOpen] = useState(false);
-  const [isOfflineManagerOpen, setIsOfflineManagerOpen] = useState(false);
   const [isNetworkAnalysisOpen, setIsNetworkAnalysisOpen] = useState(false);
   const [selectedConnectionAnalysis, setSelectedConnectionAnalysis] = useState<RouteConnectionAnalysis | undefined>();
   const [isOnline, setIsOnline] = useState(navigator.onLine);
@@ -795,21 +793,12 @@ export default function App() {
         {/* Header Right Actions */}
         <div className="flex items-center gap-2 sm:gap-3">
           <button
-            onClick={() => setIsOfflineManagerOpen(true)}
-            className="flex items-center gap-1.5 px-2.5 sm:px-3 py-2 bg-emerald-950/70 hover:bg-emerald-900/90 text-emerald-300 border border-emerald-700/60 text-xs font-semibold rounded-md transition cursor-pointer shadow-xs tablet-touch-friendly-btn"
-            title="Lokale knooppuntcache beheren; geverifieerde verbindingen zijn ingebouwd"
-          >
-            <HardDrive className="w-3.5 h-3.5 text-emerald-400" />
-            <span className="hidden sm:inline">Knooppuntcache</span>
-          </button>
-
-          <button
             onClick={() => setIsDataModalOpen(true)}
             className="flex items-center gap-1.5 px-2.5 sm:px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-medium rounded-md transition cursor-pointer shadow-xs tablet-touch-friendly-btn"
-            title="Knooppunten data, offline opslag & regio download"
+            title="Netwerkgegevens en lokale browsercache"
           >
             <Database className="w-3.5 h-3.5 text-blue-400" />
-            <span className="hidden lg:inline">Data &amp; Regio's</span>
+            <span className="hidden lg:inline">Netwerkdata</span>
           </button>
 
           <button
@@ -892,7 +881,6 @@ export default function App() {
             onOpenRoundTrip={() => setIsRoundTripOpen(true)}
             onOpenGpxImport={() => setIsGpxImportOpen(true)}
             onOpenLaravelModal={() => setIsLaravelModalOpen(true)}
-            onSelectRegion={() => setIsDataModalOpen(true)}
           />
         </div>
 
@@ -988,17 +976,11 @@ export default function App() {
         onImportGpx={handleImportGpx}
       />
 
-      <DataManagementModal
+      <NetworkDataModal
         isOpen={isDataModalOpen}
         onClose={() => setIsDataModalOpen(false)}
         availableNodesCount={availableNodes.length}
-        onImportNodes={handleAddNewNodes}
-      />
-
-      <OfflineDataManagerModal
-        isOpen={isOfflineManagerOpen}
-        onClose={() => setIsOfflineManagerOpen(false)}
-        onDataUpdated={refreshNodesFromCache}
+        onCacheChanged={refreshNodesFromCache}
       />
 
       <NetworkAnalysisModal

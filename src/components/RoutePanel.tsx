@@ -50,7 +50,6 @@ interface RoutePanelProps {
   onOpenRoundTrip: () => void;
   onOpenGpxImport: () => void;
   onOpenLaravelModal: () => void;
-  onSelectRegion: (center: [number, number], zoom: number) => void;
 }
 
 const BIKE_PROFILES: BikeProfile[] = [

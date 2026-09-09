@@ -1111,15 +1111,15 @@ export const MapPlanner: React.FC<MapPlannerProps> = ({
             )}
           </button>
 
-          {/* Local Cache & Data Management */}
+          {/* Network data and local browser-cache status */}
           {onOpenDataModal && (
             <button
               onClick={onOpenDataModal}
               className="flex items-center gap-1.5 px-2.5 py-1.5 bg-white/95 backdrop-blur hover:bg-blue-50 text-slate-700 hover:text-blue-800 text-xs font-semibold rounded-md border border-slate-200 shadow-xs transition active:scale-95 cursor-pointer"
-              title="Knooppunten data, offline opslag & regio download"
+              title="Netwerkgegevens en lokale browsercache"
             >
               <Database className="w-3.5 h-3.5 text-blue-600" />
-              <span className="hidden sm:inline">Data &amp; Regio's</span>
+              <span className="hidden sm:inline">Netwerkdata</span>
               <span className="sm:hidden">Data</span>
             </button>
           )}
