@@ -259,10 +259,18 @@ function getRefTagEndpoints(relation: OplRelation, nodes: Map<number, OplNode>, 
   return from && to && from.id !== to.id ? { from, to } : null;
 }
 
-function resolveEndpoints(relation: OplRelation, coordinates: [number, number][], nodes: Map<number, OplNode>, junctionIndex: Map<string, OplNode[]>): { from: OplNode; to: OplNode; coordinates: [number, number][] } | null {
+function resolveEndpoints(relation: OplRelation, coordinates: [number, number][], nodes: Map<number, OplNode>, junctionIndex: Map<string, OplNode[]>, declaredHint?: { from: OplNode; to: OplNode }): { from: OplNode; to: OplNode; coordinates: [number, number][] } | null {
   const explicit = getExplicitEndpoints(relation, nodes);
   const start = coordinates[0];
   const finish = coordinates[coordinates.length - 1];
+  // `ref=29-567` was already matched to concrete OSM junction objects from the
+  // relation's own way ends. Prefer that evidence over a spatial lookup: local
+  // duplicate markers can otherwise make a perfectly valid endpoint ambiguous.
+  if (declaredHint) {
+    const { from, to } = declaredHint;
+    if (close(start, [from.lat, from.lng], EXPLICIT_ENDPOINT_TOLERANCE_DEGREES) && close(finish, [to.lat, to.lng], EXPLICIT_ENDPOINT_TOLERANCE_DEGREES)) return { from, to, coordinates };
+    if (close(start, [to.lat, to.lng], EXPLICIT_ENDPOINT_TOLERANCE_DEGREES) && close(finish, [from.lat, from.lng], EXPLICIT_ENDPOINT_TOLERANCE_DEGREES)) return { from, to, coordinates: [...coordinates].reverse() };
+  }
   if (explicit) {
     const { from, to } = explicit;
     if (close(start, [from.lat, from.lng], EXPLICIT_ENDPOINT_TOLERANCE_DEGREES) && close(finish, [to.lat, to.lng], EXPLICIT_ENDPOINT_TOLERANCE_DEGREES)) return { from, to, coordinates };
@@ -499,7 +507,7 @@ function consumeVerifiedEdges(relations: OplRelation[], country: string, nodes: 
         : 'De geometrie bevat een onverklaarde onderbreking en er zijn geen veilige knooppunteinden.', declared || undefined);
       continue;
     }
-    const resolved = resolveEndpoints(relation, geometry, nodes, junctionIndex);
+    const resolved = resolveEndpoints(relation, geometry, nodes, junctionIndex, declared || undefined);
     if (!resolved) {
       report(declared ? 'declared-topology' : 'rejected', declared
         ? 'De routegeometrie eindigt niet veilig op de knooppunten; de expliciete knooppuntrelatie blijft behouden.'
