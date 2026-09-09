@@ -19,11 +19,17 @@ async function main() {
   assert.ok(verifiedLeg.coordinates.length > 1, 'a verified corridor must include its real geometry');
   assert.ok(verifiedLeg.instructions?.startsWith('Geverifieerde corridor:'), 'the leg must retain its provenance');
 
-  await assert.rejects(
-    () => calculateBicycleLeg(kp64, kp62),
-    UnknownKnooppuntenConnectionError,
-    'an unverified direct connection must never be routed by a fallback',
-  );
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response('', { status: 503 });
+  try {
+    await assert.rejects(
+      () => calculateBicycleLeg(kp64, kp62),
+      UnknownKnooppuntenConnectionError,
+      'a route must fail clearly when both verified data and live bike routers are unavailable',
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 
   const graph = buildKnooppuntenGraph([kp64, kp251, kp62]);
   assert.equal(graph.adjacency.get(getNodeKey(kp64))?.has(getNodeKey(kp62)), false, 'the graph must not infer proximity edges');
@@ -77,6 +83,22 @@ async function main() {
   assert.equal(topologyLeg.distanceKm, 2, 'official trajectory segments must route between their anchored junctions');
   assert.equal(topologyLeg.coordinates.length, 3, 'official trajectory segments must retain their joined geometry');
   assert.equal(topologyLeg.instructions, 'Geverifieerde knooppuntenroute via officiële trajectsegmenten.');
+
+  const fallbackNodes = [
+    { id: 'fallback-a', ref: '30', lat: 53, lng: 5 },
+    { id: 'fallback-b', ref: '31', lat: 53, lng: 5.01 },
+  ];
+  globalThis.fetch = async () => new Response(JSON.stringify({
+    features: [{ geometry: { coordinates: [[5, 53], [5.005, 53.001], [5.01, 53]] }, properties: { 'track-length': 1234 } }],
+  }), { status: 200, headers: { 'content-type': 'application/json' } });
+  try {
+    const fallbackLeg = await calculateBicycleLeg(fallbackNodes[0], fallbackNodes[1]);
+    assert.equal(fallbackLeg.isVerified, false, 'a router fallback must be visibly marked as unverified');
+    assert.equal(fallbackLeg.distanceKm, 1.23, 'a router fallback must retain the router distance');
+    assert.equal(fallbackLeg.coordinates.length, 3, 'a router fallback must use real router geometry, never a straight-line placeholder');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
   console.log('Official-network regression tests passed.');
 }
 

@@ -339,6 +339,12 @@ export const RoutePanel: React.FC<RoutePanelProps> = ({
           </div>
         )}
 
+        {routeLegs.some((leg) => leg.isVerified === false) && !routeError && (
+          <div className="p-2.5 rounded-md bg-amber-50 border border-amber-200 text-[11px] leading-relaxed text-amber-950">
+            <strong>Controle nodig.</strong> Een of meer delen volgen een echte fietsroute, maar de lokale knooppuntverbinding kon niet worden geverifieerd.
+          </div>
+        )}
+
         {/* Tab 2: Hoogteprofiel view */}
         {activeTab === 'elevation' && totalDistanceKm > 0 && elevationAvailable ? (
           <div className="bg-white p-3 rounded-lg border border-slate-200 shadow-xs space-y-2">

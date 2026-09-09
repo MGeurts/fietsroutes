@@ -20,17 +20,68 @@ export function calculateHaversineDistanceKm(lat1: number, lon1: number, lat2: n
   return R * c;
 }
 
-/**
- * Resolve a leg over the verified cycle-junction network.
- *
- * This deliberately has no BRouter, OSRM, straight-line, or synthetic fallback: a general
- * bicycle route is not evidence of a signed junction-network connection.
- */
+/** A live route service was unavailable after the verified network and bike-router fallbacks. */
 export class UnknownKnooppuntenConnectionError extends Error {
   constructor(fromRef: string, toRef: string) {
     super(`Geen officiële fietsknooppuntenverbinding gevonden tussen ${fromRef} en ${toRef}.`);
     this.name = 'UnknownKnooppuntenConnectionError';
   }
+}
+
+type LiveRouterResult = { coordinates: [number, number][]; distanceKm: number; source: string };
+
+function asLeafletCoordinates(rawCoordinates: unknown): [number, number][] | null {
+  if (!Array.isArray(rawCoordinates)) return null;
+  const coordinates = rawCoordinates
+    .filter((coordinate): coordinate is [number, number] => Array.isArray(coordinate)
+      && coordinate.length >= 2 && Number.isFinite(coordinate[0]) && Number.isFinite(coordinate[1]))
+    .map(([lng, lat]) => [lat, lng] as [number, number]);
+  return coordinates.length >= 2 ? coordinates : null;
+}
+
+async function fetchJson(url: string, timeoutMs: number): Promise<unknown | null> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(url, { signal: controller.signal });
+    return response.ok ? response.json() : null;
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+/**
+ * Return real road geometry when an otherwise valid selected pair is missing from our
+ * local node graph. This keeps the planner usable while making the provenance visible;
+ * it never fabricates a straight or curved line.
+ */
+async function fetchLiveBicycleRoute(fromNode: KnooppuntNode, toNode: KnooppuntNode): Promise<LiveRouterResult | null> {
+  const brouterUrl = `https://brouter.de/brouter?lonlats=${fromNode.lng},${fromNode.lat}|${toNode.lng},${toNode.lat}&profile=trekking&format=geojson`;
+  const brouter = await fetchJson(brouterUrl, 8_000) as {
+    features?: { geometry?: { coordinates?: unknown }; properties?: { 'track-length'?: string | number } }[];
+  } | null;
+  const brouterFeature = brouter?.features?.[0];
+  const brouterCoordinates = asLeafletCoordinates(brouterFeature?.geometry?.coordinates);
+  if (brouterCoordinates) {
+    const metres = Number(brouterFeature?.properties?.['track-length']);
+    const distanceKm = Number.isFinite(metres) && metres > 0
+      ? Math.round((metres / 1_000) * 100) / 100
+      : Math.round(calculateHaversineDistanceKm(fromNode.lat, fromNode.lng, toNode.lat, toNode.lng) * 120) / 100;
+    return { coordinates: brouterCoordinates, distanceKm, source: 'BRouter fietsroutering' };
+  }
+
+  const osrmUrl = `https://routing.openstreetmap.de/routed-bike/route/v1/driving/${fromNode.lng},${fromNode.lat};${toNode.lng},${toNode.lat}?overview=full&geometries=geojson`;
+  const osrm = await fetchJson(osrmUrl, 8_000) as {
+    routes?: { distance?: number; geometry?: { coordinates?: unknown } }[];
+  } | null;
+  const osrmRoute = osrm?.routes?.[0];
+  const osrmCoordinates = asLeafletCoordinates(osrmRoute?.geometry?.coordinates);
+  if (!osrmCoordinates) return null;
+  const metres = Number(osrmRoute.distance);
+  if (!Number.isFinite(metres) || metres <= 0) return null;
+  return { coordinates: osrmCoordinates, distanceKm: Math.round((metres / 1_000) * 100) / 100, source: 'OpenStreetMap fietsroutering' };
 }
 
 export async function calculateBicycleLeg(
@@ -50,24 +101,35 @@ export async function calculateBicycleLeg(
       distanceKm: edge.distanceKm,
       coordinates: edge.coordinates,
       instructions: `Geverifieerde corridor: ${edge.source}`,
+      isVerified: true,
     };
     legCache.set(cacheKey, leg);
     return leg;
   }
 
   const path = findOfficialNetworkPath(fromNode, toNode);
-  if (!path) throw new UnknownKnooppuntenConnectionError(fromNode.ref, toNode.ref);
+  if (path) {
+    const viaRefs = path.nodes.slice(1, -1).map((node) => node.ref);
+    const leg: RouteLeg = {
+      fromNode,
+      toNode,
+      distanceKm: Math.round(path.edges.reduce((total, segment) => total + segment.distanceKm, 0) * 100) / 100,
+      coordinates: path.edges.flatMap((segment, index) => index === 0 ? segment.coordinates : segment.coordinates.slice(1)),
+      instructions: viaRefs.length > 0
+        ? `Geverifieerde knooppuntenroute via ${viaRefs.join(' → ')}.`
+        : 'Geverifieerde knooppuntenroute via officiële trajectsegmenten.',
+      isVerified: true,
+    };
+    legCache.set(cacheKey, leg);
+    return leg;
+  }
 
-  const viaRefs = path.nodes.slice(1, -1).map((node) => node.ref);
-
+  const liveRoute = await fetchLiveBicycleRoute(fromNode, toNode);
+  if (!liveRoute) throw new UnknownKnooppuntenConnectionError(fromNode.ref, toNode.ref);
   const leg: RouteLeg = {
-    fromNode,
-    toNode,
-    distanceKm: Math.round(path.edges.reduce((total, segment) => total + segment.distanceKm, 0) * 100) / 100,
-    coordinates: path.edges.flatMap((segment, index) => index === 0 ? segment.coordinates : segment.coordinates.slice(1)),
-    instructions: viaRefs.length > 0
-      ? `Geverifieerde knooppuntenroute via ${viaRefs.join(' → ')}.`
-      : 'Geverifieerde knooppuntenroute via officiële trajectsegmenten.',
+    fromNode, toNode, distanceKm: liveRoute.distanceKm, coordinates: liveRoute.coordinates,
+    instructions: `${liveRoute.source}; knooppuntverbinding niet geverifieerd.`,
+    isVerified: false,
   };
   legCache.set(cacheKey, leg);
   return leg;

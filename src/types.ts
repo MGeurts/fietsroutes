@@ -17,6 +17,8 @@ export interface RouteLeg {
   distanceKm: number;
   coordinates: [number, number][]; // [lat, lng] path
   instructions?: string;
+  /** False when a live bicycle router supplied road geometry because the static node graph has a gap. */
+  isVerified?: boolean;
 }
 
 export interface ElevationPoint {
