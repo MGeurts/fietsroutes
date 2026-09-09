@@ -1,8 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { KnooppuntNode, RouteConnectionAnalysis, RouteLeg, ElevationPoint, BikeType, MapTileProvider, PlannedRoute } from './types';
-import { INITIAL_NODES } from './data/knooppuntenData';
 import { calculateBicycleLeg, fetchElevationProfile, downloadGpxFile, UnknownKnooppuntenConnectionError } from './services/routingService';
-import { getAllCachedNodes, saveNodesToCache } from './services/knooppuntenCacheService';
+import { getAllCachedNodes, replaceCachedNodes, saveNodesToCache } from './services/knooppuntenCacheService';
 import { searchPlacesAndAddresses, isKnooppuntQuery, PlaceSearchResult, PRELOADED_MAJOR_PLACES } from './services/geocodingService';
 import { MapPlanner } from './components/MapPlanner';
 import { RoutePanel } from './components/RoutePanel';
@@ -18,7 +17,7 @@ import { Map, List, Bike, Sparkles, Navigation, Undo2, Redo2, X, Search, MapPin,
 
 export default function App() {
   // Available nodes in current state (preloaded + Overpass queried)
-  const [availableNodes, setAvailableNodes] = useState<KnooppuntNode[]>(INITIAL_NODES);
+  const [availableNodes, setAvailableNodes] = useState<KnooppuntNode[]>([]);
 
   // Clean initial state without default route (starts fresh on current location)
   const [selectedNodes, setSelectedNodes] = useState<KnooppuntNode[]>([]);
@@ -336,44 +335,22 @@ export default function App() {
     }
   }, [handleAddNewNodes]);
 
-  // Load persisted knooppunten from local IndexedDB cache on startup
+  // The packaged network is the sole source for routeable nodes. Replacing the
+  // cache also removes legacy hardcoded entries stored by older application versions.
   useEffect(() => {
-    getAllCachedNodes()
-      .then(async (cached) => {
-        // Register verified edges even when nodes were already cached during an earlier session.
-        const network = await loadPrepackagedOfficialNetwork();
-        if (network?.nodes.length) {
-          handleAddNewNodes(network.nodes);
-        }
-        if (cached && cached.length > 50) {
-          handleAddNewNodes(cached, true);
-        } else {
-          // Live/browser Overpass discovery only adds markers; it can never turn a
-          // discovered proximity into a route edge.
-          try {
-            if (network && network.nodes.length > 0) {
-              await saveNodesToCache(network.nodes);
-              return;
-            }
-            const res = await fetch('/data/benelux_knooppunten.json');
-            if (res.ok) {
-              const nodes: KnooppuntNode[] = await res.json();
-              if (Array.isArray(nodes) && nodes.length > 0) {
-                await saveNodesToCache(nodes);
-                handleAddNewNodes(nodes);
-                return;
-              }
-            }
-          } catch {
-            // fallback
-          }
-          saveNodesToCache(INITIAL_NODES).catch(() => {});
-        }
+    let cancelled = false;
+    loadPrepackagedOfficialNetwork()
+      .then(async (network) => {
+        if (!network?.nodes.length) throw new Error('Ingebouwde netwerkdataset ontbreekt of is ongeldig.');
+        await replaceCachedNodes(network.nodes);
+        if (!cancelled) setAvailableNodes(network.nodes);
       })
       .catch((err) => {
-        console.warn('Kon lokale knooppunten-cache niet laden:', err);
+        console.warn('Kon ingebouwde netwerkdataset niet laden:', err);
+        if (!cancelled) setAvailableNodes([]);
       });
-  }, [handleAddNewNodes]);
+    return () => { cancelled = true; };
+  }, []);
 
   // Reordering and removing nodes with history tracking
   const handleRemoveNode = (index: number) => {

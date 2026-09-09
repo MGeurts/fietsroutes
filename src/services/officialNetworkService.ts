@@ -1,9 +1,4 @@
 import { KnooppuntNode, OfficialNetworkDataset, OfficialNetworkDatasetEdge } from '../types';
-import { getOfficialGisCorridor, OFFICIAL_GIS_CORRIDORS } from '../data/officialGisCorridors';
-import { INITIAL_NODES } from '../data/knooppuntenData';
-
-/** A conservative endpoint tolerance prevents a duplicate ref in another region being matched. */
-const ENDPOINT_TOLERANCE_KM = 0.35;
 
 function distanceKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
   const dLat = ((lat2 - lat1) * Math.PI) / 180;
@@ -33,9 +28,6 @@ let declaredNetworkAdjacency = new Map<string, Map<string, OfficialNetworkEdge>>
 let officialTopologyAdjacency = new Map<string, Map<string, OfficialNetworkEdge>>();
 let officialTopologyAnchors = new Map<string, string>();
 
-/** The curated starter map covers a few local connections missing from current OSM tags. */
-const CURATED_CONNECTION_TOLERANCE_KM = 0.35;
-
 function edgeKey(from: string, to: string): string {
   return `${from}\u0000${to}`;
 }
@@ -46,23 +38,6 @@ export function registerOfficialNetworkDataset(dataset: OfficialNetworkDataset):
   const allowedNodeIds = new Set(dataset.nodes.map((node) => String(node.id)));
   const next = new Map<string, OfficialNetworkDatasetEdge>();
   const nextNodes = new Map(dataset.nodes.map((node) => [String(node.id), node]));
-  const resolveCuratedNodeKey = (curated: KnooppuntNode): string => {
-    let closest: KnooppuntNode | undefined;
-    let closestDistance = CURATED_CONNECTION_TOLERANCE_KM;
-    for (const candidate of nextNodes.values()) {
-      if (candidate.ref !== curated.ref) continue;
-      const candidateDistance = distanceKm(curated.lat, curated.lng, candidate.lat, candidate.lng);
-      if (candidateDistance <= closestDistance) {
-        closest = candidate;
-        closestDistance = candidateDistance;
-      }
-    }
-    if (closest) return getNodeKey(closest);
-    const key = getNodeKey(curated);
-    nextNodes.set(key, curated);
-    return key;
-  };
-  const curatedNodeKeys = new Map(INITIAL_NODES.map((node) => [node, resolveCuratedNodeKey(node)]));
   const nextAdjacency = new Map<string, Map<string, OfficialNetworkEdge>>();
   for (const edge of dataset.edges) {
     if (!allowedNodeIds.has(edge.from) || !allowedNodeIds.has(edge.to) || edge.coordinates.length < 2 || edge.distanceKm <= 0) continue;
@@ -116,63 +91,6 @@ export function registerOfficialNetworkDataset(dataset: OfficialNetworkDataset):
   for (const connection of dataset.declaredConnections || []) {
     addDeclaredConnection(connection.from, connection.to, connection.source);
   }
-  for (const curated of INITIAL_NODES) {
-    const fromKey = curatedNodeKeys.get(curated);
-    if (!fromKey) continue;
-    for (const targetRef of curated.connections || []) {
-      const target = INITIAL_NODES.find((node) => node.ref === targetRef);
-      const targetKey = target && curatedNodeKeys.get(target);
-      if (targetKey) addDeclaredConnection(fromKey, targetKey, 'Samengestelde lokale knooppuntverbinding');
-    }
-  }
-
-  // The compact local corridor collection is verified geometry, not merely a
-  // shortcut for a directly selected pair. Register it in the same graph used
-  // for intermediate-node routing as well. Without this, 535 -> 534 could be
-  // rendered as a live-router segment inside a longer route, yet as verified
-  // geometry when the exact same two nodes were selected directly.
-  const closestCorridorEndpoint = (ref: string, coordinate: [number, number]): KnooppuntNode | undefined => {
-    let closest: KnooppuntNode | undefined;
-    let closestDistance = ENDPOINT_TOLERANCE_KM;
-    for (const candidate of nextNodes.values()) {
-      if (candidate.ref !== ref) continue;
-      const candidateDistance = distanceKm(candidate.lat, candidate.lng, coordinate[0], coordinate[1]);
-      if (candidateDistance <= closestDistance) {
-        closest = candidate;
-        closestDistance = candidateDistance;
-      }
-    }
-    return closest;
-  };
-  const addCuratedCorridor = (corridor: (typeof OFFICIAL_GIS_CORRIDORS)[string]) => {
-    if (!corridor.verified || corridor.coordinates.length < 2) return;
-    const from = closestCorridorEndpoint(corridor.from, corridor.coordinates[0]);
-    const to = closestCorridorEndpoint(corridor.to, corridor.coordinates[corridor.coordinates.length - 1]);
-    if (!from || !to) return;
-
-    const fromKey = getNodeKey(from);
-    const toKey = getNodeKey(to);
-    if (fromKey === toKey) return;
-    const add = (startKey: string, endKey: string, coordinates: [number, number][]) => {
-      const neighbours = nextDeclaredAdjacency.get(startKey) || new Map<string, OfficialNetworkEdge>();
-      const existing = neighbours.get(endKey);
-      // Never replace a current validated import, but upgrade a relation which
-      // has topology only and would otherwise need the live router.
-      if (!existing || existing.coordinates.length < 2) {
-        neighbours.set(endKey, {
-          fromKey: startKey,
-          toKey: endKey,
-          distanceKm: corridor.distanceKm,
-          coordinates,
-          source: corridor.source,
-        });
-      }
-      nextDeclaredAdjacency.set(startKey, neighbours);
-    };
-    add(fromKey, toKey, corridor.coordinates);
-    add(toKey, fromKey, [...corridor.coordinates].reverse());
-  };
-  for (const corridor of Object.values(OFFICIAL_GIS_CORRIDORS)) addCuratedCorridor(corridor);
 
   declaredNetworkAdjacency = nextDeclaredAdjacency;
   const topologyAdjacency = new Map<string, Map<string, OfficialNetworkEdge>>();
@@ -190,10 +108,7 @@ export function registerOfficialNetworkDataset(dataset: OfficialNetworkDataset):
   officialTopologyAnchors = new Map(Object.entries(dataset.topology?.anchors || {}));
 }
 
-/**
- * OSM ids are stable and refs are not globally unique.  Imported legacy data without an
- * id keeps a location-qualified key, so it can never silently collide with another `251`.
- */
+/** OSM ids are stable and refs are not globally unique. */
 export function getNodeKey(node: KnooppuntNode): string {
   if (node.id !== undefined && node.id !== null && String(node.id).trim()) {
     return String(node.id);
@@ -201,13 +116,9 @@ export function getNodeKey(node: KnooppuntNode): string {
   return `legacy:${node.ref}:${node.lat.toFixed(5)}:${node.lng.toFixed(5)}`;
 }
 
-function isAtCoordinate(node: KnooppuntNode, coordinate: [number, number]): boolean {
-  return distanceKm(node.lat, node.lng, coordinate[0], coordinate[1]) <= ENDPOINT_TOLERANCE_KM;
-}
-
 /**
- * Resolve a leg only when a verified corridor has the requested refs *and* physically
- * terminates at the selected two nodes. No geometric, router, or nearest-node fallback is allowed.
+ * Resolve a leg only when an imported dataset edge has the exact selected endpoints.
+ * No hardcoded corridor, proximity, or ref-only fallback is allowed.
  */
 export function getOfficialEdgeBetween(from: KnooppuntNode, to: KnooppuntNode): OfficialNetworkEdge | null {
   if (getNodeKey(from) === getNodeKey(to)) return null;
@@ -220,20 +131,7 @@ export function getOfficialEdgeBetween(from: KnooppuntNode, to: KnooppuntNode): 
     };
   }
 
-  const corridor = getOfficialGisCorridor(from.ref, to.ref);
-  if (!corridor || corridor.coordinates.length < 2) return null;
-
-  const start = corridor.coordinates[0];
-  const end = corridor.coordinates[corridor.coordinates.length - 1];
-  if (!isAtCoordinate(from, start) || !isAtCoordinate(to, end)) return null;
-
-  return {
-    fromKey: getNodeKey(from),
-    toKey: getNodeKey(to),
-    distanceKm: corridor.distanceKm,
-    coordinates: corridor.coordinates,
-    source: corridor.source,
-  };
+  return null;
 }
 
 export interface OfficialNetworkPath {
@@ -332,7 +230,6 @@ export function findOfficialNetworkPath(from: KnooppuntNode, to: KnooppuntNode):
 /** Build an adjacency graph exclusively from verified, endpoint-matched corridors. */
 export function buildOfficialNetworkGraph(nodes: KnooppuntNode[]): OfficialNetworkGraph {
   const nodeMap = new Map<string, KnooppuntNode>();
-  const byRef = new Map<string, KnooppuntNode[]>();
   const adjacency = new Map<string, Map<string, OfficialNetworkEdge>>();
 
   for (const node of nodes) {
@@ -340,24 +237,6 @@ export function buildOfficialNetworkGraph(nodes: KnooppuntNode[]): OfficialNetwo
     if (nodeMap.has(key)) continue;
     nodeMap.set(key, node);
     adjacency.set(key, new Map());
-    const matching = byRef.get(node.ref) || [];
-    matching.push(node);
-    byRef.set(node.ref, matching);
-  }
-
-  for (const corridor of Object.values(OFFICIAL_GIS_CORRIDORS)) {
-    if (!corridor.verified || corridor.coordinates.length < 2) continue;
-    const start = corridor.coordinates[0];
-    const end = corridor.coordinates[corridor.coordinates.length - 1];
-    const from = (byRef.get(corridor.from) || []).find((node) => isAtCoordinate(node, start));
-    const to = (byRef.get(corridor.to) || []).find((node) => isAtCoordinate(node, end));
-    if (!from || !to || getNodeKey(from) === getNodeKey(to)) continue;
-
-    const forward = getOfficialEdgeBetween(from, to);
-    const reverse = getOfficialEdgeBetween(to, from);
-    if (!forward || !reverse) continue;
-    adjacency.get(forward.fromKey)?.set(forward.toKey, forward);
-    adjacency.get(reverse.fromKey)?.set(reverse.toKey, reverse);
   }
 
   for (const edge of importedEdges.values()) {

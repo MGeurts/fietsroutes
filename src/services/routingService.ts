@@ -114,7 +114,7 @@ export async function calculateBicycleLeg(
       toNode,
       distanceKm: edge.distanceKm,
       coordinates: edge.coordinates,
-      instructions: `Geverifieerde corridor: ${edge.source}`,
+      instructions: `Geverifieerde netwerkverbinding: ${edge.source}`,
       isVerified: true,
       displaySegments: [{ coordinates: edge.coordinates, source: 'official', analysis: analysisForConnection(fromNode, toNode, edge.source, 'official') }],
     };

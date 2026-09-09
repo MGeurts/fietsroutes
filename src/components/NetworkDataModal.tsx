@@ -49,13 +49,13 @@ export const NetworkDataModal: React.FC<NetworkDataModalProps> = ({
   if (!isOpen) return null;
 
   const resetCache = async () => {
-    if (!window.confirm('Lokale knooppunten-cache terugzetten naar de basisset? Je huidige route blijft zichtbaar, maar extra opgeslagen knooppunten verdwijnen na een herlaadbeurt.')) return;
+    if (!window.confirm('Lokale knooppunten-cache wissen? De ingebouwde netwerkdataset wordt bij een herlaadbeurt opnieuw geladen. Je huidige route blijft zichtbaar.')) return;
     setIsResetting(true);
     try {
       await clearCache();
       await refresh();
       onCacheChanged?.();
-      setMessage('De lokale browsercache is teruggezet naar de basisset.');
+      setMessage('De lokale browsercache is gewist.');
     } catch {
       setMessage('De lokale browsercache kon niet worden teruggezet.');
     } finally {
@@ -109,7 +109,7 @@ export const NetworkDataModal: React.FC<NetworkDataModalProps> = ({
 
           <div className="flex flex-col-reverse sm:flex-row sm:justify-between gap-2 pt-1">
             <button onClick={resetCache} disabled={isResetting} className="inline-flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-semibold text-rose-200 hover:text-white border border-rose-900/80 hover:bg-rose-950/50 rounded-lg disabled:opacity-50">
-              <Trash2 className="w-3.5 h-3.5" /> {isResetting ? 'Cache wissen…' : 'Lokale cache terugzetten'}
+              <Trash2 className="w-3.5 h-3.5" /> {isResetting ? 'Cache wissen…' : 'Lokale cache wissen'}
             </button>
             <button onClick={onClose} className="px-4 py-2 text-xs font-semibold bg-cyan-600 hover:bg-cyan-500 rounded-lg">Sluiten</button>
           </div>

@@ -1,23 +1,29 @@
 import assert from 'node:assert/strict';
-import { INITIAL_NODES } from '../src/data/knooppuntenData';
 import { buildKnooppuntenGraph } from '../src/services/roundTripService';
 import { calculateBicycleLeg, fetchElevationProfile, UnknownKnooppuntenConnectionError } from '../src/services/routingService';
 import { getNodeKey, registerOfficialNetworkDataset } from '../src/services/officialNetworkService';
 
-const node = (ref: string) => {
-  const result = INITIAL_NODES.find((candidate) => candidate.ref === ref);
-  assert.ok(result, `seed node ${ref} is required for this regression test`);
-  return result;
-};
-
 async function main() {
-  const kp64 = node('64');
-  const kp251 = node('251');
-  const kp62 = node('62');
+  const kp64 = { id: 'fixture-64', ref: '64', lat: 50.91965, lng: 5.56714 };
+  const kp251 = { id: 'fixture-251', ref: '251', lat: 50.93368, lng: 5.5757 };
+  const kp62 = { id: 'fixture-62', ref: '62', lat: 50.94116, lng: 5.59278 };
+  registerOfficialNetworkDataset({
+    version: 1,
+    generatedAt: new Date().toISOString(),
+    nodes: [kp64, kp251, kp62],
+    edges: [{
+      from: kp64.id,
+      to: kp251.id,
+      distanceKm: 1.8,
+      coordinates: [[kp64.lat, kp64.lng], [kp251.lat, kp251.lng]],
+      source: 'fixture dataset edge',
+      verifiedAt: 'test',
+    }],
+  });
 
   const verifiedLeg = await calculateBicycleLeg(kp64, kp251);
-  assert.ok(verifiedLeg.coordinates.length > 1, 'a verified corridor must include its real geometry');
-  assert.ok(verifiedLeg.instructions?.startsWith('Geverifieerde corridor:'), 'the leg must retain its provenance');
+  assert.ok(verifiedLeg.coordinates.length > 1, 'a verified dataset edge must include its real geometry');
+  assert.ok(verifiedLeg.instructions?.startsWith('Geverifieerde netwerkverbinding:'), 'the leg must retain its provenance');
 
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async () => new Response('', { status: 503 });
@@ -27,46 +33,18 @@ async function main() {
       UnknownKnooppuntenConnectionError,
       'a route must fail clearly when both verified data and live bike routers are unavailable',
     );
+    await assert.rejects(
+      () => calculateBicycleLeg(kp64, { id: 'kp-503', ref: '503', lat: 50.892, lng: 5.662 }),
+      UnknownKnooppuntenConnectionError,
+      'a historic hardcoded node must never be injected into the imported network graph',
+    );
   } finally {
     globalThis.fetch = originalFetch;
   }
 
-  // A curated verified corridor must retain its geometry when it is an
-  // intermediate hop, not only when its two endpoints are selected directly.
-  const curatedPathNodes = [
-    { id: 'osm-329559551', ref: '535', lat: 50.9662915, lng: 5.5653107 },
-    { id: 'osm-416071790', ref: '534', lat: 50.9420401, lng: 5.5680431 },
-    { id: 'osm-329313103', ref: '251', lat: 50.9336772, lng: 5.5757049 },
-  ];
-  registerOfficialNetworkDataset({
-    version: 1,
-    generatedAt: new Date().toISOString(),
-    nodes: curatedPathNodes,
-    edges: [],
-    declaredConnections: [
-      { from: 'osm-329559551', to: 'osm-416071790', source: 'topology-only relation' },
-      { from: 'osm-416071790', to: 'osm-329313103', source: 'topology-only relation' },
-    ],
-  });
-  const curatedPathLeg = await calculateBicycleLeg(curatedPathNodes[0], curatedPathNodes[2]);
-  assert.match(curatedPathLeg.instructions || '', /534/, 'the curated intermediate node must be retained');
-  assert.ok(
-    curatedPathLeg.displaySegments?.every((segment) => segment.source === 'official'),
-    'verified curated geometry must prevent a live-router fallback inside a longer route',
-  );
-
-  const relationSourceNodes = [
-    { id: 'osm-122170632', ref: '29', lat: 50.9455188, lng: 5.5460142 },
-    { id: 'osm-122159217', ref: '30', lat: 50.9566814, lng: 5.5336876 },
-  ];
-  registerOfficialNetworkDataset({ version: 1, generatedAt: new Date().toISOString(), nodes: relationSourceNodes, edges: [] });
-  const relationSourceLeg = await calculateBicycleLeg(relationSourceNodes[0], relationSourceNodes[1]);
-  assert.equal(relationSourceLeg.displaySegments?.[0]?.source, 'official', 'the 29-30 verified corridor must render as a solid official line');
-  assert.equal(relationSourceLeg.displaySegments?.[0]?.analysis?.relationId, 108542, 'the analysis must recognise an OSM RCN Rel source');
-
   const graph = buildKnooppuntenGraph([kp64, kp251, kp62]);
   assert.equal(graph.adjacency.get(getNodeKey(kp64))?.has(getNodeKey(kp62)), false, 'the graph must not infer proximity edges');
-  assert.equal(graph.adjacency.get(getNodeKey(kp64))?.has(getNodeKey(kp251)), true, 'the graph must retain verified corridors');
+  assert.equal(graph.adjacency.get(getNodeKey(kp64))?.has(getNodeKey(kp251)), true, 'the graph must retain imported verified edges');
 
   globalThis.fetch = async (input) => {
     const requestUrl = new URL(String(input));
@@ -143,17 +121,17 @@ async function main() {
     edges: [{ from: 'genk-30', to: 'genk-250', distanceKm: 2, coordinates: [[50.9566814, 5.5336876], [50.9652694, 5.5186055]], source: 'test', verifiedAt: 'test' }],
     declaredConnections: [{ from: 'genk-29', to: 'genk-30', source: 'test topology' }],
   });
-  let curatedRouterCalls = 0;
+  let intermediateRouterCalls = 0;
   globalThis.fetch = async () => {
-    curatedRouterCalls += 1;
+    intermediateRouterCalls += 1;
     return new Response(JSON.stringify({
       features: [{ geometry: { coordinates: [[5.5460142, 50.9455188], [5.5336876, 50.9566814]] }, properties: { 'track-length': 2000 } }],
     }), { status: 200, headers: { 'content-type': 'application/json' } });
   };
   try {
-    const curatedLeg = await calculateBicycleLeg(genkLikeNodes[0], genkLikeNodes[2]);
-    assert.equal(curatedRouterCalls, 1, 'a curated intermediate node must prevent one direct live route over the whole leg');
-    assert.match(curatedLeg.instructions || '', /test-30/, 'the known local intermediate knooppunt must be retained before a direct fallback');
+    const intermediateLeg = await calculateBicycleLeg(genkLikeNodes[0], genkLikeNodes[2]);
+    assert.equal(intermediateRouterCalls, 1, 'an imported intermediate node must prevent one direct live route over the whole leg');
+    assert.match(intermediateLeg.instructions || '', /test-30/, 'the imported intermediate knooppunt must be retained before a direct fallback');
   } finally {
     globalThis.fetch = originalFetch;
   }

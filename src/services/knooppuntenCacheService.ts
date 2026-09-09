@@ -1,5 +1,4 @@
 import { KnooppuntNode } from '../types';
-import { INITIAL_NODES } from '../data/knooppuntenData';
 import { enrichKnooppuntLocality } from './localityService';
 
 const DB_NAME = 'FietsknooppuntenDB';
@@ -51,7 +50,7 @@ export interface CacheMetadata {
 }
 
 /**
- * Initialize cache with seed INITIAL_NODES if database is empty
+ * Initialize an empty cache. Network data is always supplied by the packaged dataset.
  */
 export async function initializeCache(): Promise<KnooppuntNode[]> {
   try {
@@ -59,17 +58,13 @@ export async function initializeCache(): Promise<KnooppuntNode[]> {
     const existing = await getAllNodesFromCache();
 
     if (existing.length === 0) {
-      // Seed with initial nodes
-      await saveNodesToCache(INITIAL_NODES);
-      await saveMetadata('lastSyncTimestamp', Date.now());
-      await saveMetadata('cachedRegions', ['Belgisch Limburg (Zutendaal & Kempen)']);
-      return INITIAL_NODES;
+      return [];
     }
 
     return existing;
   } catch (err) {
-    console.warn('IndexedDB initialisatiefout, fallback naar geheugen:', err);
-    return INITIAL_NODES;
+    console.warn('IndexedDB initialisatiefout:', err);
+    return [];
   }
 }
 
@@ -133,6 +128,28 @@ export async function saveNodesToCache(nodes: KnooppuntNode[]): Promise<number> 
   }
 }
 
+/** Replace the cache with the packaged dataset, removing stale discovery and legacy records. */
+export async function replaceCachedNodes(nodes: KnooppuntNode[]): Promise<number> {
+  try {
+    const db = await openDB();
+    return new Promise((resolve) => {
+      const tx = db.transaction([STORE_NODES, STORE_META], 'readwrite');
+      const store = tx.objectStore(STORE_NODES);
+      store.clear();
+      for (const node of nodes) {
+        store.put({ ...node, id: node.id, updatedAt: Date.now() });
+      }
+      const meta = tx.objectStore(STORE_META);
+      meta.put({ key: 'lastSyncTimestamp', value: Date.now(), updatedAt: Date.now() });
+      meta.put({ key: 'cachedRegions', value: ['Ingebouwde netwerkdataset'], updatedAt: Date.now() });
+      tx.oncomplete = () => resolve(nodes.length);
+      tx.onerror = () => resolve(0);
+    });
+  } catch {
+    return 0;
+  }
+}
+
 /**
  * Save key-value metadata
  */
@@ -187,7 +204,7 @@ export async function getCacheStatus(): Promise<CacheMetadata> {
     };
   } catch {
     return {
-      totalNodes: INITIAL_NODES.length,
+      totalNodes: 0,
       lastSyncTimestamp: null,
       cachedRegions: [],
     };
@@ -195,7 +212,7 @@ export async function getCacheStatus(): Promise<CacheMetadata> {
 }
 
 /**
- * Clear the entire node cache (reset to initial state)
+ * Clear the entire node cache.
  */
 export async function clearCache(): Promise<void> {
   try {
@@ -205,9 +222,6 @@ export async function clearCache(): Promise<void> {
       tx.objectStore(STORE_NODES).clear();
       tx.objectStore(STORE_META).clear();
       tx.oncomplete = async () => {
-        // Re-seed with initial nodes
-        await saveNodesToCache(INITIAL_NODES);
-        await saveMetadata('lastSyncTimestamp', Date.now());
         resolve();
       };
       tx.onerror = () => resolve();

@@ -1,6 +1,5 @@
 import { KnooppuntNode } from '../types';
 import { buildOfficialNetworkGraph, getNodeKey, OfficialNetworkGraph } from './officialNetworkService';
-import { INITIAL_NODES } from '../data/knooppuntenData';
 
 export interface GeneratedLoop {
   nodes: KnooppuntNode[];
@@ -43,8 +42,7 @@ function hasSelfIntersection(nodes: KnooppuntNode[]): boolean {
 
 /** Builds a graph solely from verified corridors; historic connections and proximity are ignored. */
 export function buildKnooppuntenGraph(allAvailableNodes: KnooppuntNode[]): OfficialNetworkGraph {
-  // Prefer cached/imported OSM ids over seed ids for the same physical junction.
-  return buildOfficialNetworkGraph([...allAvailableNodes, ...INITIAL_NODES]);
+  return buildOfficialNetworkGraph(allAvailableNodes);
 }
 
 /** Find closed loops over verified graph edges only. */

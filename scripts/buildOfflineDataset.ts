@@ -1,7 +1,6 @@
 import fs from 'fs';
 import path from 'path';
 import { enrichKnooppuntLocality } from '../src/services/localityService';
-import { INITIAL_NODES } from '../src/data/knooppuntenData';
 import { KnooppuntNode } from '../src/types';
 
 interface SectorDef {
@@ -131,13 +130,7 @@ async function main() {
     } catch {}
   }
 
-  // 1. Add all initial curated nodes
-  for (const node of INITIAL_NODES) {
-    const enriched = enrichKnooppuntLocality(node);
-    allNodesMap.set(`${enriched.ref}-${enriched.lat.toFixed(3)}-${enriched.lng.toFixed(3)}`, enriched);
-  }
-
-  // 2. Fetch each sector and incrementally save
+  // Fetch each sector and incrementally save. No hand-maintained seed nodes are included.
   for (const sector of SECTORS) {
     const nodes = await fetchSectorNodes(sector);
     for (const n of nodes) {
