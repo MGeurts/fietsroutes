@@ -56,15 +56,17 @@ function calculateBearing(p1: [number, number], p2: [number, number]): number {
 }
 
 function routeStyle(source: RouteGeometrySource): L.PolylineOptions {
-  // The node-to-node connection itself is official; only its road shape was fetched live.
+  // A red solid line is geometry that was verified in the local official dataset.
+  // An orange dash remains an official node-to-node relation, but its road shape
+  // had to be fetched live and must never look equivalent to verified geometry.
   if (source === 'official-declared') {
-    return { color: '#ea580c', weight: 5.5, opacity: 0.95, lineCap: 'round', lineJoin: 'round' };
+    return { color: '#c2410c', dashArray: '14 8', weight: 5.5, opacity: 0.98, lineCap: 'round', lineJoin: 'round' };
   }
   if (source === 'brouter') {
-    return { color: '#d97706', dashArray: '12 8', weight: 5.5, opacity: 0.95, lineCap: 'round', lineJoin: 'round' };
+    return { color: '#a16207', dashArray: '3 9', weight: 5.5, opacity: 0.98, lineCap: 'round', lineJoin: 'round' };
   }
   if (source === 'osm-router') {
-    return { color: '#7c3aed', dashArray: '3 8', weight: 5.5, opacity: 0.95, lineCap: 'round', lineJoin: 'round' };
+    return { color: '#7c3aed', dashArray: '10 5 2 5', weight: 5.5, opacity: 0.98, lineCap: 'round', lineJoin: 'round' };
   }
   return { color: '#dc2626', weight: 5.5, opacity: 0.95, lineCap: 'round', lineJoin: 'round' };
 }

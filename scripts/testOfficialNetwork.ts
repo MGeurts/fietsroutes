@@ -55,6 +55,15 @@ async function main() {
     'verified curated geometry must prevent a live-router fallback inside a longer route',
   );
 
+  const relationSourceNodes = [
+    { id: 'osm-122170632', ref: '29', lat: 50.9455188, lng: 5.5460142 },
+    { id: 'osm-122159217', ref: '30', lat: 50.9566814, lng: 5.5336876 },
+  ];
+  registerOfficialNetworkDataset({ version: 1, generatedAt: new Date().toISOString(), nodes: relationSourceNodes, edges: [] });
+  const relationSourceLeg = await calculateBicycleLeg(relationSourceNodes[0], relationSourceNodes[1]);
+  assert.equal(relationSourceLeg.displaySegments?.[0]?.source, 'official', 'the 29-30 verified corridor must render as a solid official line');
+  assert.equal(relationSourceLeg.displaySegments?.[0]?.analysis?.relationId, 108542, 'the analysis must recognise an OSM RCN Rel source');
+
   const graph = buildKnooppuntenGraph([kp64, kp251, kp62]);
   assert.equal(graph.adjacency.get(getNodeKey(kp64))?.has(getNodeKey(kp62)), false, 'the graph must not infer proximity edges');
   assert.equal(graph.adjacency.get(getNodeKey(kp64))?.has(getNodeKey(kp251)), true, 'the graph must retain verified corridors');

@@ -350,6 +350,16 @@ export const RoutePanel: React.FC<RoutePanelProps> = ({
         {routeLegs.some((leg) => leg.isVerified === false) && !routeError && (
           <div className="p-2.5 rounded-md bg-amber-50 border border-amber-200 text-[11px] leading-relaxed text-amber-950">
             <strong>Controle nodig.</strong> Een of meer delen zijn met live fietsroutering berekend omdat de exacte officiële weggeometrie ontbreekt.
+            <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-[10px] font-semibold">
+              <span className="inline-flex items-center gap-1">
+                <i className="inline-block w-5 border-t-[3px] border-red-600" />
+                Rood vol: geverifieerde officiële wegvorm
+              </span>
+              <span className="inline-flex items-center gap-1">
+                <i className="inline-block w-5 border-t-[3px] border-dashed border-orange-700" />
+                Oranje streep: officiële verbinding, wegvorm live berekend
+              </span>
+            </div>
           </div>
         )}
 

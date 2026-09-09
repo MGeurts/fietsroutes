@@ -31,7 +31,7 @@ export class UnknownKnooppuntenConnectionError extends Error {
 type LiveRouterResult = { coordinates: [number, number][]; distanceKm: number; source: string; geometrySource: RouteGeometrySource };
 
 function relationIdFromSource(source: string): number | undefined {
-  const value = /(?:relation|relatie)\s+(\d+)/i.exec(source)?.[1];
+  const value = /(?:relation|relatie|rel)\s+(\d+)/i.exec(source)?.[1];
   return value ? Number(value) : undefined;
 }
 
