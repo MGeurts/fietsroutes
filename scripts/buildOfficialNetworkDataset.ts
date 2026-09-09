@@ -38,8 +38,11 @@ const PBF_SOURCES: PbfSource[] = [
 const EXPLICIT_ENDPOINT_TOLERANCE_DEGREES = 0.0045; // Tag-defined endpoints only (~500 m).
 const INFERRED_ENDPOINT_TOLERANCE_DEGREES = 0.001; // Geometry endpoint to one unique junction (~110 m).
 const REF_ENDPOINT_TOLERANCE_DEGREES = 0.01; // Relation ref is authoritative; geometry only chooses the local duplicate ref.
-// Permit minor OSM way-end imprecision (about 22 m), but never bridge a visible gap.
-const SEGMENT_JOIN_TOLERANCE_DEGREES = 0.0002;
+// Recent OSM route edits can leave a short split at a roundabout or an unshared
+// way-end.  Relation 11198434 (131-558) has one such 27.4 m join.  Forty metres
+// still cannot conceal a meaningful detour, while preserving the route that OSM
+// itself explicitly declares.
+const SEGMENT_JOIN_TOLERANCE_DEGREES = 0.00036;
 const JUNCTION_INDEX_CELL_DEGREES = 0.01;
 const MAX_UNMAPPED_GEOMETRY_GAP_KM = 1;
 const DUTCH_NETWORK_WFS = 'https://geo.rijkswaterstaat.nl/services/ogc/gdr/fietsareaal/wfs';

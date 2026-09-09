@@ -17,4 +17,10 @@ const rejected = assembleRelationGeometry([
 ], 0.00015);
 assert.equal(rejected, null, 'a substantial gap must not be bridged');
 
+const recentOsmSplit = assembleRelationGeometry([
+  [[50.88, 5.64], [50.88, 5.6401]],
+  [[50.88, 5.64045], [50.88, 5.64055]],
+], 0.00036);
+assert.ok(recentOsmSplit, 'a short OSM split such as relation 11198434 must remain one route');
+
 console.log('Network-geometry assembly tests passed.');
