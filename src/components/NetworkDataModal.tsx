@@ -6,6 +6,7 @@ interface NetworkDataModalProps {
   isOpen: boolean;
   onClose: () => void;
   availableNodesCount: number;
+  availableConnectionsCount: number;
   onCacheChanged?: () => void;
 }
 
@@ -21,6 +22,7 @@ export const NetworkDataModal: React.FC<NetworkDataModalProps> = ({
   isOpen,
   onClose,
   availableNodesCount,
+  availableConnectionsCount,
   onCacheChanged,
 }) => {
   const [cache, setCache] = useState<CacheMetadata | null>(null);
@@ -98,11 +100,12 @@ export const NetworkDataModal: React.FC<NetworkDataModalProps> = ({
                 {isOnline ? <Wifi className="w-3 h-3" /> : <WifiOff className="w-3 h-3" />}{isOnline ? 'Online' : 'Offline'}
               </span>
             </div>
-            <div className="grid grid-cols-2 gap-3 mt-3">
+            <div className="grid grid-cols-3 gap-2 mt-3">
               <div className="rounded-lg bg-slate-900/70 border border-slate-700 p-3"><div className="text-[11px] text-slate-400">Lokaal bewaard</div><div className="mt-1 text-lg font-bold text-cyan-300">{(cache?.totalNodes ?? availableNodesCount).toLocaleString('nl-BE')}</div><div className="text-[10px] text-slate-500">knooppunten</div></div>
+              <div className="rounded-lg bg-slate-900/70 border border-slate-700 p-3"><div className="text-[11px] text-slate-400">Lokaal beschikbaar</div><div className="mt-1 text-lg font-bold text-cyan-300">{availableConnectionsCount.toLocaleString('nl-BE')}</div><div className="text-[10px] text-slate-500">verbindingen</div></div>
               <div className="rounded-lg bg-slate-900/70 border border-slate-700 p-3"><div className="text-[11px] text-slate-400">Laatst lokaal gewijzigd</div><div className="mt-1 text-xs font-semibold text-slate-200 leading-snug">{formatDate(cache?.lastSyncTimestamp ?? null)}</div></div>
             </div>
-            <p className="mt-3 text-[11px] leading-relaxed text-slate-400">Deze cache bewaart knooppuntmarkeringen die eerder zijn geladen. Kaartachtergronden en live fietsroutering hebben nog steeds internet nodig.</p>
+            <p className="mt-3 text-[11px] leading-relaxed text-slate-400">De browsercache bewaart knooppuntmarkeringen. Verbindingen worden bij het starten uit de ingebouwde netwerkdataset lokaal geregistreerd; kaartachtergronden en live fietsroutering hebben nog steeds internet nodig.</p>
           </section>
 
           {message && <p className="rounded-lg border border-cyan-800 bg-cyan-950/40 px-3 py-2 text-xs text-cyan-100">{message}</p>}

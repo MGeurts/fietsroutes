@@ -18,6 +18,7 @@ import { Map, List, Bike, Sparkles, Navigation, Undo2, Redo2, X, Search, MapPin,
 export default function App() {
   // Available nodes in current state (preloaded + Overpass queried)
   const [availableNodes, setAvailableNodes] = useState<KnooppuntNode[]>([]);
+  const [availableConnectionsCount, setAvailableConnectionsCount] = useState(0);
 
   // Clean initial state without default route (starts fresh on current location)
   const [selectedNodes, setSelectedNodes] = useState<KnooppuntNode[]>([]);
@@ -343,11 +344,24 @@ export default function App() {
       .then(async (network) => {
         if (!network?.nodes.length) throw new Error('Ingebouwde netwerkdataset ontbreekt of is ongeldig.');
         await replaceCachedNodes(network.nodes);
-        if (!cancelled) setAvailableNodes(network.nodes);
+        if (!cancelled) {
+          // A declared OSM relation remains routeable even when its exact line is
+          // absent. Count every unique endpoint pair once, regardless of whether
+          // it also has a verified geometry.
+          const connectionKeys = new Set([
+            ...network.edges.map((edge) => [edge.from, edge.to].sort().join('\u0000')),
+            ...(network.declaredConnections || []).map((connection) => [connection.from, connection.to].sort().join('\u0000')),
+          ]);
+          setAvailableNodes(network.nodes);
+          setAvailableConnectionsCount(connectionKeys.size);
+        }
       })
       .catch((err) => {
         console.warn('Kon ingebouwde netwerkdataset niet laden:', err);
-        if (!cancelled) setAvailableNodes([]);
+        if (!cancelled) {
+          setAvailableNodes([]);
+          setAvailableConnectionsCount(0);
+        }
       });
     return () => { cancelled = true; };
   }, []);
@@ -976,6 +990,7 @@ export default function App() {
         isOpen={isDataModalOpen}
         onClose={() => setIsDataModalOpen(false)}
         availableNodesCount={availableNodes.length}
+        availableConnectionsCount={availableConnectionsCount}
         onCacheChanged={refreshNodesFromCache}
       />
 
