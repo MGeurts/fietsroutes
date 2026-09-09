@@ -125,6 +125,55 @@ export function registerOfficialNetworkDataset(dataset: OfficialNetworkDataset):
       if (targetKey) addDeclaredConnection(fromKey, targetKey, 'Samengestelde lokale knooppuntverbinding');
     }
   }
+
+  // The compact local corridor collection is verified geometry, not merely a
+  // shortcut for a directly selected pair. Register it in the same graph used
+  // for intermediate-node routing as well. Without this, 535 -> 534 could be
+  // rendered as a live-router segment inside a longer route, yet as verified
+  // geometry when the exact same two nodes were selected directly.
+  const closestCorridorEndpoint = (ref: string, coordinate: [number, number]): KnooppuntNode | undefined => {
+    let closest: KnooppuntNode | undefined;
+    let closestDistance = ENDPOINT_TOLERANCE_KM;
+    for (const candidate of nextNodes.values()) {
+      if (candidate.ref !== ref) continue;
+      const candidateDistance = distanceKm(candidate.lat, candidate.lng, coordinate[0], coordinate[1]);
+      if (candidateDistance <= closestDistance) {
+        closest = candidate;
+        closestDistance = candidateDistance;
+      }
+    }
+    return closest;
+  };
+  const addCuratedCorridor = (corridor: (typeof OFFICIAL_GIS_CORRIDORS)[string]) => {
+    if (!corridor.verified || corridor.coordinates.length < 2) return;
+    const from = closestCorridorEndpoint(corridor.from, corridor.coordinates[0]);
+    const to = closestCorridorEndpoint(corridor.to, corridor.coordinates[corridor.coordinates.length - 1]);
+    if (!from || !to) return;
+
+    const fromKey = getNodeKey(from);
+    const toKey = getNodeKey(to);
+    if (fromKey === toKey) return;
+    const add = (startKey: string, endKey: string, coordinates: [number, number][]) => {
+      const neighbours = nextDeclaredAdjacency.get(startKey) || new Map<string, OfficialNetworkEdge>();
+      const existing = neighbours.get(endKey);
+      // Never replace a current validated import, but upgrade a relation which
+      // has topology only and would otherwise need the live router.
+      if (!existing || existing.coordinates.length < 2) {
+        neighbours.set(endKey, {
+          fromKey: startKey,
+          toKey: endKey,
+          distanceKm: corridor.distanceKm,
+          coordinates,
+          source: corridor.source,
+        });
+      }
+      nextDeclaredAdjacency.set(startKey, neighbours);
+    };
+    add(fromKey, toKey, corridor.coordinates);
+    add(toKey, fromKey, [...corridor.coordinates].reverse());
+  };
+  for (const corridor of Object.values(OFFICIAL_GIS_CORRIDORS)) addCuratedCorridor(corridor);
+
   declaredNetworkAdjacency = nextDeclaredAdjacency;
   const topologyAdjacency = new Map<string, Map<string, OfficialNetworkEdge>>();
   for (const edge of dataset.topology?.edges || []) {
