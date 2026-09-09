@@ -147,15 +147,27 @@ function buildCoordinates(relation: OplRelation, ways: Map<number, OplWay>, node
   if (segments.length !== relation.wayMemberIds.length || segments.length === 0) return null;
 
   const assembled = assembleRelationGeometry(segments, SEGMENT_JOIN_TOLERANCE_DEGREES);
-  if (assembled) return assembled;
-  if (!endpointHint) return null;
-  return findRelationPathGeometry(
+  if (!endpointHint) return assembled;
+
+  // A relation can be assembled as a line while still starting or ending on a
+  // parallel branch instead of the named knooppunt.  In that case derive the
+  // endpoint-to-endpoint path from the relation members themselves.  This keeps
+  // the shortest official route's real geometry and distance available.
+  const endsAtDeclaredNodes = (coordinates: [number, number][] | null) => Boolean(coordinates && (
+    (close(coordinates[0], [endpointHint.from.lat, endpointHint.from.lng], EXPLICIT_ENDPOINT_TOLERANCE_DEGREES)
+      && close(coordinates[coordinates.length - 1], [endpointHint.to.lat, endpointHint.to.lng], EXPLICIT_ENDPOINT_TOLERANCE_DEGREES))
+    || (close(coordinates[0], [endpointHint.to.lat, endpointHint.to.lng], EXPLICIT_ENDPOINT_TOLERANCE_DEGREES)
+      && close(coordinates[coordinates.length - 1], [endpointHint.from.lat, endpointHint.from.lng], EXPLICIT_ENDPOINT_TOLERANCE_DEGREES))
+  ));
+  if (endsAtDeclaredNodes(assembled)) return assembled;
+  const path = findRelationPathGeometry(
     segments,
     [endpointHint.from.lat, endpointHint.from.lng],
     [endpointHint.to.lat, endpointHint.to.lng],
     SEGMENT_JOIN_TOLERANCE_DEGREES,
     REF_ENDPOINT_TOLERANCE_DEGREES,
   );
+  return path || assembled;
 }
 
 function junctionCell(lat: number, lng: number): string {
