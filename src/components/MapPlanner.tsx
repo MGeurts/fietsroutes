@@ -25,6 +25,8 @@ export interface SearchCandidatesState {
 interface MapPlannerProps {
   availableNodes: KnooppuntNode[];
   selectedNodes: KnooppuntNode[];
+  /** Network nodes selected by the planner while resolving a user-selected leg. */
+  automaticIntermediateNodes: KnooppuntNode[];
   routeCoordinates: [number, number][];
   routeLegs: RouteLeg[];
   onNodeClick: (node: KnooppuntNode) => void;
@@ -93,6 +95,7 @@ const endPinSvg = `
 export const MapPlanner: React.FC<MapPlannerProps> = ({
   availableNodes,
   selectedNodes,
+  automaticIntermediateNodes,
   routeCoordinates,
   routeLegs,
   onNodeClick,
@@ -300,7 +303,7 @@ export const MapPlanner: React.FC<MapPlannerProps> = ({
     const uniqueNodes: KnooppuntNode[] = [];
     const seenByRef = new Map<string, KnooppuntNode[]>();
 
-    availableNodes.forEach((node) => {
+    [...availableNodes, ...automaticIntermediateNodes].forEach((node) => {
       const existingList = seenByRef.get(node.ref) || [];
       const isMicroDuplicate = existingList.some(
         (ex) => Math.hypot(ex.lat - node.lat, ex.lng - node.lng) < 0.003
@@ -316,6 +319,7 @@ export const MapPlanner: React.FC<MapPlannerProps> = ({
     uniqueNodes.forEach((node) => {
       const idKey = String(node.id || node.ref);
       const isSelected = selectedIndices.has(idKey);
+      const isAutomaticIntermediate = !isSelected && automaticIntermediateNodes.some((candidate) => String(candidate.id) === String(node.id));
       const isStart = selectedNodes.length > 0 && String(selectedNodes[0].id || selectedNodes[0].ref) === idKey;
       const isEnd = selectedNodes.length > 1 && String(selectedNodes[selectedNodes.length - 1].id || selectedNodes[selectedNodes.length - 1].ref) === idKey;
 
@@ -337,6 +341,8 @@ export const MapPlanner: React.FC<MapPlannerProps> = ({
 
       const bgClass = isSelected
         ? 'bg-white text-stone-950 font-black border-[2.5px] border-red-600'
+        : isAutomaticIntermediate
+        ? 'bg-slate-100 text-slate-700 font-extrabold border-2 border-slate-500 ring-2 ring-slate-300'
         : isHighlight
         ? 'bg-white text-emerald-800 font-extrabold border-2 border-emerald-500 ring-2 ring-amber-300'
         : 'bg-white text-emerald-800 font-bold border-2 border-emerald-500';
@@ -348,7 +354,7 @@ export const MapPlanner: React.FC<MapPlannerProps> = ({
               ${rolePinHtml}
             </div>
           ` : ''}
-          <div class="w-8 h-8 rounded-full flex items-center justify-center text-xs shadow-md transition-all cursor-pointer ${bgClass} ${ringClass}">
+          <div class="w-8 h-8 rounded-full flex items-center justify-center text-xs shadow-md transition-all cursor-pointer ${bgClass} ${ringClass}" title="${isAutomaticIntermediate ? 'Automatisch gekozen tussenknooppunt' : `Knooppunt ${node.ref}`} ">
             ${node.ref}
           </div>
           ${isHighlight ? `
@@ -371,7 +377,7 @@ export const MapPlanner: React.FC<MapPlannerProps> = ({
       const popupContent = `
         <div class="p-1 font-sans text-slate-900 min-w-[210px]">
           <div class="flex items-center gap-2 mb-1.5">
-            <span class="w-7 h-7 rounded-full bg-emerald-500 text-white flex items-center justify-center font-bold text-xs shadow-sm">
+            <span class="w-7 h-7 rounded-full ${isAutomaticIntermediate ? 'bg-slate-500' : 'bg-emerald-500'} text-white flex items-center justify-center font-bold text-xs shadow-sm">
               ${node.ref}
             </span>
             <div>
@@ -386,6 +392,11 @@ export const MapPlanner: React.FC<MapPlannerProps> = ({
                 <span class="font-bold text-amber-900 block text-[10px] uppercase tracking-wider">Highlight / Bezienswaardigheid</span>
                 <span class="text-slate-800 text-xs font-medium">${node.highlight}</span>
               </div>
+            </div>
+          ` : ''}
+          ${isAutomaticIntermediate ? `
+            <div class="mb-1.5 px-2 py-1 bg-slate-100 text-slate-700 text-[11px] rounded border border-slate-300 font-medium">
+              Automatisch gekozen tussenknooppunt
             </div>
           ` : ''}
           <div class="mt-2 pt-2 border-t border-slate-200 flex justify-end">
@@ -416,7 +427,7 @@ export const MapPlanner: React.FC<MapPlannerProps> = ({
       nodeMarkersRef.current.set(idKey, marker);
       markersGroup.addLayer(marker);
     });
-  }, [availableNodes, selectedNodes, onNodeClick]);
+  }, [availableNodes, selectedNodes, automaticIntermediateNodes, onNodeClick]);
 
   // Update Route Polyline and Directional Markers
   useEffect(() => {

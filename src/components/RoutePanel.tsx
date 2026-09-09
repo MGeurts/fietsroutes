@@ -26,6 +26,8 @@ interface RoutePanelProps {
   onChangeRouteName: (name: string) => void;
   selectedNodes: KnooppuntNode[];
   routeLegs: RouteLeg[];
+  /** Nodes inserted by the network solver between two manually selected points. */
+  automaticIntermediateNodes: KnooppuntNode[];
   totalDistanceKm: number;
   elevationGainM: number;
   elevationPoints: ElevationPoint[];
@@ -64,6 +66,7 @@ export const RoutePanel: React.FC<RoutePanelProps> = ({
   onChangeRouteName,
   selectedNodes,
   routeLegs,
+  automaticIntermediateNodes,
   totalDistanceKm,
   elevationGainM,
   elevationPoints,
@@ -90,6 +93,7 @@ export const RoutePanel: React.FC<RoutePanelProps> = ({
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<'nodes' | 'elevation'>('nodes');
+  const displayedNodeCount = selectedNodes.length + automaticIntermediateNodes.length;
 
   // Cumulative distances up to each node (except node 0 which is the start)
   const cumulativeDistances = useMemo(() => {
@@ -146,10 +150,10 @@ export const RoutePanel: React.FC<RoutePanelProps> = ({
               </span>
             </div>
             <div className="h-5 w-px bg-slate-200" />
-            <div title="Aantal knooppunten">
+            <div title={`${selectedNodes.length} zelf gekozen${automaticIntermediateNodes.length ? ` + ${automaticIntermediateNodes.length} automatisch tussenpunt${automaticIntermediateNodes.length === 1 ? '' : 'en'}` : ''}`}>
               <span className="text-[9px] text-slate-400 block uppercase font-bold leading-tight">KP</span>
               <span className="font-extrabold text-emerald-800 bg-emerald-50 border border-emerald-200 px-1.5 py-0.2 rounded text-[11px]">
-                {selectedNodes.length}
+                {displayedNodeCount}
               </span>
             </div>
           </div>
@@ -249,7 +253,7 @@ export const RoutePanel: React.FC<RoutePanelProps> = ({
             >
               <span>Knooppunten</span>
               <span className={`text-[10px] ${activeTab === 'nodes' ? 'text-emerald-700 font-semibold' : 'text-slate-400 font-normal'}`}>
-                ({selectedNodes.length})
+                ({displayedNodeCount})
               </span>
             </button>
 
@@ -447,6 +451,13 @@ export const RoutePanel: React.FC<RoutePanelProps> = ({
                   {selectedNodes.map((node, index) => {
                     const nextLeg = routeLegs[index];
                     const nextLegNeedsReview = nextLeg?.isVerified === false;
+                    const automaticNodesForLeg = (nextLeg?.displaySegments || [])
+                      .slice(0, -1)
+                      .flatMap((segment) => segment.analysis?.toNode ? [segment.analysis.toNode] : [])
+                      .filter((candidate, candidateIndex, nodes) => (
+                        automaticIntermediateNodes.some((automaticNode) => String(automaticNode.id) === String(candidate.id))
+                        && nodes.findIndex((other) => String(other.id) === String(candidate.id)) === candidateIndex
+                      ));
                     const isStart = index === 0;
                     const isEnd = index === selectedNodes.length - 1;
                     const isInBetween = !isStart && !isEnd;
@@ -532,6 +543,24 @@ export const RoutePanel: React.FC<RoutePanelProps> = ({
                             </button>
                           </div>
                         </div>
+
+                        {automaticNodesForLeg.map((automaticNode) => (
+                          <div
+                            key={`automatic-${index}-${automaticNode.id}`}
+                            className="ml-5 mt-1 flex items-center gap-2 rounded-md border border-slate-300 bg-slate-100 px-2 py-1.5 text-slate-700"
+                            title="Dit tussenknooppunt is automatisch gekozen om de officiële netwerkverbinding te volgen."
+                          >
+                            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 border-slate-500 bg-white text-[10px] font-black text-slate-700">
+                              {automaticNode.ref}
+                            </span>
+                            <span className="min-w-0 truncate text-[11px] font-semibold">
+                              Automatisch via knooppunt {automaticNode.ref}
+                            </span>
+                            <span className="ml-auto shrink-0 rounded border border-slate-300 bg-white px-1 py-0.5 text-[9px] font-bold uppercase tracking-wide text-slate-500">
+                              Tussenpunt
+                            </span>
+                          </div>
+                        ))}
 
                         {/* Distance connector badge between nodes */}
                         {nextLeg && (

@@ -72,6 +72,23 @@ export default function App() {
     leg.displaySegments?.flatMap((segment) => segment.analysis ? [segment.analysis] : []) || []
   )), [routeLegs]);
 
+  // A route leg may be resolved through one or more network nodes that the user
+  // did not click themselves. Keep those nodes separate from selectedNodes:
+  // they explain the chosen route without changing the user's itinerary.
+  const automaticIntermediateNodes = useMemo(() => {
+    const selectedIds = new Set(selectedNodes.map((node) => String(node.id)));
+    const seenIds = new Set<string>();
+
+    return routeLegs.flatMap((leg) => (
+      (leg.displaySegments || []).slice(0, -1).flatMap((segment) => {
+        const node = segment.analysis?.toNode;
+        if (!node || selectedIds.has(String(node.id)) || seenIds.has(String(node.id))) return [];
+        seenIds.add(String(node.id));
+        return [node];
+      })
+    ));
+  }, [routeLegs, selectedNodes]);
+
   useEffect(() => {
     const onOnline = () => setIsOnline(true);
     const onOffline = () => setIsOnline(false);
@@ -857,6 +874,7 @@ export default function App() {
             onChangeRouteName={setRouteName}
             selectedNodes={selectedNodes}
             routeLegs={routeLegs}
+            automaticIntermediateNodes={automaticIntermediateNodes}
             totalDistanceKm={totalDistanceKm}
             elevationGainM={elevationGainM}
             elevationPoints={elevationPoints}
@@ -893,6 +911,7 @@ export default function App() {
           <MapPlanner
             availableNodes={availableNodes}
             selectedNodes={selectedNodes}
+            automaticIntermediateNodes={automaticIntermediateNodes}
             routeCoordinates={fullCoordinates}
             routeLegs={routeLegs}
             onNodeClick={handleNodeClick}
