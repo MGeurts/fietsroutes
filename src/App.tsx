@@ -70,6 +70,10 @@ export default function App() {
   const [selectedConnectionAnalysis, setSelectedConnectionAnalysis] = useState<RouteConnectionAnalysis | undefined>();
   const [isOnline, setIsOnline] = useState(navigator.onLine);
 
+  const routeConnectionAnalyses = useMemo(() => routeLegs.flatMap((leg) => (
+    leg.displaySegments?.flatMap((segment) => segment.analysis ? [segment.analysis] : []) || []
+  )), [routeLegs]);
+
   useEffect(() => {
     const onOnline = () => setIsOnline(true);
     const onOffline = () => setIsOnline(false);
@@ -814,7 +818,9 @@ export default function App() {
               setIsNetworkAnalysisOpen(true);
             }}
             className="flex items-center gap-1.5 px-2.5 sm:px-3 py-2 bg-cyan-950/70 hover:bg-cyan-900/90 text-cyan-200 border border-cyan-800/70 text-xs font-medium rounded-md transition cursor-pointer shadow-xs tablet-touch-friendly-btn"
-            title="Analyseer OSM-knooppuntrelaties en datakwaliteit"
+            title={routeConnectionAnalyses.length > 0
+              ? 'Analyseer alleen de verbindingen in de actieve route'
+              : 'Analyseer OSM-knooppuntrelaties en datakwaliteit'}
           >
             <Network className="w-3.5 h-3.5 text-cyan-300" />
             <span className="hidden lg:inline">Analyse</span>
@@ -1000,6 +1006,7 @@ export default function App() {
         onClose={() => setIsNetworkAnalysisOpen(false)}
         focusNode={selectedNodes[selectedNodes.length - 1]}
         connection={selectedConnectionAnalysis}
+        routeConnections={routeConnectionAnalyses}
       />
     </div>
   );

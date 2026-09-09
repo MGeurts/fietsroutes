@@ -8,6 +8,8 @@ interface NetworkAnalysisModalProps {
   onClose: () => void;
   focusNode?: KnooppuntNode;
   connection?: RouteConnectionAnalysis;
+  /** Connections actually rendered for the active route. Takes precedence over a radius search. */
+  routeConnections?: RouteConnectionAnalysis[];
 }
 
 const DEFAULT_FOCUS: KnooppuntNode = {
@@ -32,7 +34,7 @@ function isNearFocus(entry: OfficialNetworkValidationEntry, focus: KnooppuntNode
 
 function statusLabel(status: OfficialNetworkValidationEntry['status']): string {
   if (status === 'verified-geometry') return 'Geometrie geverifieerd';
-  if (status === 'declared-topology') return 'Officiële topologie';
+  if (status === 'declared-topology') return 'OSM-verbinding, exacte lijn ontbreekt';
   return 'Onopgelost';
 }
 
@@ -56,7 +58,7 @@ function geometryClass(source: RouteConnectionAnalysis['geometrySource']): strin
   return 'bg-amber-950/70 border-amber-700 text-amber-300';
 }
 
-export const NetworkAnalysisModal: React.FC<NetworkAnalysisModalProps> = ({ isOpen, onClose, focusNode, connection }) => {
+export const NetworkAnalysisModal: React.FC<NetworkAnalysisModalProps> = ({ isOpen, onClose, focusNode, connection, routeConnections = [] }) => {
   const [report, setReport] = useState<OfficialNetworkValidationReport | null>(null);
   const [loading, setLoading] = useState(false);
   const [radiusKm, setRadiusKm] = useState(25);
@@ -79,11 +81,44 @@ export const NetworkAnalysisModal: React.FC<NetworkAnalysisModalProps> = ({ isOp
     ? null
     : report?.entries.find((entry) => entry.relationId === connection.relationId) || null, [report, connection]);
   const connectionUsesVerifiedGeometry = connection?.geometrySource === 'official';
-  const entries = useMemo(() => connection
-    ? selectedEntry ? [selectedEntry] : []
-    : (report?.entries || [])
+  const uniqueRouteConnections = useMemo(() => {
+    const seen = new Set<string>();
+    return routeConnections.filter((routeConnection) => {
+      const key = `${routeConnection.fromNode.id}:${routeConnection.toNode.id}:${routeConnection.source}:${routeConnection.geometrySource || ''}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }, [routeConnections]);
+  const routeScope = !connection && uniqueRouteConnections.length > 0;
+  const routePointRefs = useMemo(() => {
+    const seen = new Set<string>();
+    const refs: string[] = [];
+    for (const routeConnection of uniqueRouteConnections) {
+      for (const node of [routeConnection.fromNode, routeConnection.toNode]) {
+        const key = String(node.id);
+        if (!seen.has(key)) {
+          seen.add(key);
+          refs.push(node.ref);
+        }
+      }
+    }
+    return refs;
+  }, [uniqueRouteConnections]);
+  const entries = useMemo(() => {
+    if (connection) return selectedEntry ? [selectedEntry] : [];
+    if (routeScope) {
+      const relationIds = new Set(uniqueRouteConnections.flatMap((routeConnection) => (
+        routeConnection.relationId === undefined ? [] : [routeConnection.relationId]
+      )));
+      return (report?.entries || [])
+        .filter((entry) => relationIds.has(entry.relationId))
+        .sort((a, b) => a.relationId - b.relationId);
+    }
+    return (report?.entries || [])
       .filter((entry) => isNearFocus(entry, focus, radiusKm))
-      .sort((a, b) => a.status.localeCompare(b.status) || a.relationId - b.relationId), [report, focus, radiusKm, connection, selectedEntry]);
+      .sort((a, b) => a.status.localeCompare(b.status) || a.relationId - b.relationId);
+  }, [report, focus, radiusKm, connection, selectedEntry, routeScope, uniqueRouteConnections]);
   const localSummary = useMemo(() => {
     if (connection && selectedEntry) {
       const status = connectionUsesVerifiedGeometry ? 'verified-geometry' : selectedEntry.status;
@@ -93,12 +128,26 @@ export const NetworkAnalysisModal: React.FC<NetworkAnalysisModalProps> = ({ isOp
         unresolved: status === 'rejected' ? 1 : 0,
       };
     }
+    if (routeScope) {
+      return uniqueRouteConnections.reduce((summary, routeConnection) => {
+        const relation = routeConnection.relationId === undefined
+          ? undefined
+          : report?.entries.find((entry) => entry.relationId === routeConnection.relationId);
+        const status = routeConnection.geometrySource === 'official'
+          ? 'verified-geometry'
+          : relation?.status || 'rejected';
+        if (status === 'verified-geometry') summary.verified += 1;
+        else if (status === 'declared-topology') summary.topology += 1;
+        else summary.unresolved += 1;
+        return summary;
+      }, { verified: 0, topology: 0, unresolved: 0 });
+    }
     return {
       verified: entries.filter((entry) => entry.status === 'verified-geometry').length,
       topology: entries.filter((entry) => entry.status === 'declared-topology').length,
       unresolved: entries.filter((entry) => entry.status === 'rejected').length,
     };
-  }, [connection, connectionUsesVerifiedGeometry, entries, selectedEntry]);
+  }, [connection, connectionUsesVerifiedGeometry, entries, report, routeScope, selectedEntry, uniqueRouteConnections]);
 
   if (!isOpen) return null;
 
@@ -109,8 +158,8 @@ export const NetworkAnalysisModal: React.FC<NetworkAnalysisModalProps> = ({ isOp
           <div className="flex gap-3 min-w-0">
             <div className="p-2.5 rounded-xl bg-cyan-950 border border-cyan-800 shrink-0"><Network className="w-5 h-5 text-cyan-300" /></div>
             <div>
-              <h2 className="text-lg font-bold text-white">{connection ? `Analyse verbinding ${connection.fromNode.ref} → ${connection.toNode.ref}` : 'Netwerkanalyse'}</h2>
-              <p className="text-sm text-slate-400">{connection ? 'De geselecteerde kaartlijn wordt rechtstreeks gekoppeld aan haar bronbewijs.' : `OSM-relaties rond knooppunt ${focus.ref}; brondata en routegeometrie worden afzonderlijk beoordeeld.`}</p>
+              <h2 className="text-lg font-bold text-white">{connection ? `Analyse verbinding ${connection.fromNode.ref} → ${connection.toNode.ref}` : routeScope ? 'Analyse actieve route' : 'Netwerkanalyse'}</h2>
+              <p className="text-sm text-slate-400">{connection ? 'De geselecteerde kaartlijn wordt rechtstreeks gekoppeld aan haar bronbewijs.' : routeScope ? 'Alleen de knooppunten en verbindingen die in de actieve route voorkomen.' : `OSM-relaties rond knooppunt ${focus.ref}; brondata en routegeometrie worden afzonderlijk beoordeeld.`}</p>
             </div>
           </div>
           <button onClick={onClose} className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg" aria-label="Sluiten"><X className="w-5 h-5" /></button>
@@ -126,6 +175,11 @@ export const NetworkAnalysisModal: React.FC<NetworkAnalysisModalProps> = ({ isOp
                   {geometryLabel(connection.geometrySource)}
                 </span>
               )}
+            </div>
+          ) : routeScope ? (
+            <div className="rounded-xl border border-cyan-800/70 bg-cyan-950/30 p-3 mb-5 text-sm text-cyan-100">
+              <strong>Betrokken knooppunten:</strong> {routePointRefs.join(' → ')}
+              <span className="block mt-1 text-xs text-cyan-200/80">{uniqueRouteConnections.length} getekende verbinding{uniqueRouteConnections.length === 1 ? '' : 'en'}; overige relaties in de omgeving zijn verborgen.</span>
             </div>
           ) : (
             <div className="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between mb-5">
@@ -155,13 +209,18 @@ export const NetworkAnalysisModal: React.FC<NetworkAnalysisModalProps> = ({ isOp
               )}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-5">
                 <div className="rounded-xl bg-emerald-950/50 border border-emerald-800 p-3"><div className="text-xl font-bold text-emerald-300">{localSummary.verified}</div><div className="text-xs text-emerald-100">geverifieerde geometrieën</div></div>
-                <div className="rounded-xl bg-amber-950/50 border border-amber-800 p-3"><div className="text-xl font-bold text-amber-300">{localSummary.topology}</div><div className="text-xs text-amber-100">officiële topologieën zonder complete lijn</div></div>
+                <div className="rounded-xl bg-amber-950/50 border border-amber-800 p-3"><div className="text-xl font-bold text-amber-300">{localSummary.topology}</div><div className="text-xs text-amber-100">OSM-verbindingen zonder exacte lijn</div></div>
                 <div className="rounded-xl bg-rose-950/50 border border-rose-800 p-3"><div className="text-xl font-bold text-rose-300">{localSummary.unresolved}</div><div className="text-xs text-rose-100">onopgeloste relaties</div></div>
               </div>
-              <p className="text-xs text-slate-500 mb-3">Dataset gebouwd {new Date(report.generatedAt).toLocaleString('nl-BE')}. {connection ? `${entries.length} gekoppelde relatie.` : `${entries.length} relaties binnen ${radiusKm} km.`}</p>
+              <p className="text-xs text-slate-500 mb-3">Dataset gebouwd {new Date(report.generatedAt).toLocaleString('nl-BE')}. {connection ? `${entries.length} gekoppelde relatie.` : routeScope ? `${uniqueRouteConnections.length} verbindingen uit de actieve route; ${entries.length} OSM-relaties gekoppeld.` : `${entries.length} relaties binnen ${radiusKm} km.`}</p>
               <div className="space-y-2">
                 {entries.map((entry) => {
-                  const displayedStatus = connection && connectionUsesVerifiedGeometry ? 'verified-geometry' : entry.status;
+                  const routeConnection = routeScope
+                    ? uniqueRouteConnections.find((candidate) => candidate.relationId === entry.relationId)
+                    : undefined;
+                  const displayedStatus = (connection && connectionUsesVerifiedGeometry) || routeConnection?.geometrySource === 'official'
+                    ? 'verified-geometry'
+                    : entry.status;
                   const rawStatusDiffers = displayedStatus !== entry.status;
                   return (
                   <article key={`${entry.country}-${entry.relationId}`} className="rounded-xl border border-slate-700 bg-slate-950/40 p-3">
