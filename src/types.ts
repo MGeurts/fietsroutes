@@ -23,7 +23,7 @@ export interface RouteLeg {
   displaySegments?: RouteDisplaySegment[];
 }
 
-export type RouteGeometrySource = 'official' | 'brouter' | 'osm-router';
+export type RouteGeometrySource = 'official' | 'official-declared' | 'brouter' | 'osm-router';
 
 export interface RouteDisplaySegment {
   coordinates: [number, number][];

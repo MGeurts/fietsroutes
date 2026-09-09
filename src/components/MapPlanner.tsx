@@ -55,6 +55,10 @@ function calculateBearing(p1: [number, number], p2: [number, number]): number {
 }
 
 function routeStyle(source: RouteGeometrySource): L.PolylineOptions {
+  // The node-to-node connection itself is official; only its road shape was fetched live.
+  if (source === 'official-declared') {
+    return { color: '#ea580c', weight: 5.5, opacity: 0.95, lineCap: 'round', lineJoin: 'round' };
+  }
   if (source === 'brouter') {
     return { color: '#d97706', dashArray: '12 8', weight: 5.5, opacity: 0.95, lineCap: 'round', lineJoin: 'round' };
   }

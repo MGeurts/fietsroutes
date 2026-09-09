@@ -121,7 +121,9 @@ export async function calculateBicycleLeg(
         }
         const liveRoute = await fetchLiveBicycleRoute(path.nodes[index], path.nodes[index + 1]);
         if (!liveRoute) throw new UnknownKnooppuntenConnectionError(path.nodes[index].ref, path.nodes[index + 1].ref);
-        segments.push({ coordinates: liveRoute.coordinates, distanceKm: liveRoute.distanceKm, source: liveRoute.geometrySource });
+        // The OSM Node-to-Node relation establishes this as an official connection.
+        // Only its detailed road geometry comes from the live router.
+        segments.push({ coordinates: liveRoute.coordinates, distanceKm: liveRoute.distanceKm, source: 'official-declared' });
       }
       const leg: RouteLeg = {
         fromNode, toNode,
