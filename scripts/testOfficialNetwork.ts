@@ -34,9 +34,9 @@ async function main() {
       'a route must fail clearly when both verified data and live bike routers are unavailable',
     );
     await assert.rejects(
-      () => calculateBicycleLeg(kp64, { id: 'kp-503', ref: '503', lat: 50.892, lng: 5.662 }),
+      () => calculateBicycleLeg(kp64, { id: 'fixture-503', ref: '503', lat: 50.892, lng: 5.662 }),
       UnknownKnooppuntenConnectionError,
-      'a historic hardcoded node must never be injected into the imported network graph',
+      'an unknown test node must never be injected into the imported network graph',
     );
   } finally {
     globalThis.fetch = originalFetch;

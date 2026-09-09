@@ -7,8 +7,6 @@ export interface KnooppuntNode {
   municipality?: string;
   region?: string; // e.g. "Belgisch Limburg", "Nederlands Limburg", "Antwerpen"
   highlight?: string; // e.g. "Fietsen door het Water", "Nationaal Park Hoge Kempen"
-  /** Legacy display data only. Routing never reads this field. */
-  connections?: string[];
 }
 
 export interface RouteLeg {

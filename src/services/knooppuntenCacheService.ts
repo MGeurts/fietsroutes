@@ -109,7 +109,7 @@ export async function saveNodesToCache(nodes: KnooppuntNode[]): Promise<number> 
       let savedCount = 0;
       for (const node of nodes) {
         // Ensure valid node ID
-        const id = node.id || `kp-${node.ref}-${node.lat.toFixed(4)}-${node.lng.toFixed(4)}`;
+        const id = node.id || `local-${node.ref}-${node.lat.toFixed(4)}-${node.lng.toFixed(4)}`;
         const record = { ...node, id, updatedAt: Date.now() };
         store.put(record);
         savedCount++;
