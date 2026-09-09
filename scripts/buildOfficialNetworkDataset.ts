@@ -13,7 +13,7 @@ import readline from 'node:readline';
 import { spawn } from 'node:child_process';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
-import { assembleRelationGeometry } from '../src/services/networkGeometryAssembler';
+import { assembleRelationGeometry, findRelationPathGeometry } from '../src/services/networkGeometryAssembler';
 import type {
   KnooppuntNode,
   OfficialNetworkDeclaredConnection,
@@ -140,13 +140,22 @@ function getKnooppuntRef(node: OplNode): string | undefined {
   return undefined;
 }
 
-function buildCoordinates(relation: OplRelation, ways: Map<number, OplWay>, nodes: Map<number, OplNode>): [number, number][] | null {
+function buildCoordinates(relation: OplRelation, ways: Map<number, OplWay>, nodes: Map<number, OplNode>, endpointHint?: { from: OplNode; to: OplNode }): [number, number][] | null {
   const segments = relation.wayMemberIds
     .map((wayId) => ways.get(wayId)?.nodeIds.map((nodeId) => nodes.get(nodeId)).filter((node): node is OplNode => Boolean(node)).map((node) => [node.lat, node.lng] as [number, number]))
     .filter((segment): segment is [number, number][] => Boolean(segment && segment.length > 1));
   if (segments.length !== relation.wayMemberIds.length || segments.length === 0) return null;
 
-  return assembleRelationGeometry(segments, SEGMENT_JOIN_TOLERANCE_DEGREES);
+  const assembled = assembleRelationGeometry(segments, SEGMENT_JOIN_TOLERANCE_DEGREES);
+  if (assembled) return assembled;
+  if (!endpointHint) return null;
+  return findRelationPathGeometry(
+    segments,
+    [endpointHint.from.lat, endpointHint.from.lng],
+    [endpointHint.to.lat, endpointHint.to.lng],
+    SEGMENT_JOIN_TOLERANCE_DEGREES,
+    REF_ENDPOINT_TOLERANCE_DEGREES,
+  );
 }
 
 function junctionCell(lat: number, lng: number): string {
@@ -465,7 +474,7 @@ function consumeVerifiedEdges(relations: OplRelation[], country: string, nodes: 
         from: fromId, to: toId, source: `OpenStreetMap RCN relation ${relation.id}`,
       });
     }
-    const geometry = buildCoordinates(relation, ways, nodes);
+    const geometry = buildCoordinates(relation, ways, nodes, declared || undefined);
     if (!geometry || geometry.length < 2) {
       report(declared ? 'declared-topology' : 'rejected', declared
         ? 'Way members ontbreken of kunnen niet veilig tot één lijn worden samengesteld; de expliciete knooppuntrelatie blijft behouden.'
