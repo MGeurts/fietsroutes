@@ -13,6 +13,7 @@ import readline from 'node:readline';
 import { spawn } from 'node:child_process';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
+import { assembleRelationGeometry } from '../src/services/networkGeometryAssembler';
 import type {
   KnooppuntNode,
   OfficialNetworkDeclaredConnection,
@@ -37,7 +38,8 @@ const PBF_SOURCES: PbfSource[] = [
 const EXPLICIT_ENDPOINT_TOLERANCE_DEGREES = 0.0045; // Tag-defined endpoints only (~500 m).
 const INFERRED_ENDPOINT_TOLERANCE_DEGREES = 0.001; // Geometry endpoint to one unique junction (~110 m).
 const REF_ENDPOINT_TOLERANCE_DEGREES = 0.01; // Relation ref is authoritative; geometry only chooses the local duplicate ref.
-const SEGMENT_JOIN_TOLERANCE_DEGREES = 0.00001; // Ways must actually meet; never bridge a visible gap.
+// Permit minor OSM way-end imprecision (about 22 m), but never bridge a visible gap.
+const SEGMENT_JOIN_TOLERANCE_DEGREES = 0.0002;
 const JUNCTION_INDEX_CELL_DEGREES = 0.01;
 const MAX_UNMAPPED_GEOMETRY_GAP_KM = 1;
 const DUTCH_NETWORK_WFS = 'https://geo.rijkswaterstaat.nl/services/ogc/gdr/fietsareaal/wfs';
@@ -141,15 +143,7 @@ function buildCoordinates(relation: OplRelation, ways: Map<number, OplWay>, node
     .filter((segment): segment is [number, number][] => Boolean(segment && segment.length > 1));
   if (segments.length !== relation.wayMemberIds.length || segments.length === 0) return null;
 
-  const first = segments.shift()!;
-  let coordinates = first;
-  for (const segment of segments) {
-    const tail = coordinates[coordinates.length - 1];
-    const next = close(tail, segment[0]) ? segment : close(tail, segment[segment.length - 1]) ? [...segment].reverse() : null;
-    if (!next) return null;
-    coordinates = coordinates.concat(next.slice(1));
-  }
-  return coordinates;
+  return assembleRelationGeometry(segments, SEGMENT_JOIN_TOLERANCE_DEGREES);
 }
 
 function junctionCell(lat: number, lng: number): string {
@@ -471,8 +465,8 @@ function consumeVerifiedEdges(relations: OplRelation[], country: string, nodes: 
     const geometry = buildCoordinates(relation, ways, nodes);
     if (!geometry || geometry.length < 2) {
       report(declared ? 'declared-topology' : 'rejected', declared
-        ? 'Way members ontbreken of vormen geen aaneengesloten geometrie; de expliciete knooppuntrelatie blijft behouden.'
-        : 'Way members ontbreken of vormen geen aaneengesloten geometrie, en er zijn geen veilige knooppunteinden.', declared || undefined);
+        ? 'Way members ontbreken of kunnen niet veilig tot één lijn worden samengesteld; de expliciete knooppuntrelatie blijft behouden.'
+        : 'Way members ontbreken of kunnen niet veilig tot één lijn worden samengesteld, en er zijn geen veilige knooppunteinden.', declared || undefined);
       continue;
     }
     if (hasUnmappedGeometryGap(geometry)) {

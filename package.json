@@ -10,7 +10,7 @@
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit",
     "build:network": "tsx scripts/buildOfficialNetworkDataset.ts",
-    "test": "tsx scripts/testOfficialNetwork.ts"
+    "test": "tsx scripts/testOfficialNetwork.ts && tsx scripts/testNetworkGeometryAssembler.ts"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",
