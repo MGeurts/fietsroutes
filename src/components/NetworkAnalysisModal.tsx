@@ -111,9 +111,15 @@ export const NetworkAnalysisModal: React.FC<NetworkAnalysisModalProps> = ({ isOp
       const relationIds = new Set(uniqueRouteConnections.flatMap((routeConnection) => (
         routeConnection.relationId === undefined ? [] : [routeConnection.relationId]
       )));
+      const routeOrder = new Map<number, number>();
+      uniqueRouteConnections.forEach((routeConnection, index) => {
+        if (routeConnection.relationId !== undefined && !routeOrder.has(routeConnection.relationId)) {
+          routeOrder.set(routeConnection.relationId, index);
+        }
+      });
       return (report?.entries || [])
         .filter((entry) => relationIds.has(entry.relationId))
-        .sort((a, b) => a.relationId - b.relationId);
+        .sort((a, b) => (routeOrder.get(a.relationId) ?? Infinity) - (routeOrder.get(b.relationId) ?? Infinity));
     }
     return (report?.entries || [])
       .filter((entry) => isNearFocus(entry, focus, radiusKm))
