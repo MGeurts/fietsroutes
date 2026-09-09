@@ -41,6 +41,13 @@ export interface OfficialNetworkDatasetEdge {
   verifiedAt: string;
 }
 
+/** A signed OSM Node-to-Node relation with explicit endpoints, but no safely assembled geometry. */
+export interface OfficialNetworkDeclaredConnection {
+  from: string;
+  to: string;
+  source: string;
+}
+
 /** A detailed official segment graph, currently supplied by Rijkswaterstaat for NL. */
 export interface OfficialNetworkTopologyVertex {
   id: string;
@@ -68,6 +75,7 @@ export interface OfficialNetworkDataset {
   generatedAt: string;
   nodes: KnooppuntNode[];
   edges: OfficialNetworkDatasetEdge[];
+  declaredConnections?: OfficialNetworkDeclaredConnection[];
   topology?: OfficialNetworkTopology;
 }
 

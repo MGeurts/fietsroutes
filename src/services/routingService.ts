@@ -110,6 +110,30 @@ export async function calculateBicycleLeg(
   const path = findOfficialNetworkPath(fromNode, toNode);
   if (path) {
     const viaRefs = path.nodes.slice(1, -1).map((node) => node.ref);
+    if (path.requiresLiveGeometry) {
+      const segments: { coordinates: [number, number][]; distanceKm: number }[] = [];
+      for (let index = 0; index < path.edges.length; index += 1) {
+        const edge = path.edges[index];
+        if (edge.coordinates.length >= 2) {
+          segments.push({ coordinates: edge.coordinates, distanceKm: edge.distanceKm });
+          continue;
+        }
+        const liveRoute = await fetchLiveBicycleRoute(path.nodes[index], path.nodes[index + 1]);
+        if (!liveRoute) throw new UnknownKnooppuntenConnectionError(path.nodes[index].ref, path.nodes[index + 1].ref);
+        segments.push(liveRoute);
+      }
+      const leg: RouteLeg = {
+        fromNode, toNode,
+        distanceKm: Math.round(segments.reduce((total, segment) => total + segment.distanceKm, 0) * 100) / 100,
+        coordinates: segments.flatMap((segment, index) => index === 0 ? segment.coordinates : segment.coordinates.slice(1)),
+        instructions: viaRefs.length > 0
+          ? `Knooppuntvolgorde uit OSM-relaties via ${viaRefs.join(' → ')}; ontbrekende weggeometrie is live berekend.`
+          : 'Knooppuntverbinding uit een OSM-relatie; ontbrekende weggeometrie is live berekend.',
+        isVerified: false,
+      };
+      legCache.set(cacheKey, leg);
+      return leg;
+    }
     const leg: RouteLeg = {
       fromNode,
       toNode,

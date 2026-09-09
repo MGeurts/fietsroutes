@@ -28,6 +28,7 @@ export interface OfficialNetworkGraph {
 let importedEdges = new Map<string, OfficialNetworkDatasetEdge>();
 let importedNodes = new Map<string, KnooppuntNode>();
 let importedAdjacency = new Map<string, Map<string, OfficialNetworkEdge>>();
+let declaredNetworkAdjacency = new Map<string, Map<string, OfficialNetworkEdge>>();
 let officialTopologyAdjacency = new Map<string, Map<string, OfficialNetworkEdge>>();
 let officialTopologyAnchors = new Map<string, string>();
 
@@ -70,6 +71,28 @@ export function registerOfficialNetworkDataset(dataset: OfficialNetworkDataset):
   importedEdges = next;
   importedNodes = nextNodes;
   importedAdjacency = nextAdjacency;
+  const nextDeclaredAdjacency = new Map<string, Map<string, OfficialNetworkEdge>>(
+    [...nextAdjacency].map(([key, neighbours]) => [key, new Map(neighbours)]),
+  );
+  for (const connection of dataset.declaredConnections || []) {
+    const from = nextNodes.get(connection.from);
+    const to = nextNodes.get(connection.to);
+    if (!from || !to || connection.from === connection.to) continue;
+    const add = (fromKey: string, toKey: string, fromNode: KnooppuntNode, toNode: KnooppuntNode) => {
+      const neighbours = nextDeclaredAdjacency.get(fromKey) || new Map<string, OfficialNetworkEdge>();
+      // Complete, validated geometry always beats a topology-only relation.
+      if (!neighbours.has(toKey)) {
+        neighbours.set(toKey, {
+          fromKey, toKey, coordinates: [], source: connection.source,
+          distanceKm: distanceKm(fromNode.lat, fromNode.lng, toNode.lat, toNode.lng),
+        });
+      }
+      nextDeclaredAdjacency.set(fromKey, neighbours);
+    };
+    add(connection.from, connection.to, from, to);
+    add(connection.to, connection.from, to, from);
+  }
+  declaredNetworkAdjacency = nextDeclaredAdjacency;
   const topologyAdjacency = new Map<string, Map<string, OfficialNetworkEdge>>();
   for (const edge of dataset.topology?.edges || []) {
     if (edge.coordinates.length < 2 || edge.distanceKm <= 0) continue;
@@ -134,6 +157,7 @@ export function getOfficialEdgeBetween(from: KnooppuntNode, to: KnooppuntNode): 
 export interface OfficialNetworkPath {
   edges: OfficialNetworkEdge[];
   nodes: KnooppuntNode[];
+  requiresLiveGeometry: boolean;
 }
 
 function shortestPath(startKey: string, targetKey: string, adjacency: Map<string, Map<string, OfficialNetworkEdge>>): OfficialNetworkEdge[] | null {
@@ -208,12 +232,14 @@ export function findOfficialNetworkPath(from: KnooppuntNode, to: KnooppuntNode):
     officialTopologyAnchors.get(targetKey) || '',
     officialTopologyAdjacency,
   );
-  const edges = topologyEdges || shortestPath(startKey, targetKey, importedAdjacency);
+  const importedEdges = shortestPath(startKey, targetKey, importedAdjacency);
+  const declaredEdges = importedEdges ? null : shortestPath(startKey, targetKey, declaredNetworkAdjacency);
+  const edges = topologyEdges || importedEdges || declaredEdges;
   if (!edges) return null;
   const nodes = topologyEdges
     ? [from, to]
     : [from, ...edges.slice(0, -1).map((edge) => importedNodes.get(edge.toKey)!).filter(Boolean), to];
-  return { edges, nodes };
+  return { edges, nodes, requiresLiveGeometry: Boolean(declaredEdges?.some((edge) => edge.coordinates.length < 2)) };
 }
 
 /** Build an adjacency graph exclusively from verified, endpoint-matched corridors. */

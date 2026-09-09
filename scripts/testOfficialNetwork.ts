@@ -84,6 +84,38 @@ async function main() {
   assert.equal(topologyLeg.coordinates.length, 3, 'official trajectory segments must retain their joined geometry');
   assert.equal(topologyLeg.instructions, 'Geverifieerde knooppuntenroute via officiële trajectsegmenten.');
 
+  const declaredNodes = [
+    { id: 'declared-a', ref: '40', lat: 52, lng: 4 },
+    { id: 'declared-b', ref: '41', lat: 52, lng: 4.01 },
+    { id: 'declared-c', ref: '42', lat: 52, lng: 4.02 },
+  ];
+  registerOfficialNetworkDataset({
+    version: 1,
+    generatedAt: new Date().toISOString(),
+    nodes: declaredNodes,
+    edges: [],
+    declaredConnections: [
+      { from: 'declared-a', to: 'declared-b', source: 'explicit OSM relation' },
+      { from: 'declared-b', to: 'declared-c', source: 'explicit OSM relation' },
+    ],
+  });
+  let declaredRouterCalls = 0;
+  globalThis.fetch = async () => {
+    declaredRouterCalls += 1;
+    const offset = declaredRouterCalls === 1 ? 0 : 0.01;
+    return new Response(JSON.stringify({
+      features: [{ geometry: { coordinates: [[4 + offset, 52], [4.01 + offset, 52]] }, properties: { 'track-length': 1000 } }],
+    }), { status: 200, headers: { 'content-type': 'application/json' } });
+  };
+  try {
+    const declaredLeg = await calculateBicycleLeg(declaredNodes[0], declaredNodes[2]);
+    assert.equal(declaredRouterCalls, 2, 'each missing geometry hop must be routed between declared intermediate nodes');
+    assert.equal(declaredLeg.isVerified, false, 'live geometry for a declared connection must remain visibly distinct');
+    assert.match(declaredLeg.instructions || '', /41/, 'the declared intermediate knooppunt must be retained in the route order');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+
   const fallbackNodes = [
     { id: 'fallback-a', ref: '30', lat: 53, lng: 5 },
     { id: 'fallback-b', ref: '31', lat: 53, lng: 5.01 },

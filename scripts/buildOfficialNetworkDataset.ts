@@ -15,6 +15,7 @@ import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import type {
   KnooppuntNode,
+  OfficialNetworkDeclaredConnection,
   OfficialNetworkDataset,
   OfficialNetworkDatasetEdge,
   OfficialNetworkTopology,
@@ -178,14 +179,20 @@ function findUniqueJunction(coordinate: [number, number], index: Map<string, Opl
   return candidates.length === 1 ? candidates[0] : null;
 }
 
-function resolveEndpoints(relation: OplRelation, coordinates: [number, number][], nodes: Map<number, OplNode>, junctionIndex: Map<string, OplNode[]>): { from: OplNode; to: OplNode; coordinates: [number, number][] } | null {
+function getExplicitEndpoints(relation: OplRelation, nodes: Map<number, OplNode>): { from: OplNode; to: OplNode } | null {
   const explicit = relation.nodeMemberIds.map((id) => nodes.get(id)).filter((node): node is OplNode => Boolean(node && getKnooppuntRef(node)));
+  if (explicit.length < 2) return null;
+  const from = explicit[0];
+  const to = explicit[explicit.length - 1];
+  return from.id === to.id ? null : { from, to };
+}
+
+function resolveEndpoints(relation: OplRelation, coordinates: [number, number][], nodes: Map<number, OplNode>, junctionIndex: Map<string, OplNode[]>): { from: OplNode; to: OplNode; coordinates: [number, number][] } | null {
+  const explicit = getExplicitEndpoints(relation, nodes);
   const start = coordinates[0];
   const finish = coordinates[coordinates.length - 1];
-  if (explicit.length > 1) {
-    const from = explicit[0];
-    const to = explicit[explicit.length - 1];
-    if (from.id === to.id) return null;
+  if (explicit) {
+    const { from, to } = explicit;
     if (close(start, [from.lat, from.lng], EXPLICIT_ENDPOINT_TOLERANCE_DEGREES) && close(finish, [to.lat, to.lng], EXPLICIT_ENDPOINT_TOLERANCE_DEGREES)) return { from, to, coordinates };
     if (close(start, [to.lat, to.lng], EXPLICIT_ENDPOINT_TOLERANCE_DEGREES) && close(finish, [from.lat, from.lng], EXPLICIT_ENDPOINT_TOLERANCE_DEGREES)) return { from, to, coordinates: [...coordinates].reverse() };
     return null;
@@ -377,9 +384,24 @@ async function readPayload(payloadFile: string): Promise<{ nodes: Map<number, Op
   return { nodes, ways };
 }
 
-function consumeVerifiedEdges(relations: OplRelation[], nodes: Map<number, OplNode>, ways: Map<number, OplWay>, junctionIndex: Map<string, OplNode[]>, datasetNodes: Map<string, KnooppuntNode>, edges: Map<string, OfficialNetworkDatasetEdge>): number {
+function consumeVerifiedEdges(relations: OplRelation[], nodes: Map<number, OplNode>, ways: Map<number, OplWay>, junctionIndex: Map<string, OplNode[]>, datasetNodes: Map<string, KnooppuntNode>, edges: Map<string, OfficialNetworkDatasetEdge>, declaredConnections: Map<string, OfficialNetworkDeclaredConnection>): number {
   let rejected = 0;
   for (const relation of relations) {
+    // Route relations with explicit endpoint nodes remain useful topology, even when
+    // their way members are malformed or split. Their geometry is *not* invented;
+    // the client will obtain it per declared Node-to-Node hop when necessary.
+    const declared = getExplicitEndpoints(relation, nodes);
+    if (declared) {
+      const fromId = `osm-${declared.from.id}`;
+      const toId = `osm-${declared.to.id}`;
+      const fromNode = toDatasetNode(declared.from);
+      const toNode = toDatasetNode(declared.to);
+      if (fromNode) datasetNodes.set(fromId, fromNode);
+      if (toNode) datasetNodes.set(toId, toNode);
+      declaredConnections.set([fromId, toId].sort().join('|'), {
+        from: fromId, to: toId, source: `OpenStreetMap RCN relation ${relation.id}`,
+      });
+    }
     const geometry = buildCoordinates(relation, ways, nodes);
     if (!geometry || geometry.length < 2) { rejected += 1; continue; }
     if (hasUnmappedGeometryGap(geometry)) { rejected += 1; continue; }
@@ -410,7 +432,7 @@ async function readJunctions(junctionFile: string): Promise<Map<number, OplNode>
   return nodes;
 }
 
-async function processSource(source: PbfSource, pbfFile: string, workingDirectory: string, datasetNodes: Map<string, KnooppuntNode>, edges: Map<string, OfficialNetworkDatasetEdge>): Promise<SourceBuildResult> {
+async function processSource(source: PbfSource, pbfFile: string, workingDirectory: string, datasetNodes: Map<string, KnooppuntNode>, edges: Map<string, OfficialNetworkDatasetEdge>, declaredConnections: Map<string, OfficialNetworkDeclaredConnection>): Promise<SourceBuildResult> {
   const stem = path.basename(source.filename, '.osm.pbf');
   const relationsFile = path.join(workingDirectory, `${stem}-relations.opl`);
   const junctionsFile = path.join(workingDirectory, `${stem}-junctions.opl`);
@@ -434,7 +456,7 @@ async function processSource(source: PbfSource, pbfFile: string, workingDirector
     const datasetNode = toDatasetNode(node);
     if (datasetNode) datasetNodes.set(String(datasetNode.id), datasetNode);
   }
-  const rejected = consumeVerifiedEdges(relations, nodes, ways, buildJunctionIndex(junctionNodes.values()), datasetNodes, edges);
+  const rejected = consumeVerifiedEdges(relations, nodes, ways, buildJunctionIndex(junctionNodes.values()), datasetNodes, edges, declaredConnections);
   console.log(`${source.label}: ${relations.length} relations examined; ${junctionNodes.size} junctions, ${nodes.size} nodes and ${ways.size} ways retained.`);
   fs.rmSync(relationsFile, { force: true }); fs.rmSync(junctionsFile, { force: true }); fs.rmSync(idsFile, { force: true }); fs.rmSync(payloadFile, { force: true });
   return { rejected, junctionNodes };
@@ -446,20 +468,21 @@ async function main(): Promise<void> {
     await runOsmium(['--version']);
     const datasetNodes = new Map<string, KnooppuntNode>();
     const edges = new Map<string, OfficialNetworkDatasetEdge>();
+    const declaredConnections = new Map<string, OfficialNetworkDeclaredConnection>();
     let rejected = 0;
     let dutchJunctionNodes = new Map<number, OplNode>();
     for (const source of PBF_SOURCES) {
-      const result = await processSource(source, await downloadPbf(source, workingDirectory), workingDirectory, datasetNodes, edges);
+      const result = await processSource(source, await downloadPbf(source, workingDirectory), workingDirectory, datasetNodes, edges, declaredConnections);
       rejected += result.rejected;
       if (source.label === 'Netherlands') dutchJunctionNodes = result.junctionNodes;
     }
     if (edges.size === 0) throw new Error('Geen verifieerbare RCN-routes gevonden; er wordt geen lege dataset geschreven.');
     const topology = await buildDutchOfficialTopology(dutchJunctionNodes);
-    const dataset: OfficialNetworkDataset = { version: 1, generatedAt: new Date().toISOString(), nodes: [...datasetNodes.values()], edges: [...edges.values()], topology };
+    const dataset: OfficialNetworkDataset = { version: 1, generatedAt: new Date().toISOString(), nodes: [...datasetNodes.values()], edges: [...edges.values()], declaredConnections: [...declaredConnections.values()], topology };
     const output = path.join(process.cwd(), 'public', 'data', 'benelux_network.json');
     fs.mkdirSync(path.dirname(output), { recursive: true });
     fs.writeFileSync(output, JSON.stringify(dataset));
-    console.log(`Wrote ${dataset.nodes.length} nodes, ${dataset.edges.length} verified OSM edges and ${topology.edges.length} official Netherlands trajectory segments; rejected ${rejected} relations.`);
+    console.log(`Wrote ${dataset.nodes.length} nodes, ${dataset.edges.length} verified OSM edges, ${declaredConnections.size} declared OSM connections and ${topology.edges.length} official Netherlands trajectory segments; rejected ${rejected} relations.`);
   } finally {
     fs.rmSync(workingDirectory, { recursive: true, force: true });
   }

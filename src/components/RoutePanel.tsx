@@ -341,7 +341,7 @@ export const RoutePanel: React.FC<RoutePanelProps> = ({
 
         {routeLegs.some((leg) => leg.isVerified === false) && !routeError && (
           <div className="p-2.5 rounded-md bg-amber-50 border border-amber-200 text-[11px] leading-relaxed text-amber-950">
-            <strong>Controle nodig.</strong> Een of meer delen volgen een echte fietsroute, maar de lokale knooppuntverbinding kon niet worden geverifieerd.
+            <strong>Controle nodig.</strong> Een of meer delen zijn met live fietsroutering berekend omdat de exacte officiële weggeometrie ontbreekt.
           </div>
         )}
 
