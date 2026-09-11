@@ -60,17 +60,17 @@ export default function App() {
   const [roundTripCenter, setRoundTripCenter] = useState({ lat: 50.912, lng: 5.590 });
   const [roundTripCenterLabel, setRoundTripCenterLabel] = useState('Huidige kaartcentrum');
   const [selectedBike, setSelectedBike] = useState<BikeType>('ebike');
-  // Default to cyclosm (dedicated cycling map, 100% free, no API key required, no watermark)
+  // Standard OSM is the familiar default; a saved user preference takes precedence.
   const [activeTileProvider, setActiveTileProvider] = useState<MapTileProvider>(() => {
     try {
       const saved = localStorage.getItem('preferred_tile_provider') as MapTileProvider | null;
-      if (saved && saved !== 'cyclemap') {
+      if (saved === 'standard' || saved === 'cyclosm' || saved === 'osm_waymarked' || saved === 'topo') {
         return saved;
       }
     } catch {
       // ignore
     }
-    return 'cyclosm';
+    return 'standard';
   });
 
   const handleTileProviderChange = (provider: MapTileProvider) => {

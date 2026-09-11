@@ -248,11 +248,6 @@ export const MapPlanner: React.FC<MapPlannerProps> = ({
       attribution = '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap contributors</a>';
       maxZoom = 19;
       subdomains = 'abc';
-    } else if (activeTileProvider === 'voyager_waymarked') {
-      tileUrl = 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
-      attribution = '&copy; OpenStreetMap &copy; CARTO';
-      maxZoom = 19;
-      subdomains = 'abcd';
     } else if (activeTileProvider === 'topo') {
       tileUrl = 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png';
       attribution = '&copy; OpenStreetMap contributors, SRTM | OpenTopoMap';
@@ -282,8 +277,8 @@ export const MapPlanner: React.FC<MapPlannerProps> = ({
     }).addTo(map);
     baseTileLayerRef.current = baseLayer;
 
-    // Add Waymarked Trails cycling network overlay for OSM & Voyager modes
-    if (activeTileProvider === 'osm_waymarked' || activeTileProvider === 'voyager_waymarked') {
+    // Add the Waymarked Trails cycling network overlay for the OSM cycling mode.
+    if (activeTileProvider === 'osm_waymarked') {
       const waymarkedLayer = L.tileLayer('https://tile.waymarkedtrails.org/cycling/{z}/{x}/{y}.png', {
         attribution: '&copy; <a href="https://cycling.waymarkedtrails.org">Waymarked Trails Cycling</a>',
         maxZoom: 18,
@@ -1193,7 +1188,7 @@ export const MapPlanner: React.FC<MapPlannerProps> = ({
           {/* Header */}
           <div className="flex items-center justify-between pb-2 mb-3 border-b border-slate-100">
             <div>
-              <h2 className="text-xl font-bold text-slate-900 tracking-tight">Kaartlagen (Map Layers)</h2>
+              <h2 className="text-xl font-bold text-slate-900 tracking-tight">Kaartlagen</h2>
               <p className="text-[11px] text-slate-500">Kies je favoriete achtergrondkaart</p>
             </div>
             <button
@@ -1219,7 +1214,46 @@ export const MapPlanner: React.FC<MapPlannerProps> = ({
 
           {/* Layer Options List */}
           <div className="space-y-2.5">
-            {/* CyclOSM (Aanbevolen) */}
+            {/* Standard OpenStreetMap (default) */}
+            <div
+              onClick={() => onChangeTileProvider('standard')}
+              className={`relative h-16 rounded-xl overflow-hidden cursor-pointer transition border ${
+                activeTileProvider === 'standard'
+                  ? 'border-2 border-emerald-500 ring-2 ring-emerald-500/20 shadow-md'
+                  : 'border-slate-200 hover:border-slate-300'
+              }`}
+            >
+              <div className="absolute inset-0 bg-[#e8ece9]">
+                <svg className="w-full h-full object-cover" viewBox="0 0 240 60" preserveAspectRatio="none">
+                  <path d="M0,0 Q60,30 120,10 T240,40 L240,60 L0,60 Z" fill="#cbe3bb" opacity="0.85" />
+                  <path d="M40,0 Q90,50 160,20 T240,10" fill="none" stroke="#ffffff" strokeWidth="4" />
+                  <path d="M0,45 Q100,20 200,55" fill="none" stroke="#fcd6a4" strokeWidth="3" />
+                </svg>
+              </div>
+
+              <div className="absolute top-2 left-0 bg-white/95 backdrop-blur-xs px-2.5 py-1 rounded-r-lg shadow-xs border-y border-r border-slate-200/60 flex items-center gap-1.5">
+                <span className="font-bold text-slate-900 text-xs">Standard (OSM)</span>
+                <span className="text-[9px] font-bold text-emerald-700 bg-emerald-100 px-1.5 py-0.2 rounded">Aanbevolen</span>
+              </div>
+
+              <div className="absolute bottom-1.5 left-3 text-[10px] text-slate-600 font-medium bg-white/80 px-1.5 py-0.5 rounded">
+                Geen watermerk &bull; Klassieke kaartweergave
+              </div>
+
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setActiveInfoLayer(activeInfoLayer === 'standard' ? null : 'standard');
+                }}
+                className="absolute top-2 right-2 w-6 h-6 rounded-full bg-slate-900/15 hover:bg-slate-900/30 text-slate-800 flex items-center justify-center transition cursor-pointer"
+                title="Info over Standard"
+              >
+                <Info className="w-3.5 h-3.5" />
+              </button>
+            </div>
+
+            {/* CyclOSM */}
             <div
               onClick={() => onChangeTileProvider('cyclosm')}
               className={`relative h-16 rounded-xl overflow-hidden cursor-pointer transition border ${
@@ -1238,7 +1272,7 @@ export const MapPlanner: React.FC<MapPlannerProps> = ({
 
               <div className="absolute top-2 left-0 bg-white/95 backdrop-blur-xs px-2.5 py-1 rounded-r-lg shadow-xs border-y border-r border-slate-200/60 flex items-center gap-1.5">
                 <span className="font-bold text-slate-900 text-xs">CyclOSM</span>
-                <span className="text-[9px] font-bold text-emerald-700 bg-emerald-100 px-1.5 py-0.2 rounded">Aanbevolen</span>
+                <span className="text-[9px] font-bold text-emerald-700 bg-emerald-100 px-1.5 py-0.2 rounded">Fietskaart</span>
               </div>
 
               <div className="absolute bottom-1.5 left-3 text-[10px] text-slate-600 font-medium bg-white/80 px-1.5 py-0.5 rounded">
@@ -1293,83 +1327,6 @@ export const MapPlanner: React.FC<MapPlannerProps> = ({
                 }}
                 className="absolute top-2 right-2 w-6 h-6 rounded-full bg-slate-900/15 hover:bg-slate-900/30 text-slate-800 flex items-center justify-center transition cursor-pointer"
                 title="Info over OSM + Fietsnetwerk"
-              >
-                <Info className="w-3.5 h-3.5" />
-              </button>
-            </div>
-
-            {/* Standard OpenStreetMap */}
-            <div
-              onClick={() => onChangeTileProvider('standard')}
-              className={`relative h-16 rounded-xl overflow-hidden cursor-pointer transition border ${
-                activeTileProvider === 'standard'
-                  ? 'border-2 border-blue-500 ring-2 ring-blue-500/20 shadow-md'
-                  : 'border-slate-200 hover:border-slate-300'
-              }`}
-            >
-              <div className="absolute inset-0 bg-[#e8ece9]">
-                <svg className="w-full h-full object-cover" viewBox="0 0 240 60" preserveAspectRatio="none">
-                  <path d="M0,0 Q60,30 120,10 T240,40 L240,60 L0,60 Z" fill="#cbe3bb" opacity="0.85" />
-                  <path d="M40,0 Q90,50 160,20 T240,10" fill="none" stroke="#ffffff" strokeWidth="4" />
-                  <path d="M0,45 Q100,20 200,55" fill="none" stroke="#fcd6a4" strokeWidth="3" />
-                </svg>
-              </div>
-
-              <div className="absolute top-2 left-0 bg-white/95 backdrop-blur-xs px-2.5 py-1 rounded-r-lg shadow-xs border-y border-r border-slate-200/60">
-                <span className="font-bold text-slate-900 text-xs">Standard (OSM)</span>
-              </div>
-
-              <div className="absolute bottom-1.5 left-3 text-[10px] text-slate-600 font-medium bg-white/80 px-1.5 py-0.5 rounded">
-                Geen watermerk &bull; Klassieke kaartweergave
-              </div>
-
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setActiveInfoLayer(activeInfoLayer === 'standard' ? null : 'standard');
-                }}
-                className="absolute top-2 right-2 w-6 h-6 rounded-full bg-slate-900/15 hover:bg-slate-900/30 text-slate-800 flex items-center justify-center transition cursor-pointer"
-                title="Info over Standard"
-              >
-                <Info className="w-3.5 h-3.5" />
-              </button>
-            </div>
-
-            {/* CartoDB Voyager + Fietsnetwerk */}
-            <div
-              onClick={() => onChangeTileProvider('voyager_waymarked')}
-              className={`relative h-16 rounded-xl overflow-hidden cursor-pointer transition border ${
-                activeTileProvider === 'voyager_waymarked'
-                  ? 'border-2 border-purple-500 ring-2 ring-purple-500/20 shadow-md'
-                  : 'border-slate-200 hover:border-slate-300'
-              }`}
-            >
-              <div className="absolute inset-0 bg-[#fafafa]">
-                <svg className="w-full h-full object-cover" viewBox="0 0 240 60" preserveAspectRatio="none">
-                  <path d="M0,25 Q120,45 240,20" fill="none" stroke="#9333ea" strokeWidth="2.5" />
-                  <path d="M40,0 L70,60" fill="none" stroke="#e2e8f0" strokeWidth="2" />
-                  <circle cx="120" cy="35" r="4" fill="#9333ea" />
-                </svg>
-              </div>
-
-              <div className="absolute top-2 left-0 bg-white/95 backdrop-blur-xs px-2.5 py-1 rounded-r-lg shadow-xs border-y border-r border-slate-200/60 flex items-center gap-1.5">
-                <span className="font-bold text-slate-900 text-xs">CartoDB Voyager</span>
-                <span className="text-[9px] font-bold text-purple-700 bg-purple-100 px-1.5 py-0.2 rounded">Rustig</span>
-              </div>
-
-              <div className="absolute bottom-1.5 left-3 text-[10px] text-slate-600 font-medium bg-white/80 px-1.5 py-0.5 rounded">
-                Geen watermerk &bull; Rustige lichte kaart met routes
-              </div>
-
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setActiveInfoLayer(activeInfoLayer === 'voyager_waymarked' ? null : 'voyager_waymarked');
-                }}
-                className="absolute top-2 right-2 w-6 h-6 rounded-full bg-slate-900/15 hover:bg-slate-900/30 text-slate-800 flex items-center justify-center transition cursor-pointer"
-                title="Info over CartoDB Voyager"
               >
                 <Info className="w-3.5 h-3.5" />
               </button>
@@ -1489,10 +1446,9 @@ export const MapPlanner: React.FC<MapPlannerProps> = ({
           {activeInfoLayer && (
             <div className="mt-3 p-2.5 bg-blue-50 rounded-lg text-xs text-blue-900 border border-blue-200 animate-in fade-in">
               <div className="font-semibold mb-1">
-                {activeInfoLayer === 'cyclosm' && 'CyclOSM (Aanbevolen fietskaart)'}
+                {activeInfoLayer === 'cyclosm' && 'CyclOSM'}
                 {activeInfoLayer === 'osm_waymarked' && 'OSM + Fietsnetwerk (Waymarked Trails)'}
                 {activeInfoLayer === 'standard' && 'Standard (OpenStreetMap)'}
-                {activeInfoLayer === 'voyager_waymarked' && 'CartoDB Voyager + Fietsnetwerk'}
                 {activeInfoLayer === 'cyclemap' && 'OpenCycleMap (Thunderforest)'}
               </div>
               <p className="text-[11px] leading-relaxed text-blue-800">
@@ -1502,8 +1458,6 @@ export const MapPlanner: React.FC<MapPlannerProps> = ({
                   'Standaard OpenStreetMap verrijkt met de officiële fietsknooppunten- en routenetwerken van Waymarked Trails. Gratis en zonder watermerk.'}
                 {activeInfoLayer === 'standard' &&
                   'De standaard OpenStreetMap kaartweergave met volledige topografie, straten en dorpen. Gratis en zonder watermerk.'}
-                {activeInfoLayer === 'voyager_waymarked' &&
-                  'Lichte, moderne cartografie van CartoDB gecombineerd met de fietsknooppuntenlijnen. Rustig voor het oog.'}
                 {activeInfoLayer === 'cyclemap' &&
                   'De klassieke OpenCycleMap. Toont heuvelreliëf en knooppunten. Omdat Thunderforest tegenwoordig een commerciële dienst is, plaatsen zij standaard een watermerk tenzij je een gratis of betaalde API-key invoert.'}
               </p>
@@ -1545,7 +1499,7 @@ export const MapPlanner: React.FC<MapPlannerProps> = ({
               ? 'text-blue-600 bg-blue-50 border-blue-400 ring-2 ring-blue-400/30'
               : 'text-slate-700 hover:text-blue-600 border-slate-200 hover:border-slate-300'
           }`}
-          title="Kaartlagen kiezen (Map Layers)"
+          title="Kaartlagen kiezen"
         >
           <Layers className="w-5 h-5" />
         </button>
