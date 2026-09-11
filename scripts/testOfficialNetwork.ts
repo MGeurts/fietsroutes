@@ -220,6 +220,36 @@ async function main() {
   } finally {
     globalThis.fetch = originalFetch;
   }
+
+  const sharedRequestNodes = [
+    { id: 'shared-a', ref: '70', lat: 51, lng: 5 },
+    { id: 'shared-b', ref: '71', lat: 51, lng: 5.01 },
+  ];
+  registerOfficialNetworkDataset({
+    version: 1,
+    generatedAt: new Date().toISOString(),
+    nodes: sharedRequestNodes,
+    edges: [],
+    declaredConnections: [{ from: 'shared-a', to: 'shared-b', source: 'explicit OSM relation' }],
+  });
+  let sharedRequestCalls = 0;
+  globalThis.fetch = async () => {
+    sharedRequestCalls += 1;
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    return new Response(JSON.stringify({
+      features: [{ geometry: { coordinates: [[5, 51], [5.01, 51]] }, properties: { 'track-length': 1000 } }],
+    }), { status: 200, headers: { 'content-type': 'application/json' } });
+  };
+  try {
+    const [firstLeg, secondLeg] = await Promise.all([
+      calculateBicycleLeg(sharedRequestNodes[0], sharedRequestNodes[1]),
+      calculateBicycleLeg(sharedRequestNodes[0], sharedRequestNodes[1]),
+    ]);
+    assert.equal(sharedRequestCalls, 1, 'simultaneous requests for one missing geometry must share one live router request');
+    assert.equal(firstLeg, secondLeg, 'simultaneous callers must receive the same resolved leg');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
   console.log('Official-network regression tests passed.');
 }
 

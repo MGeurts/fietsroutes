@@ -4,6 +4,11 @@ import { findOfficialNetworkPath, getOfficialEdgeBetween } from './officialNetwo
 
 // In-memory cache for resolved legs to make route rendering instantaneous
 const legCache = new Map<string, RouteLeg>();
+// A second click (or a route update) can request the same leg while its live
+// geometry is still loading. Share that request instead of sending it to the
+// external router a second time.
+const pendingLegs = new Map<string, Promise<RouteLeg>>();
+const MAX_CONCURRENT_LIVE_SEGMENTS = 4;
 
 /**
  * Calculate distance between two coordinates in kilometers using Haversine formula
@@ -98,6 +103,24 @@ async function fetchLiveBicycleRoute(fromNode: KnooppuntNode, toNode: KnooppuntN
   return { coordinates: osrmCoordinates, distanceKm: Math.round((metres / 1_000) * 100) / 100, source: 'OpenStreetMap fietsroutering', geometrySource: 'osm-router' };
 }
 
+async function mapWithConcurrency<T, R>(
+  items: T[],
+  concurrency: number,
+  mapper: (item: T, index: number) => Promise<R>,
+): Promise<R[]> {
+  const results = new Array<R>(items.length);
+  let nextIndex = 0;
+  const worker = async () => {
+    while (nextIndex < items.length) {
+      const index = nextIndex;
+      nextIndex += 1;
+      results[index] = await mapper(items[index], index);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(concurrency, items.length) }, worker));
+  return results;
+}
+
 export async function calculateBicycleLeg(
   fromNode: KnooppuntNode,
   toNode: KnooppuntNode
@@ -106,7 +129,25 @@ export async function calculateBicycleLeg(
   if (legCache.has(cacheKey)) {
     return legCache.get(cacheKey)!;
   }
+  const pending = pendingLegs.get(cacheKey);
+  if (pending) return pending;
 
+  const calculation = calculateBicycleLegUncached(fromNode, toNode)
+    .then((leg) => {
+      legCache.set(cacheKey, leg);
+      return leg;
+    })
+    .finally(() => {
+      pendingLegs.delete(cacheKey);
+    });
+  pendingLegs.set(cacheKey, calculation);
+  return calculation;
+}
+
+async function calculateBicycleLegUncached(
+  fromNode: KnooppuntNode,
+  toNode: KnooppuntNode,
+): Promise<RouteLeg> {
   const edge = getOfficialEdgeBetween(fromNode, toNode);
   if (edge) {
     const leg: RouteLeg = {
@@ -118,7 +159,6 @@ export async function calculateBicycleLeg(
       isVerified: true,
       displaySegments: [{ coordinates: edge.coordinates, source: 'official', analysis: analysisForConnection(fromNode, toNode, edge.source, 'official') }],
     };
-    legCache.set(cacheKey, leg);
     return leg;
   }
 
@@ -126,21 +166,18 @@ export async function calculateBicycleLeg(
   if (path) {
     const viaRefs = path.nodes.slice(1, -1).map((node) => node.ref);
     if (path.requiresLiveGeometry) {
-      const segments: (RouteDisplaySegment & { distanceKm: number })[] = [];
-      for (let index = 0; index < path.edges.length; index += 1) {
-        const edge = path.edges[index];
+      const segments = await mapWithConcurrency(path.edges, MAX_CONCURRENT_LIVE_SEGMENTS, async (edge, index) => {
         const segmentFrom = path.nodes[index] || fromNode;
         const segmentTo = path.nodes[index + 1] || toNode;
         if (edge.coordinates.length >= 2) {
-          segments.push({ coordinates: edge.coordinates, distanceKm: edge.distanceKm, source: 'official', analysis: analysisForConnection(segmentFrom, segmentTo, edge.source, 'official') });
-          continue;
+          return { coordinates: edge.coordinates, distanceKm: edge.distanceKm, source: 'official' as const, analysis: analysisForConnection(segmentFrom, segmentTo, edge.source, 'official') };
         }
         const liveRoute = await fetchLiveBicycleRoute(segmentFrom, segmentTo);
         if (!liveRoute) throw new UnknownKnooppuntenConnectionError(segmentFrom.ref, segmentTo.ref);
         // The OSM Node-to-Node relation establishes this as an official connection.
         // Only its detailed road geometry comes from the live router.
-        segments.push({ coordinates: liveRoute.coordinates, distanceKm: liveRoute.distanceKm, source: 'official-declared', analysis: analysisForConnection(segmentFrom, segmentTo, edge.source, 'official-declared') });
-      }
+        return { coordinates: liveRoute.coordinates, distanceKm: liveRoute.distanceKm, source: 'official-declared' as const, analysis: analysisForConnection(segmentFrom, segmentTo, edge.source, 'official-declared') };
+      });
       const leg: RouteLeg = {
         fromNode, toNode,
         distanceKm: Math.round(segments.reduce((total, segment) => total + segment.distanceKm, 0) * 100) / 100,
@@ -151,7 +188,6 @@ export async function calculateBicycleLeg(
         isVerified: false,
         displaySegments: segments,
       };
-      legCache.set(cacheKey, leg);
       return leg;
     }
     const leg: RouteLeg = {
@@ -169,7 +205,6 @@ export async function calculateBicycleLeg(
         analysis: analysisForConnection(path.nodes[index] || fromNode, path.nodes[index + 1] || toNode, edge.source, 'official'),
       })),
     };
-    legCache.set(cacheKey, leg);
     return leg;
   }
 
@@ -181,7 +216,6 @@ export async function calculateBicycleLeg(
     isVerified: false,
     displaySegments: [{ coordinates: liveRoute.coordinates, source: liveRoute.geometrySource, analysis: analysisForConnection(fromNode, toNode, liveRoute.source, liveRoute.geometrySource) }],
   };
-  legCache.set(cacheKey, leg);
   return leg;
 }
 
