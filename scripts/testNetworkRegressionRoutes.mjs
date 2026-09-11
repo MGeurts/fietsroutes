@@ -105,4 +105,9 @@ verifyRoute({
   expectedNodeIds: ['osm-42412926', 'osm-42428176', 'osm-42439218', 'osm-269977106'],
 });
 
-console.log('Dataset-regressietests voor Genk en Valkenswaard geslaagd.');
+verifyRoute({
+  name: 'Rekem 61 → 58',
+  expectedNodeIds: ['osm-416503782', 'osm-370250633', 'osm-370250018', 'osm-207662730'],
+});
+
+console.log('Dataset-regressietests voor Genk, Valkenswaard en Rekem geslaagd.');

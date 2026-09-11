@@ -19,6 +19,7 @@ export default function App() {
   // Available nodes in current state (preloaded + Overpass queried)
   const [availableNodes, setAvailableNodes] = useState<KnooppuntNode[]>([]);
   const [availableConnectionsCount, setAvailableConnectionsCount] = useState(0);
+  const officialNetworkNodeIdsRef = useRef(new Set<string>());
 
   // Clean initial state without default route (starts fresh on current location)
   const [selectedNodes, setSelectedNodes] = useState<KnooppuntNode[]>([]);
@@ -280,8 +281,8 @@ export default function App() {
     });
   }, []);
 
-  // Merge nodes with spatial deduplication. Cached nodes must never replace an identity
-  // from the verified network dataset: its OSM id is the key used by the route graph.
+  // Merge dynamically discovered nodes without ever replacing an identity from the
+  // packaged network dataset: its OSM id is the key used by the route graph.
   const handleAddNewNodes = useCallback((newNodes: KnooppuntNode[], preserveOfficialIdentity = false) => {
     if (!newNodes || newNodes.length === 0) return;
     if (!preserveOfficialIdentity) saveNodesToCache(newNodes).catch(() => {});
@@ -298,7 +299,7 @@ export default function App() {
 
         if (existingIdx >= 0) {
           const existing = updated[existingIdx];
-          if (preserveOfficialIdentity && String(existing.id).startsWith('osm-')) {
+          if (preserveOfficialIdentity || officialNetworkNodeIdsRef.current.has(String(existing.id))) {
             continue;
           }
           updated[existingIdx] = {
@@ -343,7 +344,30 @@ export default function App() {
     loadPrepackagedOfficialNetwork()
       .then(async (network) => {
         if (!network?.nodes.length) throw new Error('Ingebouwde netwerkdataset ontbreekt of is ongeldig.');
-        await replaceCachedNodes(network.nodes);
+        const routeableNodeIds = new Set([
+          ...network.edges.flatMap((edge) => [edge.from, edge.to]),
+          ...(network.declaredConnections || []).flatMap((connection) => [connection.from, connection.to]),
+          ...Object.keys(network.topology?.anchors || {}),
+        ]);
+        const routeableNodesByRef = new Map<string, KnooppuntNode[]>();
+        for (const node of network.nodes) {
+          if (!routeableNodeIds.has(String(node.id))) continue;
+          const sameRef = routeableNodesByRef.get(node.ref) || [];
+          sameRef.push(node);
+          routeableNodesByRef.set(node.ref, sameRef);
+        }
+        // OSM occasionally contains a second marker with the same number a few
+        // metres away. If that duplicate has no network edge, showing it lets a
+        // user bypass the actual junction graph and wrongly trigger BRouter.
+        const selectableNodes = network.nodes.filter((node) => {
+          if (routeableNodeIds.has(String(node.id))) return true;
+          return !(routeableNodesByRef.get(node.ref) || []).some((routeable) => (
+            Math.abs(routeable.lat - node.lat) < 0.003
+            && Math.abs(routeable.lng - node.lng) < 0.003
+          ));
+        });
+        officialNetworkNodeIdsRef.current = new Set(selectableNodes.map((node) => String(node.id)));
+        await replaceCachedNodes(selectableNodes);
         if (!cancelled) {
           // A declared OSM relation remains routeable even when its exact line is
           // absent. Count every unique endpoint pair once, regardless of whether
@@ -352,7 +376,7 @@ export default function App() {
             ...network.edges.map((edge) => [edge.from, edge.to].sort().join('\u0000')),
             ...(network.declaredConnections || []).map((connection) => [connection.from, connection.to].sort().join('\u0000')),
           ]);
-          setAvailableNodes(network.nodes);
+          setAvailableNodes(selectableNodes);
           setAvailableConnectionsCount(connectionKeys.size);
         }
       })
