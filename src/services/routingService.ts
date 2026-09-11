@@ -157,7 +157,7 @@ async function calculateBicycleLegUncached(
       coordinates: edge.coordinates,
       instructions: `Geverifieerde netwerkverbinding: ${edge.source}`,
       isVerified: true,
-      displaySegments: [{ coordinates: edge.coordinates, source: 'official', analysis: analysisForConnection(fromNode, toNode, edge.source, 'official') }],
+      displaySegments: [{ coordinates: edge.coordinates, distanceKm: edge.distanceKm, source: 'official', analysis: analysisForConnection(fromNode, toNode, edge.source, 'official') }],
     };
     return leg;
   }
@@ -206,6 +206,7 @@ async function calculateBicycleLegUncached(
         .filter(({ edge }) => !edge.isJunctionAlias)
         .map(({ edge, index }) => ({
           coordinates: edge.coordinates,
+          distanceKm: edge.distanceKm,
           source: 'official' as const,
           analysis: analysisForConnection(path.edgeNodes[index] || fromNode, path.edgeNodes[index + 1] || toNode, edge.source, 'official'),
         })),
@@ -219,7 +220,7 @@ async function calculateBicycleLegUncached(
     fromNode, toNode, distanceKm: liveRoute.distanceKm, coordinates: liveRoute.coordinates,
     instructions: `${liveRoute.source}; knooppuntverbinding niet geverifieerd.`,
     isVerified: false,
-    displaySegments: [{ coordinates: liveRoute.coordinates, source: liveRoute.geometrySource, analysis: analysisForConnection(fromNode, toNode, liveRoute.source, liveRoute.geometrySource) }],
+    displaySegments: [{ coordinates: liveRoute.coordinates, distanceKm: liveRoute.distanceKm, source: liveRoute.geometrySource, analysis: analysisForConnection(fromNode, toNode, liveRoute.source, liveRoute.geometrySource) }],
   };
   return leg;
 }

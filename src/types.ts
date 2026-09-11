@@ -25,6 +25,8 @@ export type RouteGeometrySource = 'official' | 'official-declared' | 'brouter' |
 
 export interface RouteDisplaySegment {
   coordinates: [number, number][];
+  /** Length of this individual junction-to-junction segment. */
+  distanceKm?: number;
   source: RouteGeometrySource;
   /** Evidence carried to the map click handler; never inferred from a node number alone. */
   analysis?: RouteConnectionAnalysis;

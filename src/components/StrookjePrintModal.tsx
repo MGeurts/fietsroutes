@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { PlannedRoute, BikeType } from '../types';
+import { PlannedRoute, BikeType, KnooppuntNode } from '../types';
 import { Printer, Copy, Check, X, ExternalLink, Download, AlertCircle } from 'lucide-react';
 
 interface StrookjePrintModalProps {
@@ -8,6 +8,59 @@ interface StrookjePrintModalProps {
   route: PlannedRoute;
   selectedBike: BikeType;
   averageSpeedKmH: number;
+}
+
+interface StripNode {
+  node: KnooppuntNode;
+  automatic: boolean;
+}
+
+interface StripLeg {
+  fromNode: KnooppuntNode;
+  toNode: KnooppuntNode;
+  distanceKm: number;
+}
+
+/** Expand each selected leg into every actual junction-to-junction hop. */
+function buildStripRoute(route: PlannedRoute): { nodes: StripNode[]; legs: StripLeg[] } {
+  const selectedNodeIds = new Set(route.nodes.map((node) => String(node.id)));
+  const nodes: StripNode[] = [];
+  const legs: StripLeg[] = [];
+  const appendNode = (node: KnooppuntNode, automatic: boolean) => {
+    const last = nodes[nodes.length - 1];
+    if (last && String(last.node.id) === String(node.id)) {
+      if (!automatic) last.automatic = false;
+      return;
+    }
+    nodes.push({ node, automatic });
+  };
+
+  for (const leg of route.legs) {
+    const segments = (leg.displaySegments || []).filter((segment) => segment.analysis);
+    if (segments.length === 0) {
+      appendNode(leg.fromNode, !selectedNodeIds.has(String(leg.fromNode.id)));
+      appendNode(leg.toNode, !selectedNodeIds.has(String(leg.toNode.id)));
+      legs.push({ fromNode: leg.fromNode, toNode: leg.toNode, distanceKm: leg.distanceKm });
+      continue;
+    }
+    for (const segment of segments) {
+      const analysis = segment.analysis!;
+      appendNode(analysis.fromNode, !selectedNodeIds.has(String(analysis.fromNode.id)));
+      appendNode(analysis.toNode, !selectedNodeIds.has(String(analysis.toNode.id)));
+      legs.push({
+        fromNode: analysis.fromNode,
+        toNode: analysis.toNode,
+        // Older saved routes may not yet have segment distances. Their total is
+        // still shown accurately when they contain one visible segment.
+        distanceKm: segment.distanceKm ?? (segments.length === 1 ? leg.distanceKm : 0),
+      });
+    }
+  }
+
+  if (nodes.length === 0 && route.nodes.length > 0) {
+    route.nodes.forEach((node) => appendNode(node, false));
+  }
+  return { nodes, legs };
 }
 
 export const StrookjePrintModal: React.FC<StrookjePrintModalProps> = ({
@@ -25,11 +78,12 @@ export const StrookjePrintModal: React.FC<StrookjePrintModalProps> = ({
   const durationHours = route.totalDistanceKm / averageSpeedKmH;
   const hours = Math.floor(durationHours);
   const minutes = Math.round((durationHours - hours) * 60);
+  const stripRoute = buildStripRoute(route);
 
   // Generate plain text format for easy sharing
   const textSummary = `🚴 ${route.name} (${route.totalDistanceKm} km - ca. ${hours}u${minutes > 0 ? ` ${minutes}m` : ''})\n` +
-    `Knooppunten: ${route.nodes.map(n => n.ref).join(' ➔ ')}\n\n` +
-    route.legs.map((leg, i) => `${i + 1}. [${leg.fromNode.ref}] ➔ ${leg.distanceKm} km ➔ [${leg.toNode.ref}]${leg.toNode.name ? ` (${leg.toNode.name})` : ''}`).join('\n') +
+    `Knooppunten: ${stripRoute.nodes.map(({ node }) => node.ref).join(' ➔ ')}\n\n` +
+    stripRoute.legs.map((leg, i) => `${i + 1}. [${leg.fromNode.ref}] ➔ ${leg.distanceKm} km ➔ [${leg.toNode.ref}]${leg.toNode.name ? ` (${leg.toNode.name})` : ''}`).join('\n') +
     `\n\nGemaakt met Fietsroute Planner NL & BE (OpenStreetMap & Knooppuntennetwerk)`;
 
   const handleCopy = () => {
@@ -168,6 +222,11 @@ export const StrookjePrintModal: React.FC<StrookjePrintModalProps> = ({
       justify-content: center;
       box-shadow: 0 1px 2px rgba(0,0,0,0.08);
     }
+    .node-badge.automatic {
+      color: #475569;
+      border-color: #64748b;
+      background: #f8fafc;
+    }
     .leg-arrow {
       display: flex;
       flex-direction: column;
@@ -243,11 +302,11 @@ export const StrookjePrintModal: React.FC<StrookjePrintModalProps> = ({
       </div>
 
       <div class="nodes-grid">
-        ${route.nodes.map((node, i) => {
-          const leg = route.legs[i];
+        ${stripRoute.nodes.map(({ node, automatic }, i) => {
+          const leg = stripRoute.legs[i];
           return `
             <div class="node-item">
-              <div class="node-badge">${node.ref}</div>
+              <div class="node-badge${automatic ? ' automatic' : ''}" title="${automatic ? 'Automatisch tussenknooppunt' : 'Gekozen knooppunt'}">${node.ref}</div>
               ${leg ? `
                 <div class="leg-arrow">
                   <span>➔</span>
@@ -261,7 +320,7 @@ export const StrookjePrintModal: React.FC<StrookjePrintModalProps> = ({
 
       <div class="legs-table">
         <div style="font-weight: bold; font-size: 10px; color: #64748b; text-transform: uppercase; margin-bottom: 4px;">Deeltrajecten</div>
-        ${route.legs.map(leg => `
+        ${stripRoute.legs.map(leg => `
           <div class="leg-row">
             <div class="leg-points">
               <span class="mini-node">${leg.fromNode.ref}</span>
@@ -434,15 +493,15 @@ export const StrookjePrintModal: React.FC<StrookjePrintModalProps> = ({
             {/* Visual Node Badges Flow */}
             <div className="space-y-2">
               <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                Volgorde op het stuur ({route.nodes.length} knooppunten)
+                Volgorde op het stuur ({stripRoute.nodes.length} knooppunten) <span className="normal-case font-medium text-slate-400">• grijs = automatisch tussenpunt</span>
               </div>
               <div className="flex flex-wrap items-center gap-2 py-2">
-                {route.nodes.map((node, index) => {
-                  const nextLeg = route.legs[index];
+                {stripRoute.nodes.map(({ node, automatic }, index) => {
+                  const nextLeg = stripRoute.legs[index];
                   return (
                     <React.Fragment key={`${node.ref}-${index}`}>
                       <div className="flex items-center gap-1.5">
-                        <div className="w-9 h-9 rounded-full bg-white text-emerald-700 font-bold text-sm flex items-center justify-center shadow-xs border-2 border-emerald-500 shrink-0">
+                        <div title={automatic ? 'Automatisch tussenknooppunt' : 'Gekozen knooppunt'} className={`w-9 h-9 rounded-full font-bold text-sm flex items-center justify-center shadow-xs border-2 shrink-0 ${automatic ? 'bg-slate-100 text-slate-700 border-slate-500' : 'bg-white text-emerald-700 border-emerald-500'}`}>
                           {node.ref}
                         </div>
                         {nextLeg && (
@@ -463,7 +522,7 @@ export const StrookjePrintModal: React.FC<StrookjePrintModalProps> = ({
               <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">
                 Afstanden tussen knooppunten
               </div>
-              {route.legs.map((leg, i) => (
+              {stripRoute.legs.map((leg, i) => (
                 <div key={i} className="flex items-center justify-between py-1 px-2 rounded hover:bg-slate-50 text-xs border-b border-slate-100 last:border-0">
                   <div className="flex items-center gap-2">
                     <span className="w-5 h-5 rounded-full bg-emerald-600 text-white text-[10px] font-bold flex items-center justify-center shrink-0">
