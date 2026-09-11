@@ -4,6 +4,7 @@ import { KnooppuntNode } from '../types';
 import { Sparkles, RotateCw, X, Check, MapPin, Compass, Navigation, ArrowRight, Map as MapIcon } from 'lucide-react';
 import { findNearestRoundTripStart, findRoundTrips, GeneratedLoop } from '../services/roundTripService';
 import { getOfficialEdgeBetween } from '../services/officialNetworkService';
+import { findNearestMunicipality } from '../services/localityService';
 
 interface RoundTripModalProps {
   isOpen: boolean;
@@ -33,7 +34,14 @@ function nodeDistanceAndDirection(node: KnooppuntNode, center: { lat: number; ln
   const directions = ['N', 'NO', 'O', 'ZO', 'Z', 'ZW', 'W', 'NW'];
   const bearing = (Math.atan2(eastKm, northKm) * 180 / Math.PI + 360) % 360;
   const direction = directions[Math.round(bearing / 45) % directions.length];
-  return `${distanceKm.toFixed(1)} km ${direction} · ${node.lat.toFixed(4)}, ${node.lng.toFixed(4)}`;
+  return `${distanceKm.toFixed(1)} km ${direction}`;
+}
+
+function nodeOptionLabel(node: KnooppuntNode, center: { lat: number; lng: number }): string {
+  // The official network dataset generally stores the node number but no
+  // meaningful OSM name. Resolve a nearby municipality for a readable label.
+  const locality = findNearestMunicipality(node.lat, node.lng);
+  return `KP ${node.ref} — ${locality.municipality} (${locality.region}) · ${nodeDistanceAndDirection(node, center)}`;
 }
 
 const RoundTripPreviewModal: React.FC<{
@@ -114,11 +122,13 @@ export const RoundTripModal: React.FC<RoundTripModalProps> = ({
   );
 
   const startOptions = useMemo(() => (
-    [...availableNodes].sort((left, right) => {
-      const leftDistance = Math.hypot(left.lat - center.lat, left.lng - center.lng);
-      const rightDistance = Math.hypot(right.lat - center.lat, right.lng - center.lng);
-      return leftDistance - rightDistance || left.ref.localeCompare(right.ref, 'nl');
-    })
+    [...availableNodes]
+      .sort((left, right) => {
+        const leftDistance = Math.hypot(left.lat - center.lat, left.lng - center.lng);
+        const rightDistance = Math.hypot(right.lat - center.lat, right.lng - center.lng);
+        return leftDistance - rightDistance || left.ref.localeCompare(right.ref, 'nl');
+      })
+      .map((node) => ({ node, label: nodeOptionLabel(node, center) }))
   ), [availableNodes, center]);
 
   // Initialize or update start node when modal opens
@@ -209,9 +219,9 @@ export const RoundTripModal: React.FC<RoundTripModalProps> = ({
               }}
               className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2.5 text-xs text-slate-800 font-medium focus:ring-2 focus:ring-emerald-500 focus:outline-hidden"
             >
-              {startOptions.map((n) => (
-                <option key={n.id || `${n.ref}-${n.lat}-${n.lng}`} value={n.id || n.ref}>
-                  KP {n.ref} · {nodeDistanceAndDirection(n, center)}
+              {startOptions.map(({ node, label }) => (
+                <option key={node.id || `${node.ref}-${node.lat}-${node.lng}`} value={node.id || node.ref}>
+                  {label}
                 </option>
               ))}
             </select>
