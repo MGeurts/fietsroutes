@@ -20,6 +20,28 @@ export default function App() {
   const [availableNodes, setAvailableNodes] = useState<KnooppuntNode[]>([]);
   const [availableConnectionsCount, setAvailableConnectionsCount] = useState(0);
   const officialNetworkNodeIdsRef = useRef(new Set<string>());
+  const routeableNodesByRefRef = useRef(new Map<string, KnooppuntNode[]>());
+
+  // An OSM area can contain an unconnected duplicate marker with the same ref
+  // close to the actual junction. Resolve that stale map/cache marker back to
+  // the routeable identity at click time as a final safety net.
+  const resolveRouteableNode = useCallback((node: KnooppuntNode): KnooppuntNode => {
+    const candidates = routeableNodesByRefRef.current.get(node.ref) || [];
+    if (candidates.some((candidate) => String(candidate.id) === String(node.id))) return node;
+    let closest: KnooppuntNode | undefined;
+    let closestDistance = Infinity;
+    for (const candidate of candidates) {
+      const latDifference = Math.abs(candidate.lat - node.lat);
+      const lngDifference = Math.abs(candidate.lng - node.lng);
+      if (latDifference >= 0.003 || lngDifference >= 0.003) continue;
+      const distance = Math.hypot(latDifference, lngDifference);
+      if (distance < closestDistance) {
+        closest = candidate;
+        closestDistance = distance;
+      }
+    }
+    return closest || node;
+  }, []);
 
   // Clean initial state without default route (starts fresh on current location)
   const [selectedNodes, setSelectedNodes] = useState<KnooppuntNode[]>([]);
@@ -262,14 +284,15 @@ export default function App() {
 
   // Click on a node: append to route
   const handleNodeClick = useCallback((node: KnooppuntNode) => {
+    const routeableNode = resolveRouteableNode(node);
     applyRouteUpdate((prev) => {
       // Don't add same physical node twice consecutively
-      if (prev.length > 0 && String(prev[prev.length - 1].id || prev[prev.length - 1].ref) === String(node.id || node.ref)) {
+      if (prev.length > 0 && String(prev[prev.length - 1].id || prev[prev.length - 1].ref) === String(routeableNode.id || routeableNode.ref)) {
         return prev;
       }
-      return [...prev, node];
+      return [...prev, routeableNode];
     });
-  }, [applyRouteUpdate]);
+  }, [applyRouteUpdate, resolveRouteableNode]);
 
   // Add dynamically discovered node from Overpass
   const handleAddNewNode = useCallback((node: KnooppuntNode) => {
@@ -367,6 +390,7 @@ export default function App() {
           ));
         });
         officialNetworkNodeIdsRef.current = new Set(selectableNodes.map((node) => String(node.id)));
+        routeableNodesByRefRef.current = routeableNodesByRef;
         await replaceCachedNodes(selectableNodes);
         if (!cancelled) {
           // A declared OSM relation remains routeable even when its exact line is
@@ -376,6 +400,7 @@ export default function App() {
             ...network.edges.map((edge) => [edge.from, edge.to].sort().join('\u0000')),
             ...(network.declaredConnections || []).map((connection) => [connection.from, connection.to].sort().join('\u0000')),
           ]);
+          setSelectedNodes((current) => current.map(resolveRouteableNode));
           setAvailableNodes(selectableNodes);
           setAvailableConnectionsCount(connectionKeys.size);
         }
