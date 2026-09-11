@@ -110,4 +110,23 @@ verifyRoute({
   expectedNodeIds: ['osm-416503782', 'osm-370250633', 'osm-370250018', 'osm-207662730'],
 });
 
-console.log('Dataset-regressietests voor Genk, Valkenswaard en Rekem geslaagd.');
+const maastrichtIds = ['osm-41970177', 'osm-6437866553', 'osm-5480718970', 'osm-2145048813', 'osm-31012528', 'osm-41967957', 'osm-41963250'];
+for (const nodeId of maastrichtIds) {
+  assert.ok(nodes.has(nodeId), `Maastricht 06 → 12: knooppunt ${nodeId} ontbreekt in de dataset`);
+}
+for (const [from, to] of [
+  ['osm-41970177', 'osm-6437866553'],
+  ['osm-6437866553', 'osm-5480718970'],
+  ['osm-2145048813', 'osm-31012528'],
+  ['osm-31012528', 'osm-41967957'],
+  ['osm-41967957', 'osm-41963250'],
+]) {
+  const connection = connections.get(connectionKey(from, to));
+  assert.equal(connection?.verified, true, `Maastricht 06 → 12: ${from} → ${to} moet geverifieerde geometrie hebben`);
+}
+assert.ok(
+  distanceKm(nodes.get('osm-5480718970'), nodes.get('osm-2145048813')) < 0.075,
+  'Maastricht 06 → 12: de twee OSM-markers van knooppunt 02 moeten als één fysiek knooppunt gekoppeld blijven',
+);
+
+console.log('Dataset-regressietests voor Genk, Valkenswaard, Rekem en Maastricht geslaagd.');

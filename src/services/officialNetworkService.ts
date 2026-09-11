@@ -14,6 +14,8 @@ export interface OfficialNetworkEdge {
   distanceKm: number;
   coordinates: [number, number][];
   source: string;
+  /** Two OSM markers for one physical junction; this is not a route segment. */
+  isJunctionAlias?: boolean;
 }
 
 export interface OfficialNetworkGraph {
@@ -92,6 +94,46 @@ export function registerOfficialNetworkDataset(dataset: OfficialNetworkDataset):
     addDeclaredConnection(connection.from, connection.to, connection.source);
   }
 
+  // A physical junction can be mapped as two nearby OSM nodes (for example one
+  // marker per carriageway). Relations may use different markers for adjacent
+  // routes, fragmenting an otherwise valid node network. Join only markers with
+  // the same displayed ref, both already connected to the network, and within
+  // 75 metres. This is a topology alias, not invented road geometry.
+  const connectedByRef = new Map<string, KnooppuntNode[]>();
+  for (const node of nextNodes.values()) {
+    if (!(nextDeclaredAdjacency.get(String(node.id))?.size)) continue;
+    const sameRef = connectedByRef.get(node.ref) || [];
+    sameRef.push(node);
+    connectedByRef.set(node.ref, sameRef);
+  }
+  for (const nodesWithSameRef of connectedByRef.values()) {
+    for (let index = 0; index < nodesWithSameRef.length; index += 1) {
+      for (let otherIndex = index + 1; otherIndex < nodesWithSameRef.length; otherIndex += 1) {
+        const fromNode = nodesWithSameRef[index];
+        const toNode = nodesWithSameRef[otherIndex];
+        if (distanceKm(fromNode.lat, fromNode.lng, toNode.lat, toNode.lng) > 0.075) continue;
+        const fromKey = String(fromNode.id);
+        const toKey = String(toNode.id);
+        const addAlias = (start: string, end: string) => {
+          const neighbours = nextDeclaredAdjacency.get(start) || new Map<string, OfficialNetworkEdge>();
+          if (!neighbours.has(end)) {
+            neighbours.set(end, {
+              fromKey: start,
+              toKey: end,
+              distanceKm: 0,
+              coordinates: [],
+              source: 'Nabije OSM-markers van hetzelfde knooppunt',
+              isJunctionAlias: true,
+            });
+          }
+          nextDeclaredAdjacency.set(start, neighbours);
+        };
+        addAlias(fromKey, toKey);
+        addAlias(toKey, fromKey);
+      }
+    }
+  }
+
   declaredNetworkAdjacency = nextDeclaredAdjacency;
   const topologyAdjacency = new Map<string, Map<string, OfficialNetworkEdge>>();
   for (const edge of dataset.topology?.edges || []) {
@@ -136,6 +178,9 @@ export function getOfficialEdgeBetween(from: KnooppuntNode, to: KnooppuntNode): 
 
 export interface OfficialNetworkPath {
   edges: OfficialNetworkEdge[];
+  /** Raw OSM endpoints, kept one-for-one with edges for geometry rendering. */
+  edgeNodes: KnooppuntNode[];
+  /** Junctions shown to the user; duplicate marker aliases are omitted. */
   nodes: KnooppuntNode[];
   requiresLiveGeometry: boolean;
 }
@@ -221,10 +266,18 @@ export function findOfficialNetworkPath(from: KnooppuntNode, to: KnooppuntNode):
   const declaredEdges = topologyEdges ? null : shortestPath(startKey, targetKey, declaredNetworkAdjacency);
   const edges = topologyEdges || declaredEdges;
   if (!edges) return null;
-  const nodes = topologyEdges
+  const edgeNodes = topologyEdges
     ? [from, to]
     : [from, ...edges.slice(0, -1).map((edge) => importedNodes.get(edge.toKey)!).filter(Boolean), to];
-  return { edges, nodes, requiresLiveGeometry: Boolean(declaredEdges?.some((edge) => edge.coordinates.length < 2)) };
+  const nodes = topologyEdges
+    ? edgeNodes
+    : edgeNodes.filter((node, index) => index === 0 || !edges[index - 1]?.isJunctionAlias);
+  return {
+    edges,
+    edgeNodes,
+    nodes,
+    requiresLiveGeometry: Boolean(declaredEdges?.some((edge) => !edge.isJunctionAlias && edge.coordinates.length < 2)),
+  };
 }
 
 /** Build an adjacency graph exclusively from verified, endpoint-matched corridors. */

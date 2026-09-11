@@ -250,6 +250,28 @@ async function main() {
   } finally {
     globalThis.fetch = originalFetch;
   }
+
+  const splitJunctionNodes = [
+    { id: 'split-06', ref: '06', lat: 50.8466, lng: 5.7379 },
+    { id: 'split-02-west', ref: '02', lat: 50.84572, lng: 5.70182 },
+    { id: 'split-02-east', ref: '02', lat: 50.84571, lng: 5.70225 },
+    { id: 'split-01', ref: '01', lat: 50.84936, lng: 5.69431 },
+    { id: 'split-12', ref: '12', lat: 50.84143, lng: 5.68332 },
+  ];
+  registerOfficialNetworkDataset({
+    version: 1,
+    generatedAt: new Date().toISOString(),
+    nodes: splitJunctionNodes,
+    edges: [
+      { from: 'split-06', to: 'split-02-west', distanceKm: 2.26, coordinates: [[50.8466, 5.7379], [50.84572, 5.70182]], source: '06–02', verifiedAt: 'test' },
+      { from: 'split-02-east', to: 'split-01', distanceKm: 0.9, coordinates: [[50.84571, 5.70225], [50.84936, 5.69431]], source: '02–01', verifiedAt: 'test' },
+      { from: 'split-01', to: 'split-12', distanceKm: 1.23, coordinates: [[50.84936, 5.69431], [50.84143, 5.68332]], source: '01–12', verifiedAt: 'test' },
+    ],
+  });
+  const splitJunctionLeg = await calculateBicycleLeg(splitJunctionNodes[0], splitJunctionNodes[4]);
+  assert.equal(splitJunctionLeg.isVerified, true, 'nearby duplicate OSM markers of one junction must not break the official route');
+  assert.match(splitJunctionLeg.instructions || '', /02 → 01/, 'duplicate OSM markers must appear as one intermediate junction');
+  assert.equal(splitJunctionLeg.displaySegments?.length, 3, 'the marker alias must not create a rendered route segment');
   console.log('Official-network regression tests passed.');
 }
 

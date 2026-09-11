@@ -167,8 +167,9 @@ async function calculateBicycleLegUncached(
     const viaRefs = path.nodes.slice(1, -1).map((node) => node.ref);
     if (path.requiresLiveGeometry) {
       const segments = await mapWithConcurrency(path.edges, MAX_CONCURRENT_LIVE_SEGMENTS, async (edge, index) => {
-        const segmentFrom = path.nodes[index] || fromNode;
-        const segmentTo = path.nodes[index + 1] || toNode;
+        const segmentFrom = path.edgeNodes[index] || fromNode;
+        const segmentTo = path.edgeNodes[index + 1] || toNode;
+        if (edge.isJunctionAlias) return null;
         if (edge.coordinates.length >= 2) {
           return { coordinates: edge.coordinates, distanceKm: edge.distanceKm, source: 'official' as const, analysis: analysisForConnection(segmentFrom, segmentTo, edge.source, 'official') };
         }
@@ -178,15 +179,16 @@ async function calculateBicycleLegUncached(
         // Only its detailed road geometry comes from the live router.
         return { coordinates: liveRoute.coordinates, distanceKm: liveRoute.distanceKm, source: 'official-declared' as const, analysis: analysisForConnection(segmentFrom, segmentTo, edge.source, 'official-declared') };
       });
+      const visibleSegments = segments.filter((segment): segment is NonNullable<typeof segment> => segment !== null);
       const leg: RouteLeg = {
         fromNode, toNode,
-        distanceKm: Math.round(segments.reduce((total, segment) => total + segment.distanceKm, 0) * 100) / 100,
-        coordinates: segments.flatMap((segment, index) => index === 0 ? segment.coordinates : segment.coordinates.slice(1)),
+        distanceKm: Math.round(visibleSegments.reduce((total, segment) => total + segment.distanceKm, 0) * 100) / 100,
+        coordinates: visibleSegments.flatMap((segment, index) => index === 0 ? segment.coordinates : segment.coordinates.slice(1)),
         instructions: viaRefs.length > 0
           ? `Knooppuntvolgorde uit OSM-relaties via ${viaRefs.join(' → ')}; ontbrekende weggeometrie is live berekend.`
           : 'Knooppuntverbinding uit een OSM-relatie; ontbrekende weggeometrie is live berekend.',
         isVerified: false,
-        displaySegments: segments,
+        displaySegments: visibleSegments,
       };
       return leg;
     }
@@ -199,11 +201,14 @@ async function calculateBicycleLegUncached(
         ? `Geverifieerde knooppuntenroute via ${viaRefs.join(' → ')}.`
         : 'Geverifieerde knooppuntenroute via officiële trajectsegmenten.',
       isVerified: true,
-      displaySegments: path.edges.map((edge, index) => ({
-        coordinates: edge.coordinates,
-        source: 'official',
-        analysis: analysisForConnection(path.nodes[index] || fromNode, path.nodes[index + 1] || toNode, edge.source, 'official'),
-      })),
+      displaySegments: path.edges
+        .map((edge, index) => ({ edge, index }))
+        .filter(({ edge }) => !edge.isJunctionAlias)
+        .map(({ edge, index }) => ({
+          coordinates: edge.coordinates,
+          source: 'official' as const,
+          analysis: analysisForConnection(path.edgeNodes[index] || fromNode, path.edgeNodes[index + 1] || toNode, edge.source, 'official'),
+        })),
     };
     return leg;
   }
