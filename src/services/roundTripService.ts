@@ -127,9 +127,10 @@ export function findRoundTrips(
 
   // A loop must resemble the requested distance. The former 55–140% range
   // made a 35 km request return routes close to 50 km.
-  const allowedDeviationKm = Math.max(4, targetKm * 0.2);
-  const minimumKm = Math.max(8, targetKm - allowedDeviationKm);
-  const maximumKm = targetKm + allowedDeviationKm;
+  const allowedShortfallKm = Math.max(4, targetKm * 0.2);
+  const allowedOverrunKm = Math.max(4, targetKm * 0.15);
+  const minimumKm = Math.max(8, targetKm - allowedShortfallKm);
+  const maximumKm = targetKm + allowedOverrunKm;
   const found: { keys: string[]; distanceKm: number; areaKm2: number; reach: Record<CardinalDirection, number>; displayedEdges: Set<string> }[] = [];
   const seen = new Set<string>();
   const seenDisplayedRoutes = new Set<string>();
@@ -199,6 +200,7 @@ export function findRoundTrips(
         // Direction should diversify the suggestions, never turn a 35 km
         // request into a 45 km route. Distance fit therefore dominates.
         const score = (candidate: typeof ranked[number]) => {
+          const allowedDeviationKm = candidate.distanceKm > targetKm ? allowedOverrunKm : allowedShortfallKm;
           const distanceFit = 1 - Math.abs(candidate.distanceKm - targetKm) / allowedDeviationKm;
           const directionFit = maximumDirectionReach > 0
             ? candidate.reach[direction] / maximumDirectionReach
