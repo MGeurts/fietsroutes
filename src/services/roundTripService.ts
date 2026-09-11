@@ -69,6 +69,27 @@ function directionalReach(nodes: KnooppuntNode[]): Record<CardinalDirection, num
   return reach;
 }
 
+function displayedEdgeKeys(nodes: KnooppuntNode[]): Set<string> {
+  const edges = new Set<string>();
+  for (let index = 0; index < nodes.length - 1; index += 1) {
+    edges.add([nodes[index].ref, nodes[index + 1].ref].sort().join('\u0000'));
+  }
+  return edges;
+}
+
+function overlapsTooMuch(
+  candidate: Set<string>,
+  selected: Set<string>,
+): boolean {
+  let shared = 0;
+  for (const edge of candidate) {
+    if (selected.has(edge)) shared += 1;
+  }
+  // A candidate that shares 75% or more of its itinerary is not a meaningful
+  // alternative for a cyclist, even if an OSM marker identity differs.
+  return shared / Math.min(candidate.size, selected.size) >= 0.75;
+}
+
 export interface NearestRoundTripStart {
   node: KnooppuntNode;
   distanceKm: number;
@@ -106,8 +127,9 @@ export function findRoundTrips(
 
   const minimumKm = Math.max(8, targetKm * 0.55);
   const maximumKm = targetKm * 1.4;
-  const found: { keys: string[]; distanceKm: number; areaKm2: number; reach: Record<CardinalDirection, number> }[] = [];
+  const found: { keys: string[]; distanceKm: number; areaKm2: number; reach: Record<CardinalDirection, number>; displayedEdges: Set<string> }[] = [];
   const seen = new Set<string>();
+  const seenDisplayedRoutes = new Set<string>();
 
   const search = (currentKey: string, visited: Set<string>, path: string[], distanceKm: number) => {
     if (found.length >= 80 || path.length > 36) return;
@@ -124,12 +146,18 @@ export function findRoundTrips(
         if (area < 1.5 || hasSelfIntersection(nodes)) continue;
         const reverseInvariant = keys.slice(0, -1).sort().join('|');
         if (seen.has(reverseInvariant)) continue;
+        // OSM can duplicate a physical marker under a distinct id. The graph
+        // then sees a different cycle, while the cyclist sees the same numbers.
+        const displayedInvariant = nodes.slice(0, -1).map((node) => node.ref).sort().join('|');
+        if (seenDisplayedRoutes.has(displayedInvariant)) continue;
         seen.add(reverseInvariant);
+        seenDisplayedRoutes.add(displayedInvariant);
         found.push({
           keys,
           distanceKm: Math.round(total * 10) / 10,
           areaKm2: area,
           reach: directionalReach(nodes),
+          displayedEdges: displayedEdgeKeys(nodes),
         });
         continue;
       }
@@ -161,13 +189,15 @@ export function findRoundTrips(
   const selected: { loop: typeof ranked[number]; direction: CardinalDirection }[] = [];
   for (const direction of directionOrder) {
     const loop = ranked
-      .filter((candidate) => !selected.some((choice) => choice.loop === candidate))
+      .filter((candidate) => !selected.some((choice) => choice.loop === candidate)
+        && selected.every((choice) => !overlapsTooMuch(candidate.displayedEdges, choice.loop.displayedEdges)))
       .sort((left, right) => right.reach[direction] - left.reach[direction])[0];
     if (loop) selected.push({ loop, direction });
   }
   for (const loop of ranked) {
     if (selected.length >= 4) break;
-    if (!selected.some((choice) => choice.loop === loop)) {
+    if (!selected.some((choice) => choice.loop === loop)
+      && selected.every((choice) => !overlapsTooMuch(loop.displayedEdges, choice.loop.displayedEdges))) {
       const direction = cardinalDirections.reduce((best, candidate) => (
         loop.reach[candidate] > loop.reach[best] ? candidate : best
       ), 'noord' as CardinalDirection);
