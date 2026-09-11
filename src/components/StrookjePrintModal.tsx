@@ -289,18 +289,12 @@ export const StrookjePrintModal: React.FC<StrookjePrintModalProps> = ({
     </div>
   </div>
 
-  <script>
-    window.addEventListener('load', function() {
-      setTimeout(function() {
-        window.print();
-      }, 300);
-    });
-  </script>
 </body>
 </html>`;
   };
 
-  // Primary Print Action: tries hidden iframe print + window.print()
+  // Primary print action. The iframe is the sole print trigger: the previous
+  // self-printing HTML document caused a second overlapping dialog.
   const handlePrint = () => {
     setPrintStatus('Afdrukken voorbereiden...');
     setShowHelpNotice(true);

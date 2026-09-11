@@ -479,8 +479,16 @@ export default function App() {
         lng: wpt.lng,
         name: wpt.name,
       }));
-      setAvailableNodes((prev) => [...prev, ...importedNodes]);
-      applyRouteUpdate(importedNodes, routeData.name);
+      // A GPX only retains the visible waypoint number and coordinates, not the
+      // original OSM id. Rebind own exports to their nearby, routeable network
+      // nodes before calculating the route; otherwise every leg falls back to a
+      // live (dotted) router line despite a verified network connection existing.
+      const resolvedNodes: KnooppuntNode[] = importedNodes.map((node) => resolveRouteableNode(node));
+      const unmatchedNodes = resolvedNodes.filter((node) => String(node.id).startsWith('import-'));
+      if (unmatchedNodes.length > 0) {
+        setAvailableNodes((prev) => [...prev, ...unmatchedNodes]);
+      }
+      applyRouteUpdate(resolvedNodes, routeData.name);
     }
   };
 
