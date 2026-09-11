@@ -250,7 +250,7 @@ export const StrookjePrintModal: React.FC<StrookjePrintModalProps> = ({
 <body>
   <div class="print-actions">
     <button class="btn-print" onclick="window.print()">🖨️ Nu Afdrukken</button>
-    <span style="font-size: 13px; color: #475569;">Strokje voor bevestiging op je fietsstuur (knooppunten op volgorde).</span>
+    <span style="font-size: 13px; color: #475569;">Strookje voor bevestiging op je fietsstuur (knooppunten op volgorde).</span>
   </div>
 
   <div class="container">
