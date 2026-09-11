@@ -75,6 +75,8 @@ function routeStyle(source: RouteGeometrySource): L.PolylineOptions {
   return { color: '#dc2626', weight: 6, opacity: 1, lineCap: 'round', lineJoin: 'round' };
 }
 
+const DETAIL_NODE_ZOOM = 12;
+
 // Marker pin SVGs matching authentic cycling maps (screenshot)
 const startPinSvg = `
   <div class="flex flex-col items-center drop-shadow-sm" title="Start knooppunt">
@@ -334,7 +336,7 @@ export const MapPlanner: React.FC<MapPlannerProps> = ({
       // At a regional overview, thousands of markers obscure the map and make
       // accidental selection likely. Route context stays visible; all other
       // junctions return once the user zooms in to a useful planning level.
-      if (currentZoom < 13 && !isSelected && !isAutomaticIntermediate) return;
+      if (currentZoom < DETAIL_NODE_ZOOM && !isSelected && !isAutomaticIntermediate) return;
       const isStart = selectedNodes.length > 0 && String(selectedNodes[0].id || selectedNodes[0].ref) === idKey;
       const isEnd = selectedNodes.length > 1 && String(selectedNodes[selectedNodes.length - 1].id || selectedNodes[selectedNodes.length - 1].ref) === idKey;
 
@@ -1025,10 +1027,10 @@ export const MapPlanner: React.FC<MapPlannerProps> = ({
 
     if (routeCoordinates.length > 0) {
       const bounds = L.latLngBounds(routeCoordinates);
-      map.fitBounds(bounds, { padding: [50, 50], maxZoom: 16 });
+      map.fitBounds(bounds, { padding: [18, 18], maxZoom: 16 });
     } else if (selectedNodes.length > 0) {
       const bounds = L.latLngBounds(selectedNodes.map((n) => [n.lat, n.lng]));
-      map.fitBounds(bounds, { padding: [50, 50], maxZoom: 16 });
+      map.fitBounds(bounds, { padding: [18, 18], maxZoom: 16 });
     }
   }, [routeCoordinates, selectedNodes]);
 
@@ -1550,9 +1552,9 @@ export const MapPlanner: React.FC<MapPlannerProps> = ({
 
         {/* Zoom controls */}
         <div className="bg-white shadow-xl rounded-lg p-1 border border-slate-200 flex flex-col">
-          <div className="min-w-9 px-1 py-1 border-b border-slate-100 text-center leading-tight" title="Huidig zoomniveau; zoom 13 of hoger toont alle knooppunten">
+          <div className="min-w-9 px-1 py-1 border-b border-slate-100 text-center leading-tight" title={`Huidig zoomniveau; zoom ${DETAIL_NODE_ZOOM} of hoger toont alle knooppunten`}>
             <div className="text-[10px] font-black text-slate-700">Z {currentZoom}</div>
-            <div className="text-[8px] font-medium text-slate-400">{currentZoom < 13 ? 'overzicht' : 'detail'}</div>
+            <div className="text-[8px] font-medium text-slate-400">{currentZoom < DETAIL_NODE_ZOOM ? 'overzicht' : 'detail'}</div>
           </div>
           <button
             onClick={() => mapInstanceRef.current?.zoomIn()}
