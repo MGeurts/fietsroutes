@@ -54,6 +54,7 @@ export default function App() {
   const [elevationAvailable, setElevationAvailable] = useState(false);
   const [elevationLoading, setElevationLoading] = useState(false);
   const [routeError, setRouteError] = useState<string | null>(null);
+  const [fitRouteAfterImport, setFitRouteAfterImport] = useState(false);
   const [selectedBike, setSelectedBike] = useState<BikeType>('ebike');
   // Default to cyclosm (dedicated cycling map, 100% free, no API key required, no watermark)
   const [activeTileProvider, setActiveTileProvider] = useState<MapTileProvider>(() => {
@@ -415,6 +416,25 @@ export default function App() {
     return () => { cancelled = true; };
   }, []);
 
+  // An imported route appears in one action, but must still undo like a route
+  // entered point by point. Keep every prefix as a history state.
+  const applyImportedRoute = useCallback((nodes: KnooppuntNode[], name: string) => {
+    setRouteLegs([]);
+    setRouteError(null);
+    setSelectedNodes((current) => {
+      const unchanged = current.length === nodes.length
+        && current.every((node, index) => String(node.id) === String(nodes[index]?.id));
+      if (unchanged) return current;
+
+      const importedPrefixes = nodes.slice(0, -1).map((_, index) => nodes.slice(0, index + 1));
+      setUndoStack((previous) => [...previous, current, ...importedPrefixes]);
+      setRedoStack([]);
+      return nodes;
+    });
+    setRouteName(name);
+    setFitRouteAfterImport(true);
+  }, []);
+
   // Reordering and removing nodes with history tracking
   const handleRemoveNode = (index: number) => {
     applyRouteUpdate((prev) => prev.filter((_, i) => i !== index));
@@ -469,6 +489,9 @@ export default function App() {
   }) => {
     setRouteName(routeData.name);
     setFullCoordinates(routeData.coordinates);
+    setRouteLegs([]);
+    setRouteError(null);
+    setFitRouteAfterImport(true);
 
     // If waypoints exist, map to nodes
     if (routeData.waypoints.length > 0) {
@@ -488,9 +511,23 @@ export default function App() {
       if (unmatchedNodes.length > 0) {
         setAvailableNodes((prev) => [...prev, ...unmatchedNodes]);
       }
-      applyRouteUpdate(resolvedNodes, routeData.name);
+      applyImportedRoute(resolvedNodes, routeData.name);
     }
   };
+
+  // Wait for the newly imported legs (or the imported track when no waypoints
+  // are present) before asking Leaflet to fit the bounds. This avoids fitting
+  // the previous route while the replacement is still being calculated.
+  useEffect(() => {
+    if (!fitRouteAfterImport) return;
+    const hasImportedTrack = selectedNodes.length < 2 && fullCoordinates.length > 1;
+    const hasCalculatedRoute = selectedNodes.length >= 2
+      && (routeLegs.length === selectedNodes.length - 1 || routeError !== null);
+    if (!hasImportedTrack && !hasCalculatedRoute) return;
+
+    window.dispatchEvent(new CustomEvent('map-fit-route'));
+    setFitRouteAfterImport(false);
+  }, [fitRouteAfterImport, selectedNodes.length, fullCoordinates, routeLegs.length, routeError]);
 
   const handleApplyRoundTrip = (nodes: KnooppuntNode[], name: string) => {
     applyRouteUpdate(nodes, name);
