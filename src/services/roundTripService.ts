@@ -125,8 +125,11 @@ export function findRoundTrips(
   const startKey = getNodeKey(startNode);
   if (!graph.nodeMap.has(startKey)) return [];
 
-  const minimumKm = Math.max(8, targetKm * 0.55);
-  const maximumKm = targetKm * 1.4;
+  // A loop must resemble the requested distance. The former 55–140% range
+  // made a 35 km request return routes close to 50 km.
+  const allowedDeviationKm = Math.max(4, targetKm * 0.2);
+  const minimumKm = Math.max(8, targetKm - allowedDeviationKm);
+  const maximumKm = targetKm + allowedDeviationKm;
   const found: { keys: string[]; distanceKm: number; areaKm2: number; reach: Record<CardinalDirection, number>; displayedEdges: Set<string> }[] = [];
   const seen = new Set<string>();
   const seenDisplayedRoutes = new Set<string>();
@@ -188,10 +191,22 @@ export function findRoundTrips(
   });
   const selected: { loop: typeof ranked[number]; direction: CardinalDirection }[] = [];
   for (const direction of directionOrder) {
+    const maximumDirectionReach = Math.max(...ranked.map((loop) => loop.reach[direction]));
     const loop = ranked
       .filter((candidate) => !selected.some((choice) => choice.loop === candidate)
         && selected.every((choice) => !overlapsTooMuch(candidate.displayedEdges, choice.loop.displayedEdges)))
-      .sort((left, right) => right.reach[direction] - left.reach[direction])[0];
+      .sort((left, right) => {
+        // Direction should diversify the suggestions, never turn a 35 km
+        // request into a 45 km route. Distance fit therefore dominates.
+        const score = (candidate: typeof ranked[number]) => {
+          const distanceFit = 1 - Math.abs(candidate.distanceKm - targetKm) / allowedDeviationKm;
+          const directionFit = maximumDirectionReach > 0
+            ? candidate.reach[direction] / maximumDirectionReach
+            : 0;
+          return distanceFit * 100 + directionFit * 12;
+        };
+        return score(right) - score(left);
+      })[0];
     if (loop) selected.push({ loop, direction });
   }
   for (const loop of ranked) {

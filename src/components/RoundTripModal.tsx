@@ -256,6 +256,7 @@ export const RoundTripModal: React.FC<RoundTripModalProps> = ({
               <span>60 km (dagtocht)</span>
               <span>90 km</span>
             </div>
+            <p className="mt-1 text-[10px] text-slate-500">Suggesties blijven binnen ongeveer 20% van de gekozen afstand.</p>
 
             {/* Quick preset chips */}
             <div className="flex flex-wrap gap-2 pt-2">
