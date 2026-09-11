@@ -236,42 +236,6 @@ export const StrookjePrintModal: React.FC<StrookjePrintModalProps> = ({
       font-weight: 700;
       line-height: 1;
     }
-    .legs-table {
-      width: 100%;
-      margin-top: 10px;
-      border-top: 1px solid #e2e8f0;
-      padding-top: 8px;
-      font-size: 11px;
-    }
-    .leg-row {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 3px 0;
-      border-bottom: 1px solid #f1f5f9;
-    }
-    .leg-points {
-      display: flex;
-      align-items: center;
-      gap: 4px;
-      font-weight: 700;
-    }
-    .mini-node {
-      display: inline-block;
-      min-width: 20px;
-      height: 20px;
-      border-radius: 10px;
-      background: #059669;
-      color: white;
-      text-align: center;
-      line-height: 20px;
-      font-size: 10px;
-      padding: 0 4px;
-    }
-    .leg-dist {
-      font-weight: 700;
-      color: #0f172a;
-    }
     .strip-footer {
       margin-top: 10px;
       padding-top: 6px;
@@ -316,22 +280,6 @@ export const StrookjePrintModal: React.FC<StrookjePrintModalProps> = ({
             </div>
           `;
         }).join('')}
-      </div>
-
-      <div class="legs-table">
-        <div style="font-weight: bold; font-size: 10px; color: #64748b; text-transform: uppercase; margin-bottom: 4px;">Deeltrajecten</div>
-        ${stripRoute.legs.map(leg => `
-          <div class="leg-row">
-            <div class="leg-points">
-              <span class="mini-node">${leg.fromNode.ref}</span>
-              <span style="color: #94a3b8;">➔</span>
-              <span class="mini-node">${leg.toNode.ref}</span>
-              ${leg.toNode.name ? `<span style="font-weight: normal; color: #64748b; max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${leg.toNode.name}</span>` : ''}
-              ${leg.toNode.highlight ? `<span style="color: #d97706; font-size: 9px; font-weight: bold;">★ ${leg.toNode.highlight}</span>` : ''}
-            </div>
-            <div class="leg-dist">${leg.distanceKm} km</div>
-          </div>
-        `).join('')}
       </div>
 
       <div class="strip-footer">
@@ -515,35 +463,6 @@ export const StrookjePrintModal: React.FC<StrookjePrintModalProps> = ({
                   );
                 })}
               </div>
-            </div>
-
-            {/* Detailed Legs List */}
-            <div className="border-t border-slate-200 pt-3 space-y-1.5 text-xs text-slate-700">
-              <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">
-                Afstanden tussen knooppunten
-              </div>
-              {stripRoute.legs.map((leg, i) => (
-                <div key={i} className="flex items-center justify-between py-1 px-2 rounded hover:bg-slate-50 text-xs border-b border-slate-100 last:border-0">
-                  <div className="flex items-center gap-2">
-                    <span className="w-5 h-5 rounded-full bg-emerald-600 text-white text-[10px] font-bold flex items-center justify-center shrink-0">
-                      {leg.fromNode.ref}
-                    </span>
-                    <span className="text-slate-400 font-bold">➔</span>
-                    <span className="w-5 h-5 rounded-full bg-emerald-600 text-white text-[10px] font-bold flex items-center justify-center shrink-0">
-                      {leg.toNode.ref}
-                    </span>
-                    <span className="text-slate-600 truncate max-w-[200px]">
-                      {leg.toNode.name || leg.toNode.municipality || ''}
-                    </span>
-                    {leg.toNode.highlight && (
-                      <span className="text-[10px] text-amber-700 font-semibold bg-amber-50 px-1 rounded border border-amber-200">
-                        {leg.toNode.highlight}
-                      </span>
-                    )}
-                  </div>
-                  <span className="font-semibold text-slate-800 shrink-0">{leg.distanceKm} km</span>
-                </div>
-              ))}
             </div>
 
             {/* Footer */}
