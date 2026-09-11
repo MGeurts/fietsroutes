@@ -56,9 +56,9 @@ interface RoutePanelProps {
 
 const BIKE_PROFILES: BikeProfile[] = [
   { id: 'stadsfiets', label: 'Stadsfiets', averageSpeedKmH: 15, iconName: 'bike' },
+  { id: 'gravel', label: 'Gravel / Toerfiets', averageSpeedKmH: 18, iconName: 'compass' },
   { id: 'ebike', label: 'E-Bike', averageSpeedKmH: 20, iconName: 'zap' },
   { id: 'racefiets', label: 'Racefiets', averageSpeedKmH: 25, iconName: 'activity' },
-  { id: 'gravel', label: 'Gravel / Toerfiets', averageSpeedKmH: 18, iconName: 'compass' },
 ];
 
 export const RoutePanel: React.FC<RoutePanelProps> = ({
@@ -114,20 +114,15 @@ export const RoutePanel: React.FC<RoutePanelProps> = ({
     <div className="h-full flex flex-col bg-white border-r border-slate-200 w-full shrink-0 shadow-sm z-10 overflow-hidden font-sans">
       {/* Streamlined Unified Header (Clean & compact across Mobile, Tablet, and Desktop) */}
       <div className="shrink-0 bg-white border-b border-slate-200">
-        {/* Row 1: Route Name Input + Live indicator */}
-        <div className="p-2 bg-slate-50/90 border-b border-slate-100 flex items-center justify-between gap-2">
+        {/* Row 1: Route Name Input */}
+        <div className="p-2 bg-slate-50/90 border-b border-slate-100">
           <input
             type="text"
             value={routeName}
             onChange={(e) => onChangeRouteName(e.target.value)}
             placeholder="Naam van je fietsroute..."
-            className="flex-1 min-w-0 text-xs font-bold text-slate-800 bg-white border border-slate-200 rounded-md px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-emerald-500 shadow-2xs"
+            className="w-full text-xs font-bold text-slate-800 bg-white border border-slate-200 rounded-md px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-emerald-500 shadow-2xs"
           />
-          <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 flex items-center gap-1 shrink-0">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-            <span className="hidden sm:inline">Live Netwerk</span>
-            <span className="sm:hidden">Live</span>
-          </span>
         </div>
 
         {/* Row 2: Compact Metrics Bar */}
