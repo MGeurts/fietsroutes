@@ -181,6 +181,7 @@ export const MapPlanner: React.FC<MapPlannerProps> = ({
     const map = L.map(mapContainerRef.current, {
       center: [50.912, 5.590],
       zoom: 13,
+      minZoom: 11,
       zoomControl: false,
     });
 
@@ -330,6 +331,10 @@ export const MapPlanner: React.FC<MapPlannerProps> = ({
       const idKey = String(node.id || node.ref);
       const isSelected = selectedIndices.has(idKey);
       const isAutomaticIntermediate = !isSelected && automaticIntermediateNodes.some((candidate) => String(candidate.id) === String(node.id));
+      // At a regional overview, thousands of markers obscure the map and make
+      // accidental selection likely. Route context stays visible; all other
+      // junctions return once the user zooms in to a useful planning level.
+      if (currentZoom < 13 && !isSelected && !isAutomaticIntermediate) return;
       const isStart = selectedNodes.length > 0 && String(selectedNodes[0].id || selectedNodes[0].ref) === idKey;
       const isEnd = selectedNodes.length > 1 && String(selectedNodes[selectedNodes.length - 1].id || selectedNodes[selectedNodes.length - 1].ref) === idKey;
 
@@ -437,7 +442,7 @@ export const MapPlanner: React.FC<MapPlannerProps> = ({
       nodeMarkersRef.current.set(idKey, marker);
       markersGroup.addLayer(marker);
     });
-  }, [availableNodes, selectedNodes, automaticIntermediateNodes, onNodeClick]);
+  }, [availableNodes, selectedNodes, automaticIntermediateNodes, currentZoom, onNodeClick]);
 
   // Update Route Polyline and Directional Markers
   useEffect(() => {
@@ -1545,6 +1550,10 @@ export const MapPlanner: React.FC<MapPlannerProps> = ({
 
         {/* Zoom controls */}
         <div className="bg-white shadow-xl rounded-lg p-1 border border-slate-200 flex flex-col">
+          <div className="min-w-9 px-1 py-1 border-b border-slate-100 text-center leading-tight" title="Huidig zoomniveau; zoom 13 of hoger toont alle knooppunten">
+            <div className="text-[10px] font-black text-slate-700">Z {currentZoom}</div>
+            <div className="text-[8px] font-medium text-slate-400">{currentZoom < 13 ? 'overzicht' : 'detail'}</div>
+          </div>
           <button
             onClick={() => mapInstanceRef.current?.zoomIn()}
             className="w-9 h-9 border-b border-slate-100 flex items-center justify-center hover:bg-slate-50 text-slate-600 hover:text-emerald-600 transition cursor-pointer tablet-touch-friendly-btn"
@@ -1554,8 +1563,9 @@ export const MapPlanner: React.FC<MapPlannerProps> = ({
           </button>
           <button
             onClick={() => mapInstanceRef.current?.zoomOut()}
-            className="w-9 h-9 flex items-center justify-center hover:bg-slate-50 text-slate-600 hover:text-emerald-600 transition cursor-pointer tablet-touch-friendly-btn"
-            title="Zoom uit"
+            disabled={currentZoom <= 11}
+            className="w-9 h-9 flex items-center justify-center hover:bg-slate-50 text-slate-600 hover:text-emerald-600 transition cursor-pointer tablet-touch-friendly-btn disabled:cursor-not-allowed disabled:opacity-35"
+            title={currentZoom <= 11 ? 'Minimaal zoomniveau bereikt' : 'Zoom uit'}
           >
             <ZoomOut className="w-4 h-4" />
           </button>
