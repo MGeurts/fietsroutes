@@ -1,7 +1,9 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
+import L from 'leaflet';
 import { KnooppuntNode } from '../types';
-import { Sparkles, RotateCw, X, Check, MapPin, Compass, Navigation, ArrowRight } from 'lucide-react';
+import { Sparkles, RotateCw, X, Check, MapPin, Compass, Navigation, ArrowRight, Map as MapIcon } from 'lucide-react';
 import { findNearestRoundTripStart, findRoundTrips, GeneratedLoop } from '../services/roundTripService';
+import { getOfficialEdgeBetween } from '../services/officialNetworkService';
 
 interface RoundTripModalProps {
   isOpen: boolean;
@@ -11,6 +13,77 @@ interface RoundTripModalProps {
   centerLabel: string;
   onApplyRoute: (nodes: KnooppuntNode[], name: string) => void;
 }
+
+function loopCoordinates(loop: GeneratedLoop): [number, number][] {
+  const coordinates: [number, number][] = [];
+  for (let index = 0; index < loop.nodes.length - 1; index += 1) {
+    const from = loop.nodes[index];
+    const to = loop.nodes[index + 1];
+    const segment: [number, number][] = getOfficialEdgeBetween(from, to)?.coordinates
+      || [[from.lat, from.lng], [to.lat, to.lng]];
+    coordinates.push(...(coordinates.length > 0 ? segment.slice(1) : segment));
+  }
+  return coordinates;
+}
+
+const RoundTripPreviewModal: React.FC<{
+  loop: GeneratedLoop;
+  onClose: () => void;
+  onApply: () => void;
+}> = ({ loop, onClose, onApply }) => {
+  const mapContainerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!mapContainerRef.current) return;
+    const map = L.map(mapContainerRef.current, { zoomControl: false, attributionControl: true });
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; OpenStreetMap-bijdragers',
+      maxZoom: 19,
+    }).addTo(map);
+
+    const coordinates = loopCoordinates(loop);
+    const line = L.polyline(coordinates, { color: '#059669', weight: 5, opacity: 0.9 }).addTo(map);
+    loop.nodes.slice(0, -1).forEach((node, index) => {
+      const isStart = index === 0;
+      const marker = L.circleMarker([node.lat, node.lng], {
+        radius: isStart ? 8 : 5,
+        color: isStart ? '#047857' : '#ffffff',
+        weight: 2,
+        fillColor: isStart ? '#10b981' : '#ffffff',
+        fillOpacity: 1,
+      }).addTo(map);
+      marker.bindTooltip(`KP ${node.ref}${isStart ? ' · start en einde' : ''}`, { direction: 'top' });
+    });
+    if (line.getBounds().isValid()) {
+      map.fitBounds(line.getBounds(), { padding: [28, 28], maxZoom: 15 });
+    }
+    setTimeout(() => map.invalidateSize(), 0);
+    return () => map.remove();
+  }, [loop]);
+
+  return (
+    <div className="fixed inset-0 z-[2200] flex items-center justify-center bg-slate-900/70 p-4 backdrop-blur-sm">
+      <div className="flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
+        <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50 p-4">
+          <div>
+            <h3 className="text-base font-bold text-slate-900">{loop.description}</h3>
+            <p className="text-xs text-slate-500">{loop.distanceKm} km · {loop.nodeCount} knooppunten</p>
+          </div>
+          <button type="button" onClick={onClose} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-200 hover:text-slate-700 cursor-pointer" title="Sluiten">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+        <div ref={mapContainerRef} className="h-[55vh] min-h-72 w-full bg-slate-100" />
+        <div className="flex items-center justify-between border-t border-slate-200 bg-slate-50 p-4">
+          <span className="text-xs text-slate-500">Groen: officiële rondrit</span>
+          <button type="button" onClick={onApply} className="flex items-center gap-1.5 rounded-xl bg-emerald-600 px-4 py-2 text-xs font-bold text-white hover:bg-emerald-700 cursor-pointer">
+            <Sparkles className="h-4 w-4 text-amber-300" /> Kies deze rondrit
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 export const RoundTripModal: React.FC<RoundTripModalProps> = ({
   isOpen,
@@ -23,6 +96,7 @@ export const RoundTripModal: React.FC<RoundTripModalProps> = ({
   const [startNodeId, setStartNodeId] = useState<string>('');
   const [targetKm, setTargetKm] = useState<number>(35);
   const [selectedLoopIndex, setSelectedLoopIndex] = useState<number>(0);
+  const [previewLoop, setPreviewLoop] = useState<GeneratedLoop | null>(null);
 
   const nearestStart = useMemo(
     () => findNearestRoundTripStart(center, availableNodes),
@@ -60,12 +134,15 @@ export const RoundTripModal: React.FC<RoundTripModalProps> = ({
 
   if (!isOpen) return null;
 
-  const handleApply = () => {
-    if (!currentLoop || currentLoop.nodes.length < 2) return;
-    const title = `Rondrit ${activeStartNode?.name ? activeStartNode.name : `KP ${activeStartNode?.ref}`} (${currentLoop.distanceKm} km)`;
-    onApplyRoute(currentLoop.nodes, title);
+  const applyLoop = (loop: GeneratedLoop | undefined) => {
+    if (!loop || loop.nodes.length < 2) return;
+    const title = `Rondrit ${activeStartNode?.name ? activeStartNode.name : `KP ${activeStartNode?.ref}`} (${loop.distanceKm} km)`;
+    onApplyRoute(loop.nodes, title);
+    setPreviewLoop(null);
     onClose();
   };
+
+  const handleApply = () => applyLoop(currentLoop);
 
   return (
     <div className="fixed inset-0 z-[2000] flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in font-sans">
@@ -246,6 +323,16 @@ export const RoundTripModal: React.FC<RoundTripModalProps> = ({
                           );
                         })}
                       </div>
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setPreviewLoop(loop);
+                        }}
+                        className="mt-2 flex items-center gap-1 rounded-md border border-emerald-200 bg-white px-2 py-1 text-[11px] font-semibold text-emerald-700 hover:bg-emerald-50 cursor-pointer"
+                      >
+                        <MapIcon className="h-3.5 w-3.5" /> Bekijk kaart
+                      </button>
                     </div>
                   );
                 })}
@@ -293,6 +380,13 @@ export const RoundTripModal: React.FC<RoundTripModalProps> = ({
           </button>
         </div>
       </div>
+      {previewLoop && (
+        <RoundTripPreviewModal
+          loop={previewLoop}
+          onClose={() => setPreviewLoop(null)}
+          onApply={() => applyLoop(previewLoop)}
+        />
+      )}
     </div>
   );
 };
