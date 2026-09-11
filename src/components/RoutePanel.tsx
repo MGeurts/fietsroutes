@@ -176,13 +176,14 @@ export const RoutePanel: React.FC<RoutePanelProps> = ({
                     onChangeBike(p.id);
                     setIsProfileOpen(false);
                   }}
-                  className={`px-2 py-1 rounded text-[10px] sm:text-[11px] font-medium transition cursor-pointer ${
+                  className={`w-16 shrink-0 px-1 py-1 rounded text-[10px] sm:text-[11px] leading-tight text-center font-medium transition cursor-pointer ${
                     selectedBike === p.id
                       ? 'bg-white text-emerald-700 font-bold shadow-xs border border-slate-200'
                       : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
                   }`}
                 >
-                  {p.label.split(' ')[0]} ({p.averageSpeedKmH} km/u)
+                  <span className="block whitespace-nowrap">{p.label.split(' ')[0]}</span>
+                  <span className="block whitespace-nowrap">({p.averageSpeedKmH} km/u)</span>
                 </button>
               ))}
             </div>
