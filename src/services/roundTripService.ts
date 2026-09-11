@@ -45,6 +45,31 @@ export function buildKnooppuntenGraph(allAvailableNodes: KnooppuntNode[]): Offic
   return buildOfficialNetworkGraph(allAvailableNodes);
 }
 
+export interface NearestRoundTripStart {
+  node: KnooppuntNode;
+  distanceKm: number;
+}
+
+/** Find the nearest junction that is actually connected to the official graph. */
+export function findNearestRoundTripStart(
+  center: { lat: number; lng: number },
+  allAvailableNodes: KnooppuntNode[],
+): NearestRoundTripStart | null {
+  const graph = buildKnooppuntenGraph(allAvailableNodes);
+  let nearest: NearestRoundTripStart | null = null;
+  for (const [key, node] of graph.nodeMap) {
+    if ((graph.adjacency.get(key)?.size || 0) === 0) continue;
+    const distanceKm = Math.hypot(
+      (node.lat - center.lat) * 111,
+      (node.lng - center.lng) * 111 * Math.cos((center.lat * Math.PI) / 180),
+    );
+    if (!nearest || distanceKm < nearest.distanceKm) {
+      nearest = { node, distanceKm };
+    }
+  }
+  return nearest;
+}
+
 /** Find closed loops over verified graph edges only. */
 export function findRoundTrips(
   startNode: KnooppuntNode,

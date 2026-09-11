@@ -43,6 +43,8 @@ interface MapPlannerProps {
   onToggleSidebar?: () => void;
   onOpenDataModal?: () => void;
   onRouteSegmentClick?: (segment: RouteDisplaySegment) => void;
+  onMapCenterChange?: (center: { lat: number; lng: number }) => void;
+  onCurrentLocationChange?: (location: { lat: number; lng: number }) => void;
 }
 
 // Calculate bearing angle between two coordinates
@@ -112,6 +114,8 @@ export const MapPlanner: React.FC<MapPlannerProps> = ({
   onToggleSidebar,
   onOpenDataModal,
   onRouteSegmentClick,
+  onMapCenterChange,
+  onCurrentLocationChange,
 }) => {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<L.Map | null>(null);
@@ -194,6 +198,10 @@ export const MapPlanner: React.FC<MapPlannerProps> = ({
 
     map.on('zoomend', () => {
       setCurrentZoom(map.getZoom());
+    });
+    map.on('moveend', () => {
+      const center = map.getCenter();
+      onMapCenterChange?.({ lat: center.lat, lng: center.lng });
     });
 
     return () => {
@@ -694,7 +702,8 @@ export const MapPlanner: React.FC<MapPlannerProps> = ({
     });
 
     currentLocationMarkerRef.current = marker;
-  }, [handleFindNearestToCoordinates]);
+    onCurrentLocationChange?.({ lat, lng });
+  }, [handleFindNearestToCoordinates, onCurrentLocationChange]);
 
   // Center on user geolocation and place red dot
   const handleLocateMe = useCallback(() => {

@@ -55,6 +55,10 @@ export default function App() {
   const [elevationLoading, setElevationLoading] = useState(false);
   const [routeError, setRouteError] = useState<string | null>(null);
   const [fitRouteAfterImport, setFitRouteAfterImport] = useState(false);
+  const [mapCenter, setMapCenter] = useState({ lat: 50.912, lng: 5.590 });
+  const [currentLocation, setCurrentLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [roundTripCenter, setRoundTripCenter] = useState({ lat: 50.912, lng: 5.590 });
+  const [roundTripCenterLabel, setRoundTripCenterLabel] = useState('Huidige kaartcentrum');
   const [selectedBike, setSelectedBike] = useState<BikeType>('ebike');
   // Default to cyclosm (dedicated cycling map, 100% free, no API key required, no watermark)
   const [activeTileProvider, setActiveTileProvider] = useState<MapTileProvider>(() => {
@@ -85,6 +89,7 @@ export default function App() {
   // Modals
   const [isStrookjeOpen, setIsStrookjeOpen] = useState(false);
   const [isRoundTripOpen, setIsRoundTripOpen] = useState(false);
+  const [isRoundTripReplaceConfirmOpen, setIsRoundTripReplaceConfirmOpen] = useState(false);
   const [isDataModalOpen, setIsDataModalOpen] = useState(false);
   const [isLaravelModalOpen, setIsLaravelModalOpen] = useState(false);
   const [isGpxImportOpen, setIsGpxImportOpen] = useState(false);
@@ -515,6 +520,36 @@ export default function App() {
     }
   };
 
+  const openRoundTripGenerator = useCallback((center: { lat: number; lng: number }, label: string) => {
+    setRoundTripCenter(center);
+    setRoundTripCenterLabel(label);
+    setIsRoundTripOpen(true);
+  }, []);
+
+  const handleOpenRoundTrip = useCallback(() => {
+    if (selectedNodes.length > 1) {
+      setIsRoundTripReplaceConfirmOpen(true);
+      return;
+    }
+    if (selectedNodes.length === 1) {
+      const node = selectedNodes[0];
+      openRoundTripGenerator(node, `Gekozen knooppunt ${node.ref}`);
+      return;
+    }
+    if (currentLocation) {
+      openRoundTripGenerator(currentLocation, 'Huidige locatie');
+      return;
+    }
+    openRoundTripGenerator(mapCenter, 'Huidige kaartcentrum (locatie niet beschikbaar)');
+  }, [selectedNodes, currentLocation, mapCenter, openRoundTripGenerator]);
+
+  const handleConfirmRoundTripReplacement = () => {
+    // The screen centre is intentionally captured before removing the route.
+    applyRouteUpdate([]);
+    setIsRoundTripReplaceConfirmOpen(false);
+    openRoundTripGenerator(mapCenter, 'Huidige kaartcentrum');
+  };
+
   // Wait for the newly imported legs (or the imported track when no waypoints
   // are present) before asking Leaflet to fit the bounds. This avoids fitting
   // the previous route while the replacement is still being calculated.
@@ -530,6 +565,9 @@ export default function App() {
   }, [fitRouteAfterImport, selectedNodes.length, fullCoordinates, routeLegs.length, routeError]);
 
   const handleApplyRoundTrip = (nodes: KnooppuntNode[], name: string) => {
+    setRouteLegs([]);
+    setRouteError(null);
+    setFitRouteAfterImport(true);
     applyRouteUpdate(nodes, name);
   };
 
@@ -981,7 +1019,7 @@ export default function App() {
             onOpenStrookje={() => setIsStrookjeOpen(true)}
             onExportGpx={handleExportGpx}
             canExportRoute={selectedNodes.length >= 2 && routeLegs.length === selectedNodes.length - 1 && !routeError}
-            onOpenRoundTrip={() => setIsRoundTripOpen(true)}
+            onOpenRoundTrip={handleOpenRoundTrip}
             onOpenGpxImport={() => setIsGpxImportOpen(true)}
             onOpenLaravelModal={() => setIsLaravelModalOpen(true)}
           />
@@ -1016,6 +1054,8 @@ export default function App() {
               setSelectedConnectionAnalysis(segment.analysis);
               setIsNetworkAnalysisOpen(true);
             }}
+            onMapCenterChange={setMapCenter}
+            onCurrentLocationChange={setCurrentLocation}
           />
         </div>
       </div>
@@ -1065,9 +1105,37 @@ export default function App() {
         isOpen={isRoundTripOpen}
         onClose={() => setIsRoundTripOpen(false)}
         availableNodes={availableNodes}
-        currentNodes={selectedNodes}
+        center={roundTripCenter}
+        centerLabel={roundTripCenterLabel}
         onApplyRoute={handleApplyRoundTrip}
       />
+
+      {isRoundTripReplaceConfirmOpen && (
+        <div className="fixed inset-0 z-[2100] flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-sm rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl">
+            <h2 className="text-base font-bold text-slate-900">Bestaande route vervangen?</h2>
+            <p className="mt-2 text-sm leading-relaxed text-slate-600">
+              De huidige route bevat {selectedNodes.length} knooppunten. Wil je die verwijderen en een rondrit maken rond het huidige kaartcentrum?
+            </p>
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setIsRoundTripReplaceConfirmOpen(false)}
+                className="rounded-lg px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 cursor-pointer"
+              >
+                Behouden
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmRoundTripReplacement}
+                className="rounded-lg bg-emerald-600 px-3 py-2 text-xs font-bold text-white hover:bg-emerald-700 cursor-pointer"
+              >
+                Verwijder en kies rondrit
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <LaravelAntagonistModal
         isOpen={isLaravelModalOpen}

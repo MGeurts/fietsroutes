@@ -1,13 +1,14 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { KnooppuntNode } from '../types';
 import { Sparkles, RotateCw, X, Check, MapPin, Compass, Navigation, ArrowRight } from 'lucide-react';
-import { findRoundTrips, GeneratedLoop } from '../services/roundTripService';
+import { findNearestRoundTripStart, findRoundTrips, GeneratedLoop } from '../services/roundTripService';
 
 interface RoundTripModalProps {
   isOpen: boolean;
   onClose: () => void;
   availableNodes: KnooppuntNode[];
-  currentNodes: KnooppuntNode[];
+  center: { lat: number; lng: number };
+  centerLabel: string;
   onApplyRoute: (nodes: KnooppuntNode[], name: string) => void;
 }
 
@@ -15,33 +16,38 @@ export const RoundTripModal: React.FC<RoundTripModalProps> = ({
   isOpen,
   onClose,
   availableNodes,
-  currentNodes,
+  center,
+  centerLabel,
   onApplyRoute,
 }) => {
-  const defaultStart = currentNodes[0] || availableNodes[0];
   const [startNodeId, setStartNodeId] = useState<string>('');
   const [targetKm, setTargetKm] = useState<number>(35);
   const [selectedLoopIndex, setSelectedLoopIndex] = useState<number>(0);
 
+  const nearestStart = useMemo(
+    () => findNearestRoundTripStart(center, availableNodes),
+    [center, availableNodes],
+  );
+
   // Initialize or update start node when modal opens
   useEffect(() => {
     if (isOpen) {
-      const preferred = currentNodes[0] || availableNodes[0];
+      const preferred = nearestStart?.node;
       if (preferred) {
         setStartNodeId(preferred.id || preferred.ref);
       }
       setSelectedLoopIndex(0);
     }
-  }, [isOpen, currentNodes, availableNodes]);
+  }, [isOpen, nearestStart]);
 
   const activeStartNode = useMemo(() => {
     return (
       availableNodes.find((n) => n.id === startNodeId) ||
       availableNodes.find((n) => n.ref === startNodeId) ||
-      currentNodes[0] ||
+      nearestStart?.node ||
       availableNodes[0]
     );
-  }, [startNodeId, availableNodes, currentNodes]);
+  }, [startNodeId, availableNodes, nearestStart]);
 
   // Compute authentic closed loops matching target distance
   const candidateLoops: GeneratedLoop[] = useMemo(() => {
@@ -58,10 +64,6 @@ export const RoundTripModal: React.FC<RoundTripModalProps> = ({
     if (!currentLoop || currentLoop.nodes.length < 2) return;
     const title = `Rondrit ${activeStartNode?.name ? activeStartNode.name : `KP ${activeStartNode?.ref}`} (${currentLoop.distanceKm} km)`;
     onApplyRoute(currentLoop.nodes, title);
-    // Fit map to show full circular route
-    setTimeout(() => {
-      window.dispatchEvent(new CustomEvent('map-fit-route'));
-    }, 150);
     onClose();
   };
 
@@ -91,6 +93,13 @@ export const RoundTripModal: React.FC<RoundTripModalProps> = ({
 
         {/* Scrollable Body */}
         <div className="p-4 sm:p-5 space-y-4 overflow-y-auto flex-1">
+          <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-xs text-emerald-950">
+            <span className="font-bold">Centrum: </span>{centerLabel}.{' '}
+            {nearestStart
+              ? <>Start automatisch bij dichtstbijzijnde verbonden KP {nearestStart.node.ref} ({nearestStart.distanceKm.toFixed(1)} km).</>
+              : 'Er is nog geen verbonden knooppunt in de geladen netwerkdata.'}
+          </div>
+
           {/* Start Point Selection */}
           <div>
             <label className="block text-xs font-bold text-slate-700 mb-1.5 flex items-center gap-1.5">
