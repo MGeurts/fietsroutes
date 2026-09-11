@@ -124,6 +124,7 @@ export const MapPlanner: React.FC<MapPlannerProps> = ({
   const currentLocationCircleRef = useRef<L.Circle | null>(null);
   const searchedAddressMarkerRef = useRef<L.Marker | null>(null);
   const hasAutoLocatedOnStartRef = useRef(false);
+  const shouldCenterOnAutoLocationRef = useRef(true);
   const nodeMarkersRef = useRef<Map<string, L.Marker>>(new Map());
 
   // Keep a current reference to availableNodes for async event listeners & popups
@@ -135,6 +136,7 @@ export const MapPlanner: React.FC<MapPlannerProps> = ({
   const [isSearchingNodes, setIsSearchingNodes] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearchingLocation, setIsSearchingLocation] = useState(false);
+  const [isOpeningAroundLocation, setIsOpeningAroundLocation] = useState(true);
   const [searchMessage, setSearchMessage] = useState<string | null>(null);
   const [searchCandidates, setSearchCandidates] = useState<SearchCandidatesState | null>(null);
   const [showLayerMenu, setShowLayerMenu] = useState(false);
@@ -966,9 +968,14 @@ export const MapPlanner: React.FC<MapPlannerProps> = ({
     if (!mapInstanceRef.current || hasAutoLocatedOnStartRef.current) return;
     hasAutoLocatedOnStartRef.current = true;
 
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
+    if (!navigator.geolocation) {
+      setIsOpeningAroundLocation(false);
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        if (shouldCenterOnAutoLocationRef.current) {
           const { latitude, longitude, accuracy } = pos.coords;
           placeCurrentLocationDot(latitude, longitude, accuracy);
           mapInstanceRef.current?.flyTo([latitude, longitude], 14, { duration: 1.2 });
@@ -977,14 +984,25 @@ export const MapPlanner: React.FC<MapPlannerProps> = ({
           setTimeout(() => {
             handleScanBBoxForKnooppunten();
           }, 1500);
-        },
-        (err) => {
-          console.warn('Geolocatie bij opstarten niet beschikbaar of geweigerd:', err.message);
-        },
-        { enableHighAccuracy: true, timeout: 9000, maximumAge: 60000 }
-      );
-    }
+        }
+        setIsOpeningAroundLocation(false);
+      },
+      (err) => {
+        console.warn('Geolocatie bij opstarten niet beschikbaar of geweigerd:', err.message);
+        setIsOpeningAroundLocation(false);
+      },
+      // A quick, cached position is more useful at startup than delaying the
+      // entire map for a high-accuracy GPS fix.
+      { enableHighAccuracy: false, timeout: 6000, maximumAge: 60000 }
+    );
   }, [placeCurrentLocationDot, handleScanBBoxForKnooppunten]);
+
+  const handleUseMapImmediately = useCallback(() => {
+    // Do not let a late geolocation result unexpectedly move a map the user
+    // has consciously started using elsewhere.
+    shouldCenterOnAutoLocationRef.current = false;
+    setIsOpeningAroundLocation(false);
+  }, []);
 
   // Zoom to entire planned route
   const handleFitRoute = useCallback(() => {
@@ -1013,6 +1031,22 @@ export const MapPlanner: React.FC<MapPlannerProps> = ({
 
   return (
     <div className="relative w-full h-full flex flex-col bg-slate-100 overflow-hidden">
+      {isOpeningAroundLocation && (
+        <div className="absolute inset-0 z-[1200] flex items-center justify-center bg-slate-50/90 backdrop-blur-sm p-5">
+          <div className="max-w-xs rounded-xl border border-slate-200 bg-white px-5 py-4 text-center shadow-lg">
+            <Loader2 className="mx-auto mb-2 h-5 w-5 animate-spin text-emerald-600" />
+            <p className="text-sm font-bold text-slate-800">Kaart wordt rond je locatie geopend</p>
+            <p className="mt-1 text-xs leading-relaxed text-slate-500">Even geduld: zo start je meteen in de juiste omgeving.</p>
+            <button
+              type="button"
+              onClick={handleUseMapImmediately}
+              className="mt-3 text-xs font-semibold text-emerald-700 hover:text-emerald-800 hover:underline cursor-pointer"
+            >
+              Kaart direct gebruiken
+            </button>
+          </div>
+        </div>
+      )}
       {/* Top Floating Controls Bar */}
       <div className="absolute top-4 left-4 right-4 map-floating-controls-compact z-[1000] flex flex-wrap items-center justify-between gap-2.5 pointer-events-none">
         <div className="flex items-center gap-2 pointer-events-auto max-w-full">
