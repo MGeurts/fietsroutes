@@ -45,6 +45,35 @@ export function buildKnooppuntenGraph(allAvailableNodes: KnooppuntNode[]): Offic
   return buildOfficialNetworkGraph(allAvailableNodes);
 }
 
+type CardinalDirection = 'noord' | 'oost' | 'zuid' | 'west';
+const cardinalDirections: CardinalDirection[] = ['noord', 'oost', 'zuid', 'west'];
+const directionLabels: Record<CardinalDirection, string> = {
+  noord: 'Noordelijke',
+  oost: 'Oostelijke',
+  zuid: 'Zuidelijke',
+  west: 'Westelijke',
+};
+
+/** Classify a loop by the direction of its furthest excursion from its start. */
+function loopDirection(nodes: KnooppuntNode[]): CardinalDirection {
+  const start = nodes[0];
+  let furthest = start;
+  let largestDistance = -1;
+  for (const node of nodes.slice(1, -1)) {
+    const northKm = (node.lat - start.lat) * 111;
+    const eastKm = (node.lng - start.lng) * 111 * Math.cos((start.lat * Math.PI) / 180);
+    const distance = northKm ** 2 + eastKm ** 2;
+    if (distance > largestDistance) {
+      largestDistance = distance;
+      furthest = node;
+    }
+  }
+  const northKm = (furthest.lat - start.lat) * 111;
+  const eastKm = (furthest.lng - start.lng) * 111 * Math.cos((start.lat * Math.PI) / 180);
+  if (Math.abs(northKm) >= Math.abs(eastKm)) return northKm >= 0 ? 'noord' : 'zuid';
+  return eastKm >= 0 ? 'oost' : 'west';
+}
+
 export interface NearestRoundTripStart {
   node: KnooppuntNode;
   distanceKm: number;
@@ -82,7 +111,7 @@ export function findRoundTrips(
 
   const minimumKm = Math.max(8, targetKm * 0.55);
   const maximumKm = targetKm * 1.4;
-  const found: { keys: string[]; distanceKm: number; areaKm2: number }[] = [];
+  const found: { keys: string[]; distanceKm: number; areaKm2: number; direction: CardinalDirection }[] = [];
   const seen = new Set<string>();
 
   const search = (currentKey: string, visited: Set<string>, path: string[], distanceKm: number) => {
@@ -101,7 +130,12 @@ export function findRoundTrips(
         const reverseInvariant = keys.slice(0, -1).sort().join('|');
         if (seen.has(reverseInvariant)) continue;
         seen.add(reverseInvariant);
-        found.push({ keys, distanceKm: Math.round(total * 10) / 10, areaKm2: area });
+        found.push({
+          keys,
+          distanceKm: Math.round(total * 10) / 10,
+          areaKm2: area,
+          direction: loopDirection(nodes),
+        });
         continue;
       }
       if (visited.has(nextKey)) continue;
@@ -114,18 +148,31 @@ export function findRoundTrips(
   };
 
   search(startKey, new Set([startKey]), [startKey], 0);
-  return found
+  const ranked = found
     .sort((a, b) => {
       const scoreA = Math.abs(a.distanceKm - targetKm) - (a.areaKm2 / (a.distanceKm * a.distanceKm)) * 8;
       const scoreB = Math.abs(b.distanceKm - targetKm) - (b.areaKm2 / (b.distanceKm * b.distanceKm)) * 8;
       return scoreA - scoreB;
-    })
-    .slice(0, 5)
-    .map((loop, index) => ({
+    });
+
+  // A single score tends to return near-identical loops in the same area.
+  // Select the best eligible loop in each cardinal direction first, then fill
+  // any unavailable directions with the next best distinct alternatives.
+  const selected: typeof ranked = [];
+  for (const direction of cardinalDirections) {
+    const loop = ranked.find((candidate) => candidate.direction === direction);
+    if (loop) selected.push(loop);
+  }
+  for (const loop of ranked) {
+    if (selected.length >= 4) break;
+    if (!selected.includes(loop)) selected.push(loop);
+  }
+
+  return selected.map((loop) => ({
       nodes: loop.keys.map((key) => graph.nodeMap.get(key)!),
       distanceKm: loop.distanceKm,
       nodeCount: loop.keys.length,
-      description: index === 0 ? 'Aanbevolen officiële rondrit' : `Alternatieve officiële rondrit ${index + 1}`,
-      direction: 'Officieel knooppuntennetwerk',
+      description: `${directionLabels[loop.direction]} officiële rondrit`,
+      direction: loop.direction,
     }));
 }
