@@ -20,7 +20,7 @@ export default function App() {
   const [availableNodes, setAvailableNodes] = useState<KnooppuntNode[]>([]);
   const [availableConnectionsCount, setAvailableConnectionsCount] = useState(0);
   const officialNetworkNodeIdsRef = useRef(new Set<string>());
-  const routeableNodesByRefRef = useRef(new Map<string, KnooppuntNode[]>());
+  const routeableNodesByRefRef = useRef(new globalThis.Map<string, KnooppuntNode[]>());
 
   // An OSM area can contain an unconnected duplicate marker with the same ref
   // close to the actual junction. Resolve that stale map/cache marker back to
@@ -372,7 +372,7 @@ export default function App() {
           ...(network.declaredConnections || []).flatMap((connection) => [connection.from, connection.to]),
           ...Object.keys(network.topology?.anchors || {}),
         ]);
-        const routeableNodesByRef = new Map<string, KnooppuntNode[]>();
+        const routeableNodesByRef = new globalThis.Map<string, KnooppuntNode[]>();
         for (const node of network.nodes) {
           if (!routeableNodeIds.has(String(node.id))) continue;
           const sameRef = routeableNodesByRef.get(node.ref) || [];
