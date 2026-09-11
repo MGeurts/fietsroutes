@@ -241,7 +241,7 @@ export const RoundTripModal: React.FC<RoundTripModalProps> = ({
             <input
               type="range"
               min="15"
-              max="100"
+              max="60"
               step="5"
               value={targetKm}
               onChange={(e) => {
@@ -254,13 +254,12 @@ export const RoundTripModal: React.FC<RoundTripModalProps> = ({
               <span>15 km (kort)</span>
               <span>35 km (gemiddeld)</span>
               <span>60 km (dagtocht)</span>
-              <span>100 km</span>
             </div>
             <p className="mt-1 text-[10px] text-slate-500">Suggesties zijn maximaal 15% langer en ongeveer 20% korter dan de gekozen afstand.</p>
 
             {/* Quick preset chips */}
             <div className="flex flex-wrap gap-2 pt-2">
-              {[15, 25, 35, 45, 60, 75, 90, 100].map((km) => (
+              {[15, 25, 35, 45, 60].map((km) => (
                 <button
                   key={km}
                   type="button"
