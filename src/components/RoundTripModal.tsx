@@ -26,6 +26,16 @@ function loopCoordinates(loop: GeneratedLoop): [number, number][] {
   return coordinates;
 }
 
+function nodeDistanceAndDirection(node: KnooppuntNode, center: { lat: number; lng: number }): string {
+  const northKm = (node.lat - center.lat) * 111;
+  const eastKm = (node.lng - center.lng) * 111 * Math.cos((center.lat * Math.PI) / 180);
+  const distanceKm = Math.hypot(northKm, eastKm);
+  const directions = ['N', 'NO', 'O', 'ZO', 'Z', 'ZW', 'W', 'NW'];
+  const bearing = (Math.atan2(eastKm, northKm) * 180 / Math.PI + 360) % 360;
+  const direction = directions[Math.round(bearing / 45) % directions.length];
+  return `${distanceKm.toFixed(1)} km ${direction} · ${node.lat.toFixed(4)}, ${node.lng.toFixed(4)}`;
+}
+
 const RoundTripPreviewModal: React.FC<{
   loop: GeneratedLoop;
   onClose: () => void;
@@ -102,6 +112,14 @@ export const RoundTripModal: React.FC<RoundTripModalProps> = ({
     () => findNearestRoundTripStart(center, availableNodes),
     [center, availableNodes],
   );
+
+  const startOptions = useMemo(() => (
+    [...availableNodes].sort((left, right) => {
+      const leftDistance = Math.hypot(left.lat - center.lat, left.lng - center.lng);
+      const rightDistance = Math.hypot(right.lat - center.lat, right.lng - center.lng);
+      return leftDistance - rightDistance || left.ref.localeCompare(right.ref, 'nl');
+    })
+  ), [availableNodes, center]);
 
   // Initialize or update start node when modal opens
   useEffect(() => {
@@ -191,9 +209,9 @@ export const RoundTripModal: React.FC<RoundTripModalProps> = ({
               }}
               className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2.5 text-xs text-slate-800 font-medium focus:ring-2 focus:ring-emerald-500 focus:outline-hidden"
             >
-              {availableNodes.map((n) => (
+              {startOptions.map((n) => (
                 <option key={n.id || `${n.ref}-${n.lat}-${n.lng}`} value={n.id || n.ref}>
-                  KP {n.ref} &bull; {n.name || 'Knooppunt'} ({n.municipality || n.region || 'Limburg'})
+                  KP {n.ref} · {nodeDistanceAndDirection(n, center)}
                 </option>
               ))}
             </select>
