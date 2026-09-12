@@ -434,6 +434,7 @@ export const RoutePanel: React.FC<RoutePanelProps> = ({
               totalDistanceKm={totalDistanceKm}
               totalAscentM={elevationGainM}
             />
+            <PanelBrandMark />
           </div>
         ) : (
           /* Tab 1: Knooppunten Sequence */
@@ -603,9 +604,20 @@ export const RoutePanel: React.FC<RoutePanelProps> = ({
                 </div>
               </>
             )}
+            <PanelBrandMark />
           </div>
         )}
       </div>
     </div>
   );
 };
+
+const PanelBrandMark: React.FC = () => (
+  <div className="flex justify-center pt-2" aria-label="FietsRoute.io">
+    <img
+      src="/fietsroute-logo.png"
+      alt="FietsRoute.io"
+      className="w-16 h-16 sm:w-20 sm:h-20 object-contain opacity-80"
+    />
+  </div>
+);
