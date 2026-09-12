@@ -365,6 +365,41 @@ export const RoutePanel: React.FC<RoutePanelProps> = ({
 
       {/* Scrollable route details */}
       <div className="flex-1 min-h-0 overflow-y-auto p-2.5 space-y-2 bg-slate-50/50">
+        {showClearConfirm && (
+          <div className="fixed inset-0 z-[1600] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in">
+            <div className="bg-white rounded-xl shadow-2xl border border-slate-200 max-w-sm w-full p-5 space-y-4">
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center shrink-0">
+                  <Trash2 className="w-5 h-5" />
+                </div>
+                <div className="space-y-1">
+                  <h3 className="text-sm font-bold text-slate-900">Route verwijderen?</h3>
+                  <p className="text-xs text-slate-600 leading-relaxed">
+                    Weet je zeker dat je de volledige route met <strong>{selectedNodes.length} knooppunten</strong> ({totalDistanceKm} km) wilt verwijderen?
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+                <button
+                  onClick={() => setShowClearConfirm(false)}
+                  className="px-3.5 py-1.5 rounded-lg text-xs font-semibold text-slate-700 hover:bg-slate-100 transition cursor-pointer"
+                >
+                  Annuleren
+                </button>
+                <button
+                  onClick={() => {
+                    onClearRoute();
+                    setShowClearConfirm(false);
+                  }}
+                  className="px-3.5 py-1.5 rounded-lg text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 transition shadow-xs cursor-pointer"
+                >
+                  Ja, route verwijderen
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {routeError && (
           <div className="p-2.5 rounded-md bg-amber-50 border border-amber-200 text-[11px] leading-relaxed text-amber-950">
             <strong>Route niet beschikbaar.</strong> {routeError}
@@ -403,42 +438,6 @@ export const RoutePanel: React.FC<RoutePanelProps> = ({
         ) : (
           /* Tab 1: Knooppunten Sequence */
           <div className="space-y-1.5">
-            {/* Confirm Clear Route Dialog */}
-            {showClearConfirm && (
-              <div className="fixed inset-0 z-[1600] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in">
-                <div className="bg-white rounded-xl shadow-2xl border border-slate-200 max-w-sm w-full p-5 space-y-4">
-                  <div className="flex items-start gap-3">
-                    <div className="w-10 h-10 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center shrink-0">
-                      <Trash2 className="w-5 h-5" />
-                    </div>
-                    <div className="space-y-1">
-                      <h3 className="text-sm font-bold text-slate-900">Route verwijderen?</h3>
-                      <p className="text-xs text-slate-600 leading-relaxed">
-                        Weet je zeker dat je de volledige route met <strong>{selectedNodes.length} knooppunten</strong> ({totalDistanceKm} km) wilt verwijderen?
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
-                    <button
-                      onClick={() => setShowClearConfirm(false)}
-                      className="px-3.5 py-1.5 rounded-lg text-xs font-semibold text-slate-700 hover:bg-slate-100 transition cursor-pointer"
-                    >
-                      Annuleren
-                    </button>
-                    <button
-                      onClick={() => {
-                        onClearRoute();
-                        setShowClearConfirm(false);
-                      }}
-                      className="px-3.5 py-1.5 rounded-lg text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 transition shadow-xs cursor-pointer"
-                    >
-                      Ja, route verwijderen
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-
             {selectedNodes.length === 0 ? (
               <div className="p-6 bg-white rounded-xl border border-dashed border-slate-300 text-center space-y-2 shadow-xs">
                 <div className="w-10 h-10 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center mx-auto">
