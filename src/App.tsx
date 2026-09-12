@@ -15,6 +15,8 @@ import { enrichKnooppuntLocality } from './services/localityService';
 import { loadPrepackagedOfficialNetwork } from './services/networkDataService';
 import { Map, List, Bike, Sparkles, Navigation, Undo2, Redo2, X, Search, MapPin, Database, Wifi, WifiOff, Network } from 'lucide-react';
 
+const DEFAULT_ROUTE_NAME = 'Mijn Fietsroute';
+
 export default function App() {
   // Available nodes in current state (preloaded + Overpass queried)
   const [availableNodes, setAvailableNodes] = useState<KnooppuntNode[]>([]);
@@ -45,7 +47,7 @@ export default function App() {
 
   // Clean initial state without default route (starts fresh on current location)
   const [selectedNodes, setSelectedNodes] = useState<KnooppuntNode[]>([]);
-  const [routeName, setRouteName] = useState<string>('Mijn Fietsroute');
+  const [routeName, setRouteName] = useState<string>(DEFAULT_ROUTE_NAME);
   const [routeLegs, setRouteLegs] = useState<RouteLeg[]>([]);
   const [fullCoordinates, setFullCoordinates] = useState<[number, number][]>([]);
   const [totalDistanceKm, setTotalDistanceKm] = useState<number>(0);
@@ -464,6 +466,7 @@ export default function App() {
   const handleClearRoute = () => {
     if (selectedNodes.length === 0) return;
     applyRouteUpdate([]);
+    setRouteName(DEFAULT_ROUTE_NAME);
   };
 
   // GPX Export
