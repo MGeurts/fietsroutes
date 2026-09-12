@@ -29,6 +29,8 @@ interface MapPlannerProps {
   automaticIntermediateNodes: KnooppuntNode[];
   routeCoordinates: [number, number][];
   routeLegs: RouteLeg[];
+  approachRoute?: RouteLeg | null;
+  focusRouteCoordinates?: [number, number][] | null;
   onNodeClick: (node: KnooppuntNode) => void;
   onAddNewNode?: (node: KnooppuntNode) => void;
   onAddNewNodes?: (nodes: KnooppuntNode[]) => void;
@@ -109,6 +111,8 @@ export const MapPlanner: React.FC<MapPlannerProps> = ({
   automaticIntermediateNodes,
   routeCoordinates,
   routeLegs,
+  approachRoute,
+  focusRouteCoordinates,
   onNodeClick,
   onAddNewNode,
   onAddNewNodes,
@@ -133,6 +137,7 @@ export const MapPlanner: React.FC<MapPlannerProps> = ({
   const markersLayerGroupRef = useRef<L.LayerGroup | null>(null);
   const routePolylineRef = useRef<L.LayerGroup | null>(null);
   const routeDecoratorsLayerRef = useRef<L.LayerGroup | null>(null);
+  const approachRouteLayerRef = useRef<L.Polyline | null>(null);
   const currentLocationMarkerRef = useRef<L.Marker | null>(null);
   const currentLocationCircleRef = useRef<L.Circle | null>(null);
   const searchedAddressMarkerRef = useRef<L.Marker | null>(null);
@@ -562,6 +567,29 @@ export const MapPlanner: React.FC<MapPlannerProps> = ({
       }
     }
   }, [routeCoordinates, routeLegs, selectedNodes, onRouteSegmentClick]);
+
+  // The approach is intentionally rendered as a separate blue dashed line so
+  // it cannot be mistaken for part of the red planned round trip.
+  useEffect(() => {
+    const map = mapInstanceRef.current;
+    if (!map) return;
+    if (approachRouteLayerRef.current) {
+      map.removeLayer(approachRouteLayerRef.current);
+      approachRouteLayerRef.current = null;
+    }
+    if (!approachRoute || approachRoute.coordinates.length < 2) return;
+    const line = L.polyline(approachRoute.coordinates, {
+      color: '#0284c7', weight: 5, opacity: 0.9, dashArray: '8 10', lineCap: 'round', pane: 'activeRoutePane',
+    }).addTo(map);
+    line.bindTooltip('Naar startpunt — niet inbegrepen in route, GPX of strookje', { sticky: true });
+    approachRouteLayerRef.current = line;
+  }, [approachRoute]);
+
+  useEffect(() => {
+    const map = mapInstanceRef.current;
+    if (!map || !focusRouteCoordinates || focusRouteCoordinates.length < 2) return;
+    map.fitBounds(L.latLngBounds(focusRouteCoordinates), { padding: [42, 42], maxZoom: 15 });
+  }, [focusRouteCoordinates]);
 
   // Fetch real knooppunten from OpenStreetMap via Overpass for current map viewport
   const handleScanBBoxForKnooppunten = useCallback(async () => {

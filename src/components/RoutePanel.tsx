@@ -18,6 +18,12 @@ import {
   Undo2,
   Redo2,
   ChevronDown,
+  BookOpen,
+  Wifi,
+  WifiOff,
+  Navigation2,
+  MapPinned,
+  ShieldCheck,
 } from 'lucide-react';
 import { ElevationProfile } from './ElevationProfile';
 
@@ -52,6 +58,13 @@ interface RoutePanelProps {
   onOpenRoundTrip: () => void;
   onOpenGpxImport: () => void;
   onOpenLaravelModal: () => void;
+  onOpenRouteLibrary: () => void;
+  isOnline: boolean;
+  offlineRouteAvailable: boolean;
+  approachRoute: RouteLeg | null;
+  approachLoading: boolean;
+  approachError: string | null;
+  onFocusRouteLeg?: (index: number) => void;
 }
 
 const BIKE_PROFILES: BikeProfile[] = [
@@ -89,6 +102,13 @@ export const RoutePanel: React.FC<RoutePanelProps> = ({
   canExportRoute,
   onOpenRoundTrip,
   onOpenGpxImport,
+  onOpenRouteLibrary,
+  isOnline,
+  offlineRouteAvailable,
+  approachRoute,
+  approachLoading,
+  approachError,
+  onFocusRouteLeg,
 }) => {
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
@@ -134,6 +154,20 @@ export const RoutePanel: React.FC<RoutePanelProps> = ({
   const durationHours = totalDistanceKm / currentProfile.averageSpeedKmH;
   const hours = Math.floor(durationHours);
   const minutes = Math.round((durationHours - hours) * 60);
+  const approachMinutes = approachRoute ? Math.max(1, Math.round((approachRoute.distanceKm / currentProfile.averageSpeedKmH) * 60)) : 0;
+  const qualityByLeg = useMemo(() => routeLegs.map((leg) => {
+    const sources = (leg.displaySegments || []).map((segment) => segment.source);
+    if (sources.length === 0 && leg.isVerified === false) return { label: 'Externe routering', tone: 'rose' as const };
+    if (sources.every((source) => source === 'official')) return { label: 'Geverifieerde geometrie', tone: 'emerald' as const };
+    if (sources.some((source) => source === 'official-declared')) return { label: 'Officiële relatie, live geometrie', tone: 'amber' as const };
+    return { label: 'Externe routering', tone: 'rose' as const };
+  }), [routeLegs]);
+  const qualityTotals = useMemo(() => qualityByLeg.reduce((totals, quality) => {
+    if (quality.tone === 'emerald') totals.official += 1;
+    else if (quality.tone === 'amber') totals.declared += 1;
+    else totals.external += 1;
+    return totals;
+  }, { official: 0, declared: 0, external: 0 }), [qualityByLeg]);
 
   return (
     <div className="h-full flex flex-col bg-white border-r border-slate-200 w-full shrink-0 shadow-sm z-10 overflow-hidden font-sans">
@@ -251,6 +285,15 @@ export const RoutePanel: React.FC<RoutePanelProps> = ({
             <Upload className="w-3.5 h-3.5 text-slate-500" />
             <span className="hidden sm:inline text-[11px]">Import</span>
           </button>
+
+          <button
+            onClick={onOpenRouteLibrary}
+            className="flex items-center justify-center gap-1 py-1.5 px-2 bg-white hover:bg-slate-100 text-slate-700 rounded-md text-xs font-medium border border-slate-200 shadow-2xs transition active:scale-95 cursor-pointer"
+            title="Open lokale routebibliotheek en deellink"
+          >
+            <BookOpen className="w-3.5 h-3.5 text-emerald-700" />
+            <span className="hidden md:inline text-[11px]">Bibliotheek</span>
+          </button>
         </div>
       </div>
 
@@ -365,6 +408,32 @@ export const RoutePanel: React.FC<RoutePanelProps> = ({
 
       {/* Scrollable route details */}
       <div className="flex-1 min-h-0 overflow-y-auto p-2.5 space-y-2 bg-slate-50/50">
+        <div className={`flex items-start gap-2 rounded-md border px-2.5 py-2 text-[11px] leading-relaxed ${isOnline ? 'border-emerald-200 bg-emerald-50 text-emerald-950' : 'border-amber-200 bg-amber-50 text-amber-950'}`}>
+          {isOnline ? <Wifi className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-700" /> : <WifiOff className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-700" />}
+          <span><strong>{isOnline ? 'Online.' : 'Offline.'}</strong> {offlineRouteAvailable ? 'Deze route en haar hoogtegegevens zijn lokaal bewaard.' : 'Bewaar een route om haar gegevens lokaal beschikbaar te houden.'} {!isOnline && 'Kaarttegels en live fietsroutering zijn dan mogelijk niet beschikbaar.'}</span>
+        </div>
+
+        {(approachRoute || approachLoading || approachError) && (
+          <div className="rounded-md border border-sky-200 bg-sky-50 p-2.5 text-[11px] text-sky-950">
+            <div className="flex items-center gap-1.5 font-bold"><Navigation2 className="h-3.5 w-3.5 text-sky-700" />Naar startpunt <span className="ml-auto rounded bg-white px-1.5 py-0.5 text-[10px] font-semibold text-sky-700">Niet in rondrit</span></div>
+            {approachLoading ? <p className="mt-1 text-sky-700">Fiets-aanrijtraject berekenen…</p> : approachRoute ? <p className="mt-1">{approachRoute.distanceKm} km · circa {approachMinutes} min. Deze blauwe lijn telt niet mee in afstand, GPX of strookje.</p> : <p className="mt-1 text-amber-800">{approachError}</p>}
+          </div>
+        )}
+
+        {routeLegs.length > 0 && (
+          <section className="rounded-md border border-slate-200 bg-white p-2.5" aria-label="Routekwaliteit">
+            <div className="flex items-center justify-between"><h3 className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-800"><ShieldCheck className="h-3.5 w-3.5 text-emerald-700" />Routekwaliteit</h3><span className="text-[10px] text-slate-500">klik een traject voor kaartfocus</span></div>
+            <p className="mt-1 text-[10px] text-slate-600">{qualityTotals.official} geverifieerd · {qualityTotals.declared} officiële relatie/live geometrie · {qualityTotals.external} extern/onbevestigd</p>
+            <div className="mt-2 space-y-1">
+              {routeLegs.map((leg, index) => {
+                const quality = qualityByLeg[index];
+                const classes = quality.tone === 'emerald' ? 'border-emerald-200 bg-emerald-50 text-emerald-900' : quality.tone === 'amber' ? 'border-amber-200 bg-amber-50 text-amber-950' : 'border-rose-200 bg-rose-50 text-rose-950';
+                return <button type="button" key={`${leg.fromNode.id}-${leg.toNode.id}-${index}`} onClick={() => onFocusRouteLeg?.(index)} className={`flex w-full items-center justify-between gap-2 rounded border px-2 py-1.5 text-left text-[10px] hover:brightness-95 cursor-pointer ${classes}`}><span className="inline-flex min-w-0 items-center gap-1"><MapPinned className="h-3 w-3 shrink-0" /><span className="truncate">KP {leg.fromNode.ref} → {leg.toNode.ref}: {quality.label}</span></span><span className="shrink-0 font-bold">{leg.distanceKm} km</span></button>;
+              })}
+            </div>
+          </section>
+        )}
+
         {showClearConfirm && (
           <div className="fixed inset-0 z-[1600] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in">
             <div className="bg-white rounded-xl shadow-2xl border border-slate-200 max-w-sm w-full p-5 space-y-4">
@@ -403,22 +472,6 @@ export const RoutePanel: React.FC<RoutePanelProps> = ({
         {routeError && (
           <div className="p-2.5 rounded-md bg-amber-50 border border-amber-200 text-[11px] leading-relaxed text-amber-950">
             <strong>Route niet beschikbaar.</strong> {routeError}
-          </div>
-        )}
-
-        {routeLegs.some((leg) => leg.isVerified === false) && !routeError && (
-          <div className="p-2.5 rounded-md bg-amber-50 border border-amber-200 text-[11px] leading-relaxed text-amber-950">
-            <strong>Controle nodig.</strong> Een of meer delen zijn met live fietsroutering berekend omdat de exacte officiële weggeometrie ontbreekt.
-            <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-[10px] font-semibold">
-              <span className="inline-flex items-center gap-1">
-                <i className="inline-block w-5 border-t-[3px] border-red-600" />
-                Rood vol: geverifieerde officiële geometrie
-              </span>
-              <span className="inline-flex items-center gap-1">
-                <i className="inline-block w-5 border-t-[4px] border-dotted border-orange-500" />
-                Oranje stippen: officiële relatie, wegvorm live berekend
-              </span>
-            </div>
           </div>
         )}
 
@@ -465,7 +518,6 @@ export const RoutePanel: React.FC<RoutePanelProps> = ({
                 <div className="space-y-1.5">
                   {selectedNodes.map((node, index) => {
                     const nextLeg = routeLegs[index];
-                    const nextLegNeedsReview = nextLeg?.isVerified === false;
                     const automaticNodesForLeg = (nextLeg?.displaySegments || [])
                       .slice(0, -1)
                       .flatMap((segment) => segment.analysis?.toNode ? [segment.analysis.toNode] : [])
@@ -579,22 +631,12 @@ export const RoutePanel: React.FC<RoutePanelProps> = ({
 
                         {/* Distance connector badge between nodes */}
                         {nextLeg && (
-                          <div
-                            className={`flex items-center gap-2 pl-4 py-0.5 text-[10px] font-semibold ${
-                              nextLegNeedsReview ? 'text-amber-950' : 'text-emerald-700'
-                            }`}
-                          >
-                            <div className={`w-0.5 h-2 ml-3 ${nextLegNeedsReview ? 'bg-amber-300' : 'bg-emerald-300'}`} />
+                          <div className="flex items-center gap-2 pl-4 py-0.5 text-[10px] font-semibold text-emerald-700">
+                            <div className="ml-3 h-2 w-0.5 bg-emerald-300" />
                             <span
-                              className={`px-1.5 py-0.2 rounded text-[10px] border ${
-                                nextLegNeedsReview
-                                  ? 'bg-amber-50 border-amber-200'
-                                  : 'bg-emerald-50 border-emerald-100'
-                              }`}
-                              title={nextLegNeedsReview ? 'Controle nodig: berekend met live fietsroutering.' : undefined}
+                              className="rounded border border-emerald-100 bg-emerald-50 px-1.5 py-0.2 text-[10px]"
                             >
                               + {nextLeg.distanceKm} km naar KP {selectedNodes[index + 1]?.ref}
-                              {nextLegNeedsReview && ' · Controle nodig'}
                             </span>
                           </div>
                         )}

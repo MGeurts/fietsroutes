@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { KnooppuntNode, RouteConnectionAnalysis, RouteLeg, ElevationPoint, BikeType, MapTileProvider, PlannedRoute } from './types';
-import { calculateBicycleRouteLegs, fetchElevationProfile, downloadGpxFile, UnknownKnooppuntenConnectionError, isAbortError } from './services/routingService';
+import { calculateBicycleLeg, calculateBicycleRouteLegs, fetchElevationProfile, downloadGpxFile, UnknownKnooppuntenConnectionError, isAbortError } from './services/routingService';
+import { createShareUrl, deleteSavedRoute, getSavedRoutes, getRouteDraft, readSharedRoute, saveRoute, saveRouteDraft, SavedRoute } from './services/routeLibraryService';
 import { getAllCachedNodes, replaceCachedNodes, saveNodesToCache } from './services/knooppuntenCacheService';
 import { searchPlacesAndAddresses, isKnooppuntQuery, PlaceSearchResult, PRELOADED_MAJOR_PLACES } from './services/geocodingService';
 import { MapPlanner } from './components/MapPlanner';
@@ -12,6 +13,7 @@ import { GpxImportModal } from './components/GpxImportModal';
 import { NetworkDataModal } from './components/NetworkDataModal';
 import { NetworkAnalysisModal } from './components/NetworkAnalysisModal';
 import { AboutModal } from './components/AboutModal';
+import { RouteLibraryModal } from './components/RouteLibraryModal';
 import { enrichKnooppuntLocality } from './services/localityService';
 import { loadPrepackagedOfficialNetwork } from './services/networkDataService';
 import { Map, List, Bike, Sparkles, Navigation, Undo2, Redo2, X, Search, MapPin, Wifi, WifiOff, Network } from 'lucide-react';
@@ -58,6 +60,15 @@ export default function App() {
   const [elevationAvailable, setElevationAvailable] = useState(false);
   const [elevationLoading, setElevationLoading] = useState(false);
   const [routeError, setRouteError] = useState<string | null>(null);
+  const [isRouteLibraryOpen, setIsRouteLibraryOpen] = useState(false);
+  const [savedRoutes, setSavedRoutes] = useState<SavedRoute[]>([]);
+  const [routeLibraryFeedback, setRouteLibraryFeedback] = useState<string | null>(null);
+  const [approachRoute, setApproachRoute] = useState<RouteLeg | null>(null);
+  const [approachLoading, setApproachLoading] = useState(false);
+  const [approachError, setApproachError] = useState<string | null>(null);
+  const [focusedRouteLegIndex, setFocusedRouteLegIndex] = useState<number | null>(null);
+  const restoredRouteRef = useRef<SavedRoute | null>(null);
+  const sharedRouteHandledRef = useRef(false);
   const [fitRouteAfterImport, setFitRouteAfterImport] = useState(false);
   const [mapCenter, setMapCenter] = useState({ lat: 50.912, lng: 5.590 });
   const [currentLocation, setCurrentLocation] = useState<{ lat: number; lng: number } | null>(null);
@@ -138,6 +149,15 @@ export default function App() {
   useEffect(() => {
     const controller = new AbortController();
 
+    const restoredRoute = restoredRouteRef.current;
+    if (!isOnline && restoredRoute
+      && restoredRoute.nodes.length === selectedNodes.length
+      && restoredRoute.nodes.every((node, index) => String(node.id) === String(selectedNodes[index]?.id))) {
+      // A complete locally saved route is more useful than an unavailable
+      // recalculation while offline. It is refreshed once connectivity returns.
+      return () => controller.abort();
+    }
+
     async function computeFullRoute() {
       if (selectedNodes.length < 2) {
         setRouteLegs([]);
@@ -200,7 +220,45 @@ export default function App() {
       window.clearTimeout(debounceTimer);
       controller.abort();
     };
-  }, [selectedNodes]);
+  }, [selectedNodes, isOnline]);
+
+  // This is deliberately a separate route: it helps riders reach the first
+  // junction but must never alter the round-trip distance, GPX or print strip.
+  useEffect(() => {
+    const startNode = selectedNodes[0];
+    if (!currentLocation || !startNode) {
+      setApproachRoute(null);
+      setApproachLoading(false);
+      setApproachError(null);
+      return;
+    }
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => {
+      setApproachLoading(true);
+      setApproachError(null);
+      const locationNode: KnooppuntNode = {
+        id: `current-location-${currentLocation.lat.toFixed(5)}-${currentLocation.lng.toFixed(5)}`,
+        ref: 'Huidige locatie',
+        lat: currentLocation.lat,
+        lng: currentLocation.lng,
+      };
+      calculateBicycleLeg(locationNode, startNode, controller.signal)
+        .then((leg) => {
+          if (!controller.signal.aborted) setApproachRoute(leg);
+        })
+        .catch((error) => {
+          if (!controller.signal.aborted && !isAbortError(error)) {
+            setApproachRoute(null);
+            setApproachError('Aanrijroute is momenteel niet beschikbaar.');
+          }
+        })
+        .finally(() => { if (!controller.signal.aborted) setApproachLoading(false); });
+    }, ROUTE_CALCULATION_DEBOUNCE_MS);
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [currentLocation, selectedNodes]);
 
   // Undo / Redo History Stacks
   const [undoStack, setUndoStack] = useState<KnooppuntNode[][]>([]);
@@ -435,6 +493,41 @@ export default function App() {
     setFitRouteAfterImport(true);
   }, []);
 
+  const restoreSavedRoute = useCallback((route: SavedRoute) => {
+    const nodes = route.nodes.map(resolveRouteableNode);
+    restoredRouteRef.current = { ...route, nodes };
+    setRouteName(route.name || DEFAULT_ROUTE_NAME);
+    setRouteLegs(route.legs);
+    setFullCoordinates(route.fullCoordinates);
+    setTotalDistanceKm(route.totalDistanceKm);
+    setElevationGainM(route.elevationGainM);
+    setElevationPoints(route.elevationPoints);
+    setElevationAvailable(route.elevationPoints.length > 1);
+    setElevationLoading(false);
+    setRouteError(null);
+    setSelectedNodes(nodes);
+    setFitRouteAfterImport(true);
+    setIsRouteLibraryOpen(false);
+    setRouteLibraryFeedback(`Route “${route.name}” is lokaal heropend.`);
+  }, [resolveRouteableNode]);
+
+  useEffect(() => {
+    if (sharedRouteHandledRef.current) return;
+    sharedRouteHandledRef.current = true;
+    const sharedRoute = readSharedRoute();
+    if (sharedRoute) {
+      applyImportedRoute(sharedRoute.nodes.map(resolveRouteableNode), sharedRoute.name);
+      setRouteLibraryFeedback('De gedeelde knooppuntvolgorde is geladen. De actuele route wordt berekend.');
+      return;
+    }
+    if (new URLSearchParams(window.location.search).has('route')) {
+      setRouteLibraryFeedback('Deze deellink is ongeldig of onvolledig. Kies een route opnieuw of vraag een nieuwe link.');
+      return;
+    }
+    const draft = getRouteDraft();
+    if (draft && draft.nodes.length > 0) restoreSavedRoute(draft);
+  }, [applyImportedRoute, resolveRouteableNode, restoreSavedRoute]);
+
   // Reordering and removing nodes with history tracking
   const handleRemoveNode = (index: number) => {
     applyRouteUpdate((prev) => prev.filter((_, i) => i !== index));
@@ -585,6 +678,62 @@ export default function App() {
     elevationPoints,
     createdAt: new Date().toISOString(),
   };
+
+  const persistableRoute = useMemo<PlannedRoute>(() => ({
+    ...currentRouteObject,
+    legs: routeLegs.length === Math.max(0, selectedNodes.length - 1) ? routeLegs : [],
+    fullCoordinates: routeLegs.length === Math.max(0, selectedNodes.length - 1) ? fullCoordinates : [],
+    elevationPoints: routeLegs.length === Math.max(0, selectedNodes.length - 1) ? elevationPoints : [],
+    elevationGainM: routeLegs.length === Math.max(0, selectedNodes.length - 1) ? elevationGainM : 0,
+    totalDistanceKm: routeLegs.length === Math.max(0, selectedNodes.length - 1) ? totalDistanceKm : 0,
+  }), [routeName, selectedNodes, routeLegs, fullCoordinates, totalDistanceKm, elevationGainM, elevationPoints]);
+
+  useEffect(() => {
+    if (selectedNodes.length > 0) saveRouteDraft(persistableRoute);
+  }, [persistableRoute, selectedNodes.length]);
+
+  const handleOpenRouteLibrary = useCallback(() => {
+    setSavedRoutes(getSavedRoutes());
+    setIsRouteLibraryOpen(true);
+  }, []);
+
+  const handleSaveCurrentRoute = useCallback(() => {
+    if (selectedNodes.length < 2) {
+      setRouteLibraryFeedback('Kies minstens twee knooppunten voordat je een route bewaart.');
+      return;
+    }
+    const saved = saveRoute({ ...persistableRoute, id: `saved-route-${Date.now()}`, createdAt: new Date().toISOString() });
+    if (!saved) {
+      setRouteLibraryFeedback('De browser kon deze route niet lokaal opslaan. Controleer beschikbare opslagruimte.');
+      return;
+    }
+    setSavedRoutes(getSavedRoutes());
+    setRouteLibraryFeedback(`“${saved.name}” is lokaal bewaard, inclusief routegeometrie en hoogtegegevens.`);
+  }, [persistableRoute, selectedNodes.length]);
+
+  const handleDeleteSavedRoute = useCallback((route: SavedRoute) => {
+    if (deleteSavedRoute(route.id)) {
+      setSavedRoutes(getSavedRoutes());
+      setRouteLibraryFeedback(`“${route.name}” is uit deze browser verwijderd.`);
+    } else {
+      setRouteLibraryFeedback('Deze route kon niet worden verwijderd uit de lokale opslag.');
+    }
+  }, []);
+
+  const handleCopyShareUrl = useCallback(async () => {
+    const shareUrl = createShareUrl(routeName, selectedNodes);
+    if (!shareUrl) {
+      setRouteLibraryFeedback('Een deellink vereist minstens twee geldige knooppunten.');
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      setRouteLibraryFeedback('Deellink gekopieerd. Deze bevat alleen de knooppuntvolgorde en routenaam.');
+    } catch {
+      window.prompt('Kopieer deze deellink:', shareUrl);
+      setRouteLibraryFeedback('Deellink getoond om handmatig te kopiëren.');
+    }
+  }, [routeName, selectedNodes]);
 
   const [headerSearchQuery, setHeaderSearchQuery] = useState('');
   const [showHeaderSuggestions, setShowHeaderSuggestions] = useState(false);
@@ -927,6 +1076,12 @@ export default function App() {
 
         {/* Header Right Actions */}
         <div className="flex items-center gap-2 sm:gap-3">
+          <span
+            className={`hidden sm:inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[10px] font-bold ${isOnline ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-amber-200 bg-amber-50 text-amber-900'}`}
+            title={isOnline ? 'Netwerk beschikbaar; live routering en kaarttegels kunnen worden gebruikt.' : 'Offline: lokaal opgeslagen routes en de ingebouwde netwerkcache blijven beschikbaar; kaarttegels en live routering mogelijk niet.'}
+          >
+            {isOnline ? <Wifi className="h-3 w-3" /> : <WifiOff className="h-3 w-3" />}{isOnline ? 'Online' : 'Offline'}
+          </span>
           <button
             onClick={handleExportGpx}
             disabled={selectedNodes.length < 2 || routeLegs.length !== selectedNodes.length - 1 || Boolean(routeError)}
@@ -1008,6 +1163,16 @@ export default function App() {
             onOpenRoundTrip={handleOpenRoundTrip}
             onOpenGpxImport={() => setIsGpxImportOpen(true)}
             onOpenLaravelModal={() => setIsLaravelModalOpen(true)}
+            onOpenRouteLibrary={handleOpenRouteLibrary}
+            isOnline={isOnline}
+            offlineRouteAvailable={Boolean(getRouteDraft())}
+            approachRoute={approachRoute}
+            approachLoading={approachLoading}
+            approachError={approachError}
+            onFocusRouteLeg={(index) => {
+              setFocusedRouteLegIndex(index);
+              if (mobileTab === 'panel') setMobileTab('map');
+            }}
           />
         </div>
 
@@ -1023,6 +1188,8 @@ export default function App() {
             automaticIntermediateNodes={automaticIntermediateNodes}
             routeCoordinates={fullCoordinates}
             routeLegs={routeLegs}
+            approachRoute={approachRoute}
+            focusRouteCoordinates={focusedRouteLegIndex === null ? null : routeLegs[focusedRouteLegIndex]?.coordinates || null}
             onNodeClick={handleNodeClick}
             onAddNewNode={handleAddNewNode}
             onAddNewNodes={handleAddNewNodes}
@@ -1085,6 +1252,18 @@ export default function App() {
         averageSpeedKmH={
           selectedBike === 'ebike' ? 20 : selectedBike === 'racefiets' ? 25 : selectedBike === 'gravel' ? 18 : 15
         }
+      />
+
+      <RouteLibraryModal
+        isOpen={isRouteLibraryOpen}
+        routes={savedRoutes}
+        canSave={selectedNodes.length >= 2}
+        feedback={routeLibraryFeedback}
+        onClose={() => setIsRouteLibraryOpen(false)}
+        onSave={handleSaveCurrentRoute}
+        onOpen={restoreSavedRoute}
+        onDelete={handleDeleteSavedRoute}
+        onCopyShareUrl={handleCopyShareUrl}
       />
 
       <RoundTripModal
