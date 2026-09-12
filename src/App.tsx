@@ -767,9 +767,9 @@ export default function App() {
         <div ref={searchDropdownRef} className="relative hidden md:block">
           <form
             onSubmit={handleHeaderSearch}
-            className="flex items-center bg-slate-800 rounded-full px-4 py-2 w-72 lg:w-96 border border-slate-700 focus-within:border-emerald-500 focus-within:ring-1 focus-within:ring-emerald-500 transition"
+            className="flex items-center bg-white/95 rounded-xl px-4 py-2.5 w-72 lg:w-96 border-2 border-emerald-400/80 shadow-md shadow-slate-950/30 focus-within:border-emerald-300 focus-within:ring-2 focus-within:ring-emerald-300/40 transition"
           >
-            <svg className="w-4 h-4 text-slate-400 mr-2 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-4 h-4 text-emerald-700 mr-2 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path
                 d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
                 strokeWidth="2"
@@ -786,7 +786,7 @@ export default function App() {
               }}
               onFocus={() => setShowHeaderSuggestions(true)}
               placeholder="Zoek knooppunt (bijv. 131) of adres..."
-              className="bg-transparent border-none text-sm text-slate-200 placeholder-slate-500 focus:ring-0 focus:outline-none w-full"
+              className="bg-transparent border-none text-sm text-slate-900 placeholder-slate-500 focus:ring-0 focus:outline-none w-full"
             />
             {headerSearchQuery && (
               <button
@@ -795,7 +795,7 @@ export default function App() {
                   setHeaderSearchQuery('');
                   setShowHeaderSuggestions(false);
                 }}
-                className="text-slate-400 hover:text-white p-0.5 ml-1 transition cursor-pointer"
+                className="text-slate-500 hover:text-emerald-700 p-0.5 ml-1 transition cursor-pointer"
                 title="Wissen"
               >
                 <X className="w-3.5 h-3.5" />
