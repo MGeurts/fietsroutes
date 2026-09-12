@@ -112,7 +112,7 @@ export const RoutePanel: React.FC<RoutePanelProps> = ({
 }) => {
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<'nodes' | 'elevation'>('nodes');
+  const [activeTab, setActiveTab] = useState<'nodes' | 'elevation' | 'quality'>('nodes');
   // Count every passage in the rendered network route. Unlike the separate
   // automatic-node collection, this deliberately does not merge a node that
   // occurs again later (for example a route that passes KP 63 twice).
@@ -168,6 +168,23 @@ export const RoutePanel: React.FC<RoutePanelProps> = ({
     else totals.external += 1;
     return totals;
   }, { official: 0, declared: 0, external: 0 }), [qualityByLeg]);
+  const handleTabKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>) => {
+    const tabs: Array<typeof activeTab> = ['nodes'];
+    if (totalDistanceKm > 0 && elevationAvailable) tabs.push('elevation');
+    if (routeLegs.length > 0) tabs.push('quality');
+    const currentIndex = tabs.indexOf(activeTab);
+    if (event.key === 'Home') {
+      event.preventDefault();
+      setActiveTab(tabs[0]);
+    } else if (event.key === 'End') {
+      event.preventDefault();
+      setActiveTab(tabs[tabs.length - 1]);
+    } else if (event.key === 'ArrowRight' || event.key === 'ArrowLeft') {
+      event.preventDefault();
+      const offset = event.key === 'ArrowRight' ? 1 : -1;
+      setActiveTab(tabs[(currentIndex + offset + tabs.length) % tabs.length]);
+    }
+  };
 
   return (
     <div className="h-full flex flex-col bg-white border-r border-slate-200 w-full shrink-0 shadow-sm z-10 overflow-hidden font-sans">
@@ -247,11 +264,11 @@ export const RoutePanel: React.FC<RoutePanelProps> = ({
         )}
 
         {/* Row 3: Quick Action Buttons */}
-        <div className="p-2 bg-slate-50/60 flex items-center gap-1.5">
+        <div className="grid grid-cols-3 gap-1.5 bg-slate-50/60 p-2">
           <button
             onClick={onOpenStrookje}
             disabled={!canExportRoute}
-            className="flex-1 flex items-center justify-center gap-1 py-1.5 px-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-md text-xs font-semibold shadow-2xs transition active:scale-95 disabled:opacity-40 cursor-pointer"
+            className="flex min-w-0 items-center justify-center gap-1 rounded-md bg-emerald-600 px-1 py-1.5 text-[11px] font-semibold text-white shadow-2xs transition active:scale-95 hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-40 cursor-pointer"
             title="Print strookje voor stuur"
           >
             <Printer className="w-3.5 h-3.5" />
@@ -261,7 +278,7 @@ export const RoutePanel: React.FC<RoutePanelProps> = ({
           <button
             onClick={onExportGpx}
             disabled={!canExportRoute}
-            className="flex-1 flex items-center justify-center gap-1 py-1.5 px-2 bg-slate-900 hover:bg-slate-800 text-white rounded-md text-xs font-semibold shadow-2xs transition active:scale-95 disabled:opacity-40 cursor-pointer"
+            className="flex min-w-0 items-center justify-center gap-1 rounded-md bg-slate-900 px-1 py-1.5 text-[11px] font-semibold text-white shadow-2xs transition active:scale-95 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40 cursor-pointer"
             title="Download GPX bestand"
           >
             <Download className="w-3.5 h-3.5 text-emerald-400" />
@@ -270,41 +287,48 @@ export const RoutePanel: React.FC<RoutePanelProps> = ({
 
           <button
             onClick={onOpenRoundTrip}
-            className="flex items-center justify-center gap-1 py-1.5 px-2 bg-white hover:bg-slate-100 text-slate-700 rounded-md text-xs font-medium border border-slate-200 shadow-2xs transition active:scale-95 cursor-pointer"
+            className="flex min-w-0 items-center justify-center gap-1 rounded-md border border-slate-200 bg-white px-1 py-1.5 text-[11px] font-medium text-slate-700 shadow-2xs transition active:scale-95 hover:bg-slate-100 cursor-pointer"
             title="Automatische rondrit generator"
           >
             <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-            <span className="hidden sm:inline text-[11px]">Rondrit</span>
+            <span>Rondrit</span>
           </button>
 
-          <button
-            onClick={onOpenGpxImport}
-            className="flex items-center justify-center gap-1 py-1.5 px-2 bg-white hover:bg-slate-100 text-slate-700 rounded-md text-xs font-medium border border-slate-200 shadow-2xs transition active:scale-95 cursor-pointer"
-            title="Importeer GPX bestand"
-          >
-            <Upload className="w-3.5 h-3.5 text-slate-500" />
-            <span className="hidden sm:inline text-[11px]">Import</span>
-          </button>
+          <div className="col-span-3 grid grid-cols-2 gap-1.5">
+            <button
+              onClick={onOpenGpxImport}
+              className="flex min-w-0 items-center justify-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1.5 text-[11px] font-medium text-slate-700 shadow-2xs transition active:scale-95 hover:bg-slate-100 cursor-pointer"
+              title="Importeer GPX bestand"
+            >
+              <Upload className="h-3.5 w-3.5 shrink-0 text-slate-500" />
+              <span>Import</span>
+            </button>
 
-          <button
-            onClick={onOpenRouteLibrary}
-            className="flex items-center justify-center gap-1 py-1.5 px-2 bg-white hover:bg-slate-100 text-slate-700 rounded-md text-xs font-medium border border-slate-200 shadow-2xs transition active:scale-95 cursor-pointer"
-            title="Open lokale routebibliotheek en deellink"
-          >
-            <BookOpen className="w-3.5 h-3.5 text-emerald-700" />
-            <span className="hidden md:inline text-[11px]">Bibliotheek</span>
-          </button>
+            <button
+              onClick={onOpenRouteLibrary}
+              className="flex min-w-0 items-center justify-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1.5 text-[11px] font-medium text-slate-700 shadow-2xs transition active:scale-95 hover:bg-slate-100 cursor-pointer"
+              title="Open lokale routebibliotheek en deellink"
+            >
+              <BookOpen className="h-3.5 w-3.5 shrink-0 text-emerald-700" />
+              <span>Bibliotheek</span>
+            </button>
+          </div>
         </div>
       </div>
 
       {/* Pinned route controls */}
       <div className="shrink-0 space-y-2 border-b border-slate-200 bg-slate-50/80 p-2.5">
-        {/* Lijn 1: Knooppunten / Hoogte Toggle (steeds op de eerste lijn) */}
+        {/* Lijn 1: routeweergaven */}
         <div className="w-full">
-          <div className="w-full grid grid-cols-2 gap-1 bg-slate-200/70 p-0.5 rounded-lg border border-slate-200">
+          <div className="grid w-full grid-cols-3 gap-1 rounded-lg border border-slate-200 bg-slate-200/70 p-0.5" role="tablist" aria-label="Routeweergave">
             <button
               type="button"
               onClick={() => setActiveTab('nodes')}
+              onKeyDown={handleTabKeyDown}
+              role="tab"
+              id="route-panel-tab-nodes"
+              aria-selected={activeTab === 'nodes'}
+              aria-controls="route-panel-content"
               className={`py-1 rounded-md text-[11px] font-bold transition cursor-pointer flex flex-col items-center justify-center leading-tight ${
                 activeTab === 'nodes'
                   ? 'bg-white text-emerald-800 shadow-xs'
@@ -322,6 +346,11 @@ export const RoutePanel: React.FC<RoutePanelProps> = ({
               type="button"
               onClick={() => setActiveTab('elevation')}
               disabled={totalDistanceKm <= 0 || !elevationAvailable}
+              onKeyDown={handleTabKeyDown}
+              role="tab"
+              id="route-panel-tab-elevation"
+              aria-selected={activeTab === 'elevation'}
+              aria-controls="route-panel-content"
               className={`py-1 rounded-md text-[11px] font-bold transition cursor-pointer flex flex-col items-center justify-center leading-tight disabled:opacity-40 disabled:cursor-not-allowed ${
                 activeTab === 'elevation'
                   ? 'bg-white text-emerald-800 shadow-xs'
@@ -336,6 +365,28 @@ export const RoutePanel: React.FC<RoutePanelProps> = ({
               <span>Hoogte</span>
               <span className={`text-[10px] ${activeTab === 'elevation' ? 'text-emerald-700 font-semibold' : 'text-slate-400 font-normal'}`}>
                 {elevationAvailable ? `(+${elevationGainM}m)` : elevationLoading ? '(laden…)': '(niet beschikbaar)'}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab('quality')}
+              disabled={routeLegs.length === 0}
+              onKeyDown={handleTabKeyDown}
+              role="tab"
+              id="route-panel-tab-quality"
+              aria-selected={activeTab === 'quality'}
+              aria-controls="route-panel-content"
+              className={`py-1 rounded-md text-[11px] font-bold transition cursor-pointer flex flex-col items-center justify-center leading-tight disabled:opacity-40 disabled:cursor-not-allowed ${
+                activeTab === 'quality'
+                  ? 'bg-white text-emerald-800 shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+              title={routeLegs.length > 0 ? 'Toon kwaliteitscontrole per routebeen' : 'Routekwaliteit is beschikbaar zodra een routebeen is berekend.'}
+            >
+              <span>Kwaliteit</span>
+              <span className={`text-[10px] ${activeTab === 'quality' ? 'text-emerald-700 font-semibold' : 'text-slate-400 font-normal'}`}>
+                ({routeLegs.length})
               </span>
             </button>
           </div>
@@ -420,20 +471,6 @@ export const RoutePanel: React.FC<RoutePanelProps> = ({
           </div>
         )}
 
-        {routeLegs.length > 0 && (
-          <section className="rounded-md border border-slate-200 bg-white p-2.5" aria-label="Routekwaliteit">
-            <div className="flex items-center justify-between"><h3 className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-800"><ShieldCheck className="h-3.5 w-3.5 text-emerald-700" />Routekwaliteit</h3><span className="text-[10px] text-slate-500">klik een traject voor kaartfocus</span></div>
-            <p className="mt-1 text-[10px] text-slate-600">{qualityTotals.official} geverifieerd · {qualityTotals.declared} officiële relatie/live geometrie · {qualityTotals.external} extern/onbevestigd</p>
-            <div className="mt-2 space-y-1">
-              {routeLegs.map((leg, index) => {
-                const quality = qualityByLeg[index];
-                const classes = quality.tone === 'emerald' ? 'border-emerald-200 bg-emerald-50 text-emerald-900' : quality.tone === 'amber' ? 'border-amber-200 bg-amber-50 text-amber-950' : 'border-rose-200 bg-rose-50 text-rose-950';
-                return <button type="button" key={`${leg.fromNode.id}-${leg.toNode.id}-${index}`} onClick={() => onFocusRouteLeg?.(index)} className={`flex w-full items-center justify-between gap-2 rounded border px-2 py-1.5 text-left text-[10px] hover:brightness-95 cursor-pointer ${classes}`}><span className="inline-flex min-w-0 items-center gap-1"><MapPinned className="h-3 w-3 shrink-0" /><span className="truncate">KP {leg.fromNode.ref} → {leg.toNode.ref}: {quality.label}</span></span><span className="shrink-0 font-bold">{leg.distanceKm} km</span></button>;
-              })}
-            </div>
-          </section>
-        )}
-
         {showClearConfirm && (
           <div className="fixed inset-0 z-[1600] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in">
             <div className="bg-white rounded-xl shadow-2xl border border-slate-200 max-w-sm w-full p-5 space-y-4">
@@ -475,7 +512,7 @@ export const RoutePanel: React.FC<RoutePanelProps> = ({
           </div>
         )}
 
-        {/* Tab 2: Hoogteprofiel view */}
+        <div id="route-panel-content" role="tabpanel" aria-labelledby={`route-panel-tab-${activeTab}`} className="contents">
         {activeTab === 'elevation' && totalDistanceKm > 0 && elevationAvailable ? (
           <div className="bg-white p-3 rounded-lg border border-slate-200 shadow-xs space-y-2">
             <div className="flex items-center justify-between pb-1 border-b border-slate-100 text-xs">
@@ -489,6 +526,22 @@ export const RoutePanel: React.FC<RoutePanelProps> = ({
             />
             <PanelBrandMark />
           </div>
+        ) : activeTab === 'quality' ? (
+          <section className="rounded-md border border-slate-200 bg-white p-2.5" aria-label="Routekwaliteit">
+            <div className="flex items-center justify-between gap-2">
+              <h3 className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-800"><ShieldCheck className="h-3.5 w-3.5 text-emerald-700" />Routekwaliteit</h3>
+              <span className="text-right text-[10px] text-slate-500">Klik een traject voor kaartfocus</span>
+            </div>
+            <p className="mt-1 text-[10px] leading-relaxed text-slate-600">{qualityTotals.official} geverifieerd · {qualityTotals.declared} officiële relatie/live geometrie · {qualityTotals.external} extern/onbevestigd</p>
+            <div className="mt-2 space-y-1">
+              {routeLegs.map((leg, index) => {
+                const quality = qualityByLeg[index];
+                const classes = quality.tone === 'emerald' ? 'border-emerald-200 bg-emerald-50 text-emerald-900' : quality.tone === 'amber' ? 'border-amber-200 bg-amber-50 text-amber-950' : 'border-rose-200 bg-rose-50 text-rose-950';
+                return <button type="button" key={`${leg.fromNode.id}-${leg.toNode.id}-${index}`} onClick={() => onFocusRouteLeg?.(index)} className={`flex w-full items-center justify-between gap-2 rounded border px-2 py-1.5 text-left text-[10px] hover:brightness-95 cursor-pointer ${classes}`}><span className="inline-flex min-w-0 items-center gap-1"><MapPinned className="h-3 w-3 shrink-0" /><span className="truncate">KP {leg.fromNode.ref} → {leg.toNode.ref}: {quality.label}</span></span><span className="shrink-0 font-bold">{leg.distanceKm} km</span></button>;
+              })}
+            </div>
+            <PanelBrandMark />
+          </section>
         ) : (
           /* Tab 1: Knooppunten Sequence */
           <div className="space-y-1.5">
@@ -649,6 +702,7 @@ export const RoutePanel: React.FC<RoutePanelProps> = ({
             <PanelBrandMark />
           </div>
         )}
+        </div>
       </div>
     </div>
   );
