@@ -11,6 +11,7 @@ import { LaravelAntagonistModal } from './components/LaravelAntagonistModal';
 import { GpxImportModal } from './components/GpxImportModal';
 import { NetworkDataModal } from './components/NetworkDataModal';
 import { NetworkAnalysisModal } from './components/NetworkAnalysisModal';
+import { AboutModal } from './components/AboutModal';
 import { enrichKnooppuntLocality } from './services/localityService';
 import { loadPrepackagedOfficialNetwork } from './services/networkDataService';
 import { Map, List, Bike, Sparkles, Navigation, Undo2, Redo2, X, Search, MapPin, Database, Wifi, WifiOff, Network } from 'lucide-react';
@@ -94,6 +95,7 @@ export default function App() {
   const [isRoundTripReplaceConfirmOpen, setIsRoundTripReplaceConfirmOpen] = useState(false);
   const [isDataModalOpen, setIsDataModalOpen] = useState(false);
   const [isLaravelModalOpen, setIsLaravelModalOpen] = useState(false);
+  const [isAboutOpen, setIsAboutOpen] = useState(false);
   const [isGpxImportOpen, setIsGpxImportOpen] = useState(false);
   const [isNetworkAnalysisOpen, setIsNetworkAnalysisOpen] = useState(false);
   const [selectedConnectionAnalysis, setSelectedConnectionAnalysis] = useState<RouteConnectionAnalysis | undefined>();
@@ -741,9 +743,15 @@ export default function App() {
       <header className="h-16 app-header-responsive bg-slate-900 flex items-center justify-between px-4 sm:px-6 shrink-0 border-b border-slate-800 shadow-sm z-20">
         {/* Brand */}
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-emerald-500 rounded-lg flex items-center justify-center shadow-lg shrink-0 overflow-hidden">
+          <button
+            type="button"
+            onClick={() => setIsAboutOpen(true)}
+            className="w-10 h-10 bg-emerald-500 rounded-lg flex items-center justify-center shadow-lg shrink-0 overflow-hidden transition hover:bg-emerald-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-200 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 cursor-pointer"
+            title="Over FietsRoute.io"
+            aria-label="Open informatie over FietsRoute.io"
+          >
             <img src="/fietsroute-logo.png" alt="FietsRoute.io" className="w-9 h-9 object-contain" />
-          </div>
+          </button>
           <div>
             <h1 className="text-white font-bold text-base sm:text-lg leading-tight flex items-center gap-2">
               <span>FietsRoute.io</span>
@@ -1136,6 +1144,11 @@ export default function App() {
       <LaravelAntagonistModal
         isOpen={isLaravelModalOpen}
         onClose={() => setIsLaravelModalOpen(false)}
+      />
+
+      <AboutModal
+        isOpen={isAboutOpen}
+        onClose={() => setIsAboutOpen(false)}
       />
 
       <GpxImportModal
