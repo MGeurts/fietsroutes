@@ -399,12 +399,6 @@ export const RoutePanel: React.FC<RoutePanelProps> = ({
               totalDistanceKm={totalDistanceKm}
               totalAscentM={elevationGainM}
             />
-            <button
-              onClick={() => setActiveTab('nodes')}
-              className="w-full py-1.5 text-xs text-center text-emerald-700 hover:text-emerald-800 hover:bg-emerald-50 rounded border border-emerald-200 font-medium transition cursor-pointer"
-            >
-              ← Terug naar knooppuntenlijst
-            </button>
           </div>
         ) : (
           /* Tab 1: Knooppunten Sequence */
