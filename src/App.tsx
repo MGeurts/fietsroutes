@@ -14,7 +14,7 @@ import { NetworkAnalysisModal } from './components/NetworkAnalysisModal';
 import { AboutModal } from './components/AboutModal';
 import { enrichKnooppuntLocality } from './services/localityService';
 import { loadPrepackagedOfficialNetwork } from './services/networkDataService';
-import { Map, List, Bike, Sparkles, Navigation, Undo2, Redo2, X, Search, MapPin, Database, Wifi, WifiOff, Network } from 'lucide-react';
+import { Map, List, Bike, Sparkles, Navigation, Undo2, Redo2, X, Search, MapPin, Wifi, WifiOff, Network } from 'lucide-react';
 
 const DEFAULT_ROUTE_NAME = 'Mijn Fietsroute';
 
@@ -937,12 +937,12 @@ export default function App() {
         {/* Header Right Actions */}
         <div className="flex items-center gap-2 sm:gap-3">
           <button
-            onClick={() => setIsDataModalOpen(true)}
-            className="flex items-center gap-1.5 px-2.5 sm:px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-medium rounded-md transition cursor-pointer shadow-xs tablet-touch-friendly-btn"
-            title="Netwerkgegevens en lokale browsercache"
+            onClick={handleExportGpx}
+            disabled={selectedNodes.length < 2 || routeLegs.length !== selectedNodes.length - 1 || Boolean(routeError)}
+            className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-xs sm:text-sm font-medium px-3 sm:px-3.5 py-2 rounded-md transition-colors shadow-sm cursor-pointer tablet-touch-friendly-btn"
+            title="Download GPX bestand"
           >
-            <Database className="w-3.5 h-3.5 text-blue-400" />
-            <span className="hidden lg:inline">Netwerkdata</span>
+            Route Opslaan
           </button>
 
           <button
@@ -957,15 +957,6 @@ export default function App() {
           >
             <Network className="w-3.5 h-3.5 text-cyan-300" />
             <span className="hidden lg:inline">Analyse</span>
-          </button>
-
-          <button
-            onClick={handleExportGpx}
-            disabled={selectedNodes.length < 2 || routeLegs.length !== selectedNodes.length - 1 || Boolean(routeError)}
-            className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-xs sm:text-sm font-medium px-3 sm:px-3.5 py-2 rounded-md transition-colors shadow-sm cursor-pointer tablet-touch-friendly-btn"
-            title="Download GPX bestand"
-          >
-            Route Opslaan
           </button>
 
           <button
