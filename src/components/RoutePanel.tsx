@@ -608,18 +608,6 @@ export const RoutePanel: React.FC<RoutePanelProps> = ({
                     );
                   })}
                 </div>
-
-                {/* Bottom link to view elevation profile */}
-                {totalDistanceKm > 0 && (
-                  <div className="flex justify-end border-t border-slate-100 px-1 pt-2 text-[11px] text-slate-500">
-                    <button
-                      onClick={() => setActiveTab('elevation')}
-                      className="text-emerald-700 hover:text-emerald-800 font-semibold cursor-pointer flex items-center gap-1 hover:underline"
-                    >
-                      Bekijk hoogteprofiel (+{elevationGainM}m) →
-                    </button>
-                  </div>
-                )}
               </>
             )}
           </div>
