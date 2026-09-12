@@ -1,7 +1,9 @@
-# Fietsroute Planner NL & BE
+# Fietsroute Planner NL & BE ![](https://img.shields.io/badge/React-19-informational?style=flat&logo=react&color=61DAFB) ![](https://img.shields.io/badge/TypeScript-5.8-informational?style=flat&logo=typescript&color=3178C6) ![](https://img.shields.io/badge/Vite-6-informational?style=flat&logo=vite&color=646CFF) ![](https://img.shields.io/badge/Leaflet-1.9-informational?style=flat&logo=leaflet&color=199900) ![](https://img.shields.io/badge/Tailwind_CSS-4-informational?style=flat&logo=tailwindcss&color=06B6D4) [![Laatste release](https://img.shields.io/github/v/release/MGeurts/fietsroutes?label=release)](https://github.com/MGeurts/fietsroutes/releases/latest)
 
 [![Licentie: MIT](https://img.shields.io/badge/licentie-MIT-blue.svg)](LICENSE)
 [![OpenStreetMap](https://img.shields.io/badge/kaartdata-OpenStreetMap-7EBC6F?logo=openstreetmap)](https://www.openstreetmap.org)
+[![Steun via PayPal](https://img.shields.io/badge/Steun-PayPal-blue.svg?logo=paypal)](https://www.paypal.me/MGeurtsKREAWEB)
+[![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-orange.svg?logo=buy-me-a-coffee&logoColor=white)](https://buymeacoffee.com/MGeurts)
 
 Een open-source planner voor fietsknooppunten in Nederland en België. De toepassing is een React/Vite-webapp die de gecontroleerde knooppuntendataset in de browser laadt en routes als GPX kan importeren of exporteren.
 
@@ -96,3 +98,7 @@ De meegeleverde `index.php` kan de opgebouwde app vanuit `dist/` serveren op PHP
 ## Licentie
 
 Dit project is beschikbaar onder de [MIT-licentie](LICENSE). Kaartgegevens © [OpenStreetMap-bijdragers](https://www.openstreetmap.org/copyright), beschikbaar onder ODbL.
+
+## 💖 Steun dit project
+
+Onderhoud en verdere ontwikkeling kosten tijd. Wil je Fietsroute Planner steunen, dan kan dat via [PayPal](https://www.paypal.me/MGeurtsKREAWEB) of [Buy Me a Coffee](https://buymeacoffee.com/MGeurts). Dank je wel!
