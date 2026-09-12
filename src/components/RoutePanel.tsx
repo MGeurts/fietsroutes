@@ -93,7 +93,32 @@ export const RoutePanel: React.FC<RoutePanelProps> = ({
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<'nodes' | 'elevation'>('nodes');
-  const displayedNodeCount = selectedNodes.length + automaticIntermediateNodes.length;
+  // Count every passage in the rendered network route. Unlike the separate
+  // automatic-node collection, this deliberately does not merge a node that
+  // occurs again later (for example a route that passes KP 63 twice).
+  const routeVisitCount = useMemo(() => {
+    const visitedNodeIds: string[] = [];
+    const append = (node: KnooppuntNode) => {
+      if (String(visitedNodeIds[visitedNodeIds.length - 1]) !== String(node.id)) {
+        visitedNodeIds.push(String(node.id));
+      }
+    };
+
+    for (const leg of routeLegs) {
+      const segments = (leg.displaySegments || []).filter((segment) => segment.analysis);
+      if (segments.length === 0) {
+        append(leg.fromNode);
+        append(leg.toNode);
+        continue;
+      }
+      for (const segment of segments) {
+        append(segment.analysis!.fromNode);
+        append(segment.analysis!.toNode);
+      }
+    }
+
+    return visitedNodeIds.length || selectedNodes.length;
+  }, [routeLegs, selectedNodes.length]);
 
   // Cumulative distances up to each node (except node 0 which is the start)
   const cumulativeDistances = useMemo(() => {
@@ -145,10 +170,10 @@ export const RoutePanel: React.FC<RoutePanelProps> = ({
               </span>
             </div>
             <div className="h-5 w-px bg-slate-200" />
-            <div title={`${selectedNodes.length} zelf gekozen${automaticIntermediateNodes.length ? ` + ${automaticIntermediateNodes.length} automatisch tussenpunt${automaticIntermediateNodes.length === 1 ? '' : 'en'}` : ''}`}>
+            <div title={`${routeVisitCount} knooppuntpassages in de route${automaticIntermediateNodes.length ? `; ${automaticIntermediateNodes.length} verschillende automatische tussenpunten` : ''}`}>
               <span className="text-[9px] text-slate-400 block uppercase font-bold leading-tight">KP</span>
               <span className="font-extrabold text-emerald-800 bg-emerald-50 border border-emerald-200 px-1.5 py-0.2 rounded text-[11px]">
-                {displayedNodeCount}
+                {routeVisitCount}
               </span>
             </div>
           </div>
@@ -249,7 +274,7 @@ export const RoutePanel: React.FC<RoutePanelProps> = ({
             >
               <span>Knooppunten</span>
               <span className={`text-[10px] ${activeTab === 'nodes' ? 'text-emerald-700 font-semibold' : 'text-slate-400 font-normal'}`}>
-                ({displayedNodeCount})
+                ({routeVisitCount})
               </span>
             </button>
 
