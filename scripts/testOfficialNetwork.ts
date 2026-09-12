@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { buildKnooppuntenGraph } from '../src/services/roundTripService';
-import { calculateBicycleLeg, fetchElevationProfile, UnknownKnooppuntenConnectionError } from '../src/services/routingService';
+import { calculateBicycleLeg, calculateBicycleRouteLegs, fetchElevationProfile, UnknownKnooppuntenConnectionError } from '../src/services/routingService';
 import { getNodeKey, registerOfficialNetworkDataset } from '../src/services/officialNetworkService';
 
 async function main() {
@@ -272,6 +272,90 @@ async function main() {
   assert.equal(splitJunctionLeg.isVerified, true, 'nearby duplicate OSM markers of one junction must not break the official route');
   assert.match(splitJunctionLeg.instructions || '', /02 → 01/, 'duplicate OSM markers must appear as one intermediate junction');
   assert.equal(splitJunctionLeg.displaySegments?.length, 3, 'the marker alias must not create a rendered route segment');
+
+  const parallelNodes = Array.from({ length: 5 }, (_, index) => ({
+    id: `parallel-${index}`,
+    ref: `parallel-${index}`,
+    lat: 50 + index / 100,
+    lng: 4 + index / 100,
+  }));
+  registerOfficialNetworkDataset({
+    version: 1,
+    generatedAt: new Date().toISOString(),
+    nodes: parallelNodes,
+    edges: [],
+  });
+  let activeRouterRequests = 0;
+  let maximumActiveRouterRequests = 0;
+  globalThis.fetch = async (input) => {
+    const requestUrl = new URL(String(input));
+    activeRouterRequests += 1;
+    maximumActiveRouterRequests = Math.max(maximumActiveRouterRequests, activeRouterRequests);
+    await new Promise((resolve) => setTimeout(resolve, 15));
+    activeRouterRequests -= 1;
+    const [from, to] = requestUrl.searchParams.get('lonlats')!.split('|');
+    const [fromLng, fromLat] = from.split(',').map(Number);
+    const [toLng, toLat] = to.split(',').map(Number);
+    return new Response(JSON.stringify({
+      features: [{ geometry: { coordinates: [[fromLng, fromLat], [toLng, toLat]] }, properties: { 'track-length': 1000 } }],
+    }), { status: 200, headers: { 'content-type': 'application/json' } });
+  };
+  try {
+    const parallelRoute = await calculateBicycleRouteLegs(parallelNodes);
+    assert.equal(parallelRoute.error, undefined, 'parallel route legs must retain normal error handling');
+    assert.equal(parallelRoute.legs.length, 4, 'parallel route calculation must retain every leg');
+    assert.deepEqual(parallelRoute.legs.map((leg) => leg.fromNode.id), parallelNodes.slice(0, -1).map((node) => node.id), 'parallel legs must remain in itinerary order');
+    assert.equal(maximumActiveRouterRequests, 3, 'independent route legs must use the global router concurrency limit');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+
+  const cancelledNodes = [
+    { id: 'cancelled-a', ref: 'cancelled-a', lat: 52, lng: 4 },
+    { id: 'cancelled-b', ref: 'cancelled-b', lat: 52, lng: 4.01 },
+  ];
+  registerOfficialNetworkDataset({
+    version: 1,
+    generatedAt: new Date().toISOString(),
+    nodes: cancelledNodes,
+    edges: [],
+  });
+  let abortObservedByRouter = false;
+  globalThis.fetch = async (_input, init) => new Promise<Response>((_resolve, reject) => {
+    const signal = init?.signal;
+    signal?.addEventListener('abort', () => {
+      abortObservedByRouter = true;
+      reject(new DOMException('aborted', 'AbortError'));
+    }, { once: true });
+  });
+  try {
+    const cancellation = new AbortController();
+    const routePromise = calculateBicycleRouteLegs(cancelledNodes, cancellation.signal);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    cancellation.abort();
+    await assert.rejects(routePromise, (error: unknown) => error instanceof DOMException && error.name === 'AbortError', 'cancelling a replaced route must reject as an abort');
+    assert.equal(abortObservedByRouter, true, 'cancelling a replaced route must abort its live router request');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+
+  let abortObservedByElevation = false;
+  globalThis.fetch = async (_input, init) => new Promise<Response>((_resolve, reject) => {
+    init?.signal?.addEventListener('abort', () => {
+      abortObservedByElevation = true;
+      reject(new DOMException('aborted', 'AbortError'));
+    }, { once: true });
+  });
+  try {
+    const cancellation = new AbortController();
+    const elevationPromise = fetchElevationProfile([[52, 4], [52, 4.01]], 1, cancellation.signal);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    cancellation.abort();
+    await assert.rejects(elevationPromise, (error: unknown) => error instanceof DOMException && error.name === 'AbortError', 'cancelling a replaced route must abort its height profile request');
+    assert.equal(abortObservedByElevation, true, 'cancelling a replaced route must reach the height service abort signal');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
   console.log('Official-network regression tests passed.');
 }
 

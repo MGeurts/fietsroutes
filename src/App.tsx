@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { KnooppuntNode, RouteConnectionAnalysis, RouteLeg, ElevationPoint, BikeType, MapTileProvider, PlannedRoute } from './types';
-import { calculateBicycleLeg, fetchElevationProfile, downloadGpxFile, UnknownKnooppuntenConnectionError } from './services/routingService';
+import { calculateBicycleRouteLegs, fetchElevationProfile, downloadGpxFile, UnknownKnooppuntenConnectionError, isAbortError } from './services/routingService';
 import { getAllCachedNodes, replaceCachedNodes, saveNodesToCache } from './services/knooppuntenCacheService';
 import { searchPlacesAndAddresses, isKnooppuntQuery, PlaceSearchResult, PRELOADED_MAJOR_PLACES } from './services/geocodingService';
 import { MapPlanner } from './components/MapPlanner';
@@ -17,6 +17,7 @@ import { loadPrepackagedOfficialNetwork } from './services/networkDataService';
 import { Map, List, Bike, Sparkles, Navigation, Undo2, Redo2, X, Search, MapPin, Wifi, WifiOff, Network } from 'lucide-react';
 
 const DEFAULT_ROUTE_NAME = 'Mijn Fietsroute';
+const ROUTE_CALCULATION_DEBOUNCE_MS = 250;
 
 export default function App() {
   // Available nodes in current state (preloaded + Overpass queried)
@@ -135,7 +136,7 @@ export default function App() {
 
   // Recalculate route whenever selectedNodes change
   useEffect(() => {
-    let isCancelled = false;
+    const controller = new AbortController();
 
     async function computeFullRoute() {
       if (selectedNodes.length < 2) {
@@ -157,61 +158,47 @@ export default function App() {
       setElevationAvailable(false);
       setElevationLoading(true);
 
-      const calculatedLegs: RouteLeg[] = [];
-      let allCoords: [number, number][] = [];
-      let totalDist = 0;
-
       try {
-        for (let i = 0; i < selectedNodes.length - 1; i++) {
-          const from = selectedNodes[i];
-          const to = selectedNodes[i + 1];
-          const leg = await calculateBicycleLeg(from, to);
-          if (isCancelled) return;
-          calculatedLegs.push(leg);
-          totalDist += leg.distanceKm;
-          allCoords = allCoords.concat(leg.coordinates);
-        }
-      } catch (error) {
-        if (isCancelled) return;
-        // Keep every preceding verified segment visible. Only the missing segment is
-        // withheld; clearing the full route made a later invalid choice appear to erase
-        // already validated connections.
-        const partialDistance = Math.round(totalDist * 10) / 10;
+        const calculation = await calculateBicycleRouteLegs(selectedNodes, controller.signal);
+        if (controller.signal.aborted) return;
+        const calculatedLegs = calculation.legs;
+        const allCoords = calculatedLegs.flatMap((leg) => leg.coordinates);
+        const totalDist = calculatedLegs.reduce((total, leg) => total + leg.distanceKm, 0);
+        const roundedDist = Math.round(totalDist * 10) / 10;
+
         setRouteLegs(calculatedLegs);
         setFullCoordinates(allCoords);
-        setTotalDistanceKm(partialDistance);
-        setRouteError(error instanceof UnknownKnooppuntenConnectionError
-          ? error.message
-          : 'De officiële knooppuntenroute kon niet worden berekend.');
-        const partialElevation = await fetchElevationProfile(allCoords, partialDistance);
-        if (isCancelled) return;
-        setElevationGainM(partialElevation.totalAscent);
-        setElevationPoints(partialElevation.points);
-        setElevationAvailable(partialElevation.available);
+        setTotalDistanceKm(roundedDist);
+        setRouteError(calculation.error instanceof UnknownKnooppuntenConnectionError
+          ? calculation.error.message
+          : calculation.error ? 'De officiële knooppuntenroute kon niet worden berekend.' : null);
+
+        const elev = await fetchElevationProfile(allCoords, roundedDist, controller.signal);
+        if (controller.signal.aborted) return;
+        setElevationGainM(elev.totalAscent);
+        setElevationPoints(elev.points);
+        setElevationAvailable(elev.available);
         setElevationLoading(false);
-        return;
+      } catch (error) {
+        if (controller.signal.aborted || isAbortError(error)) return;
+        // A profile failure is intentionally non-fatal: the route remains usable.
+        // Network failures are already represented by calculateBicycleRouteLegs.
+        setElevationLoading(false);
       }
-
-      if (isCancelled) return;
-
-      const roundedDist = Math.round(totalDist * 10) / 10;
-      setRouteLegs(calculatedLegs);
-      setFullCoordinates(allCoords);
-      setTotalDistanceKm(roundedDist);
-      setRouteError(null);
-
-      const elev = await fetchElevationProfile(allCoords, roundedDist);
-      if (isCancelled) return;
-      setElevationGainM(elev.totalAscent);
-      setElevationPoints(elev.points);
-      setElevationAvailable(elev.available);
-      setElevationLoading(false);
     }
 
-    computeFullRoute();
+    if (selectedNodes.length < 2) {
+      void computeFullRoute();
+      return () => controller.abort();
+    }
+
+    const debounceTimer = window.setTimeout(() => {
+      void computeFullRoute();
+    }, ROUTE_CALCULATION_DEBOUNCE_MS);
 
     return () => {
-      isCancelled = true;
+      window.clearTimeout(debounceTimer);
+      controller.abort();
     };
   }, [selectedNodes]);
 
