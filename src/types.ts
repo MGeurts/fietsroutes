@@ -135,6 +135,13 @@ export interface OfficialNetworkDataset {
   topology?: OfficialNetworkTopology;
 }
 
+/** Small companion file used to validate the browser's IndexedDB copy before the
+ * considerably larger network graph is requested again. */
+export interface OfficialNetworkDatasetManifest {
+  version: 1;
+  generatedAt: string;
+}
+
 export interface PlannedRoute {
   id: string;
   name: string;

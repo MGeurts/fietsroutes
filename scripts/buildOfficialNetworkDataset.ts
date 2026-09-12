@@ -614,9 +614,11 @@ async function main(): Promise<void> {
     const topology = await buildDutchOfficialTopology(dutchJunctionNodes);
     const dataset: OfficialNetworkDataset = { version: 1, generatedAt: new Date().toISOString(), nodes: [...datasetNodes.values()], edges: [...edges.values()], declaredConnections: [...declaredConnections.values()], topology };
     const output = path.join(process.cwd(), 'public', 'data', 'benelux_network.json');
+    const manifestOutput = path.join(process.cwd(), 'public', 'data', 'benelux_network_meta.json');
     const validationOutput = path.join(process.cwd(), 'public', 'data', 'benelux_network_validation.json');
     fs.mkdirSync(path.dirname(output), { recursive: true });
     fs.writeFileSync(output, JSON.stringify(dataset));
+    fs.writeFileSync(manifestOutput, JSON.stringify({ version: dataset.version, generatedAt: dataset.generatedAt }));
     const validationReport = createValidationReport(validationEntries);
     fs.writeFileSync(validationOutput, JSON.stringify(validationReport));
     console.log(`Wrote ${dataset.nodes.length} nodes, ${dataset.edges.length} verified OSM edges, ${declaredConnections.size} declared OSM connections and ${topology.edges.length} official Netherlands trajectory segments; ${validationReport.summary.declaredTopology} topology-only and ${validationReport.summary.rejected} rejected relations are documented in benelux_network_validation.json.`);

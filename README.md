@@ -31,7 +31,7 @@ Een open-source planner voor fietsknooppunten in Nederland en België. De toepas
 
 ## Data en netwerkstatus
 
-De productiebuild bevat `public/data/benelux_network.json`: de gecontroleerde, statische knooppunten- en verbindingsdataset. De browser registreert die bij het opstarten lokaal. De datadialoog toont hoeveel knooppunten en verbindingen lokaal beschikbaar zijn en biedt de mogelijkheid de browsercache te wissen.
+De productiebuild bevat `public/data/benelux_network.json`: de gecontroleerde, statische knooppunten- en verbindingsdataset. `benelux_network_meta.json` bevat enkel de versie/tijdstempel. De browser controleert daarmee eerst zijn IndexedDB-kopie en laadt de grote dataset pas opnieuw wanneer er een nieuwe datasetbuild beschikbaar is. De datadialoog toont hoeveel knooppunten en verbindingen lokaal beschikbaar zijn en biedt de mogelijkheid de browsercache te wissen.
 
 De kaartachtergrond, zoekopdrachten, hoogtegegevens en eventuele live-routering hebben nog wel een internetverbinding nodig. Geolocatie is optioneel en wordt alleen gebruikt nadat de browser daarvoor toestemming geeft.
 
@@ -77,6 +77,7 @@ npm run build:network
 Dit proces vereist `osmium-tool` en downloadt de Geofabrik-extracten voor België en Nederland. Het schrijft daarna:
 
 - `public/data/benelux_network.json` — knooppunten, verbindingen en gecontroleerde geometrie;
+- `public/data/benelux_network_meta.json` — compacte versie-indicator voor de lokale netwerkcache;
 - `public/data/benelux_network_validation.json` — validatierapport met de herkomst en status van relaties.
 
 Om eerder gedownloade extracten te hergebruiken, stel je `NETWORK_PBF_DIR` in op de map met `belgium-latest.osm.pbf` en `netherlands-latest.osm.pbf`.

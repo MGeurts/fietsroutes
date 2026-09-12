@@ -376,14 +376,15 @@ export default function App() {
     let cancelled = false;
     loadPrepackagedOfficialNetwork()
       .then(async (network) => {
-        if (!network?.nodes.length) throw new Error('Ingebouwde netwerkdataset ontbreekt of is ongeldig.');
+        if (!network?.dataset.nodes.length) throw new Error('Ingebouwde netwerkdataset ontbreekt of is ongeldig.');
+        const dataset = network.dataset;
         const routeableNodeIds = new Set([
-          ...network.edges.flatMap((edge) => [edge.from, edge.to]),
-          ...(network.declaredConnections || []).flatMap((connection) => [connection.from, connection.to]),
-          ...Object.keys(network.topology?.anchors || {}),
+          ...dataset.edges.flatMap((edge) => [edge.from, edge.to]),
+          ...(dataset.declaredConnections || []).flatMap((connection) => [connection.from, connection.to]),
+          ...Object.keys(dataset.topology?.anchors || {}),
         ]);
         const routeableNodesByRef = new globalThis.Map<string, KnooppuntNode[]>();
-        for (const node of network.nodes) {
+        for (const node of dataset.nodes) {
           if (!routeableNodeIds.has(String(node.id))) continue;
           const sameRef = routeableNodesByRef.get(node.ref) || [];
           sameRef.push(node);
@@ -392,7 +393,7 @@ export default function App() {
         // OSM occasionally contains a second marker with the same number a few
         // metres away. If that duplicate has no network edge, showing it lets a
         // user bypass the actual junction graph and wrongly trigger BRouter.
-        const selectableNodes = network.nodes.filter((node) => {
+        const selectableNodes = dataset.nodes.filter((node) => {
           if (routeableNodeIds.has(String(node.id))) return true;
           return !(routeableNodesByRef.get(node.ref) || []).some((routeable) => (
             Math.abs(routeable.lat - node.lat) < 0.003
@@ -401,14 +402,17 @@ export default function App() {
         });
         officialNetworkNodeIdsRef.current = new Set(selectableNodes.map((node) => String(node.id)));
         routeableNodesByRefRef.current = routeableNodesByRef;
-        await replaceCachedNodes(selectableNodes);
+        // The static graph is versioned in its own IndexedDB store. Rewriting
+        // every node record on each page load was costly and is unnecessary when
+        // that graph was restored from the current cache.
+        if (!network.fromCache) await replaceCachedNodes(selectableNodes);
         if (!cancelled) {
           // A declared OSM relation remains routeable even when its exact line is
           // absent. Count every unique endpoint pair once, regardless of whether
           // it also has a verified geometry.
           const connectionKeys = new Set([
-            ...network.edges.map((edge) => [edge.from, edge.to].sort().join('\u0000')),
-            ...(network.declaredConnections || []).map((connection) => [connection.from, connection.to].sort().join('\u0000')),
+            ...dataset.edges.map((edge) => [edge.from, edge.to].sort().join('\u0000')),
+            ...(dataset.declaredConnections || []).map((connection) => [connection.from, connection.to].sort().join('\u0000')),
           ]);
           setSelectedNodes((current) => current.map(resolveRouteableNode));
           setAvailableNodes(selectableNodes);

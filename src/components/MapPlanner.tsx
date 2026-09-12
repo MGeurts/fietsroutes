@@ -77,6 +77,13 @@ function routeStyle(source: RouteGeometrySource): L.PolylineOptions {
 
 const DETAIL_NODE_ZOOM = 12;
 
+interface ViewportBounds {
+  south: number;
+  west: number;
+  north: number;
+  east: number;
+}
+
 // Marker pin SVGs matching authentic cycling maps (screenshot)
 const startPinSvg = `
   <div class="flex flex-col items-center drop-shadow-sm" title="Start knooppunt">
@@ -132,12 +139,17 @@ export const MapPlanner: React.FC<MapPlannerProps> = ({
   const hasAutoLocatedOnStartRef = useRef(false);
   const shouldCenterOnAutoLocationRef = useRef(true);
   const nodeMarkersRef = useRef<Map<string, L.Marker>>(new Map());
+  const nodeMarkerSignaturesRef = useRef<Map<string, string>>(new Map());
+  const onNodeClickRef = useRef(onNodeClick);
 
   // Keep a current reference to availableNodes for async event listeners & popups
   const availableNodesRef = useRef<KnooppuntNode[]>(availableNodes);
   useEffect(() => {
     availableNodesRef.current = availableNodes;
   }, [availableNodes]);
+  useEffect(() => {
+    onNodeClickRef.current = onNodeClick;
+  }, [onNodeClick]);
 
   const [isSearchingNodes, setIsSearchingNodes] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -148,6 +160,7 @@ export const MapPlanner: React.FC<MapPlannerProps> = ({
   const [showLayerMenu, setShowLayerMenu] = useState(false);
   const [activeInfoLayer, setActiveInfoLayer] = useState<string | null>(null);
   const [currentZoom, setCurrentZoom] = useState(13);
+  const [viewportBounds, setViewportBounds] = useState<ViewportBounds | null>(null);
 
   // Thunderforest API key management for OpenCycleMap
   const [thunderforestApiKey, setThunderforestApiKey] = useState(() => {
@@ -199,10 +212,18 @@ export const MapPlanner: React.FC<MapPlannerProps> = ({
     mapInstanceRef.current = map;
     markersLayerGroupRef.current = L.layerGroup().addTo(map);
 
-    map.on('zoomend', () => {
+    const syncViewport = () => {
       setCurrentZoom(map.getZoom());
-    });
+      const bounds = map.getBounds();
+      setViewportBounds({
+        south: bounds.getSouth(), west: bounds.getWest(),
+        north: bounds.getNorth(), east: bounds.getEast(),
+      });
+    };
+    syncViewport();
+    map.on('zoomend', syncViewport);
     map.on('moveend', () => {
+      syncViewport();
       const center = map.getCenter();
       onMapCenterChange?.({ lat: center.lat, lng: center.lng });
     });
@@ -293,9 +314,6 @@ export const MapPlanner: React.FC<MapPlannerProps> = ({
     const markersGroup = markersLayerGroupRef.current;
     if (!markersGroup) return;
 
-    markersGroup.clearLayers();
-    nodeMarkersRef.current.clear();
-
     // Map of selected node order indices by unique ID
     const selectedIndices = new Map<string, number[]>();
     selectedNodes.forEach((node, idx) => {
@@ -323,15 +341,38 @@ export const MapPlanner: React.FC<MapPlannerProps> = ({
       uniqueNodes.push(node);
     });
 
-    // Render each node with authentic badge design and role pins (start, inbetween, end)
-    uniqueNodes.forEach((node) => {
+    const automaticIds = new Set(automaticIntermediateNodes.map((node) => String(node.id || node.ref)));
+    // Keep a small buffer around the viewport so markers do not visibly pop in
+    // at the edge while panning. Selected and generated intermediate nodes stay
+    // rendered even when they are temporarily outside the map view.
+    const paddedBounds = viewportBounds && {
+      south: viewportBounds.south - (viewportBounds.north - viewportBounds.south) * 0.15,
+      north: viewportBounds.north + (viewportBounds.north - viewportBounds.south) * 0.15,
+      west: viewportBounds.west - (viewportBounds.east - viewportBounds.west) * 0.15,
+      east: viewportBounds.east + (viewportBounds.east - viewportBounds.west) * 0.15,
+    };
+    const visibleNodes = uniqueNodes.filter((node) => {
+      const idKey = String(node.id || node.ref);
+      if (selectedIndices.has(idKey) || automaticIds.has(idKey)) return true;
+      if (currentZoom < DETAIL_NODE_ZOOM || !paddedBounds) return false;
+      return node.lat >= paddedBounds.south && node.lat <= paddedBounds.north
+        && node.lng >= paddedBounds.west && node.lng <= paddedBounds.east;
+    });
+    const desiredMarkerIds = new Set(visibleNodes.map((node) => String(node.id || node.ref)));
+    nodeMarkersRef.current.forEach((marker, idKey) => {
+      if (desiredMarkerIds.has(idKey)) return;
+      markersGroup.removeLayer(marker);
+      nodeMarkersRef.current.delete(idKey);
+      nodeMarkerSignaturesRef.current.delete(idKey);
+    });
+
+    // Render only the current viewport and retain unchanged Leaflet markers.
+    // Route updates then touch just the affected badges instead of rebuilding
+    // every visible marker and popup.
+    visibleNodes.forEach((node) => {
       const idKey = String(node.id || node.ref);
       const isSelected = selectedIndices.has(idKey);
-      const isAutomaticIntermediate = !isSelected && automaticIntermediateNodes.some((candidate) => String(candidate.id) === String(node.id));
-      // At a regional overview, thousands of markers obscure the map and make
-      // accidental selection likely. Route context stays visible; all other
-      // junctions return once the user zooms in to a useful planning level.
-      if (currentZoom < DETAIL_NODE_ZOOM && !isSelected && !isAutomaticIntermediate) return;
+      const isAutomaticIntermediate = !isSelected && automaticIds.has(idKey);
       const isStart = selectedNodes.length > 0 && String(selectedNodes[0].id || selectedNodes[0].ref) === idKey;
       const isEnd = selectedNodes.length > 1 && String(selectedNodes[selectedNodes.length - 1].id || selectedNodes[selectedNodes.length - 1].ref) === idKey;
 
@@ -384,7 +425,7 @@ export const MapPlanner: React.FC<MapPlannerProps> = ({
         iconAnchor: [16, 16],
       });
 
-      const marker = L.marker([node.lat, node.lng], { icon: customIcon });
+      let marker = nodeMarkersRef.current.get(idKey);
 
       const popupContent = `
         <div class="p-1 font-sans text-slate-900 min-w-[210px]">
@@ -412,34 +453,46 @@ export const MapPlanner: React.FC<MapPlannerProps> = ({
             </div>
           ` : ''}
           <div class="mt-2 pt-2 border-t border-slate-200 flex justify-end">
-            <button id="btn-add-node-${node.ref}" class="w-full py-1.5 px-3 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-medium rounded-md shadow-xs transition flex items-center justify-center gap-1.5 cursor-pointer">
+            <button id="btn-add-node-${idKey}" class="w-full py-1.5 px-3 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-medium rounded-md shadow-xs transition flex items-center justify-center gap-1.5 cursor-pointer">
               ${isSelected ? '＋ Nogmaals toevoegen' : '＋ Toevoegen aan fietsroute'}
             </button>
           </div>
         </div>
       `;
 
-      marker.bindPopup(popupContent, { maxWidth: 260, offset: [0, -10] });
+      const markerSignature = `${isSelected}:${isAutomaticIntermediate}:${isStart}:${isEnd}:${node.highlight || ''}`;
+      if (marker && nodeMarkerSignaturesRef.current.get(idKey) === markerSignature) return;
 
+      if (marker) {
+        marker.setIcon(customIcon);
+        marker.setPopupContent(popupContent);
+      } else {
+        marker = L.marker([node.lat, node.lng], { icon: customIcon });
+        marker.bindPopup(popupContent, { maxWidth: 260, offset: [0, -10] });
+        nodeMarkersRef.current.set(idKey, marker);
+        markersGroup.addLayer(marker);
+      }
+
+      marker.off('popupopen');
       marker.on('popupopen', () => {
-        const btn = document.getElementById(`btn-add-node-${node.ref}`);
+        const btn = document.getElementById(`btn-add-node-${idKey}`);
         if (btn) {
           btn.onclick = () => {
-            onNodeClick(node);
+            onNodeClickRef.current(node);
             marker.closePopup();
           };
         }
       });
 
       // Quick click to add
+      marker.off('click');
       marker.on('click', () => {
-        onNodeClick(node);
+        onNodeClickRef.current(node);
       });
 
-      nodeMarkersRef.current.set(idKey, marker);
-      markersGroup.addLayer(marker);
+      nodeMarkerSignaturesRef.current.set(idKey, markerSignature);
     });
-  }, [availableNodes, selectedNodes, automaticIntermediateNodes, currentZoom, onNodeClick]);
+  }, [availableNodes, selectedNodes, automaticIntermediateNodes, currentZoom, viewportBounds]);
 
   // Update Route Polyline and Directional Markers
   useEffect(() => {

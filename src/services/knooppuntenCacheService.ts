@@ -1,10 +1,11 @@
-import { KnooppuntNode } from '../types';
+import { KnooppuntNode, OfficialNetworkDataset } from '../types';
 import { enrichKnooppuntLocality } from './localityService';
 
 const DB_NAME = 'FietsknooppuntenDB';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 const STORE_NODES = 'nodes';
 const STORE_META = 'metadata';
+const STORE_DATASETS = 'datasets';
 
 let dbInstance: IDBDatabase | null = null;
 
@@ -29,6 +30,9 @@ function openDB(): Promise<IDBDatabase> {
       }
       if (!db.objectStoreNames.contains(STORE_META)) {
         db.createObjectStore(STORE_META, { keyPath: 'key' });
+      }
+      if (!db.objectStoreNames.contains(STORE_DATASETS)) {
+        db.createObjectStore(STORE_DATASETS, { keyPath: 'key' });
       }
     };
 
@@ -95,6 +99,51 @@ export async function getAllNodesFromCache(): Promise<KnooppuntNode[]> {
 }
 
 export const getAllCachedNodes = getAllNodesFromCache;
+
+const OFFICIAL_NETWORK_DATASET_KEY = 'official-network';
+
+/**
+ * Return the complete static graph only when it belongs to the manifest that is
+ * currently deployed. This avoids downloading and parsing the 60+ MB JSON file
+ * again on every application start.
+ */
+export async function getCachedOfficialNetwork(generatedAt: string): Promise<OfficialNetworkDataset | null> {
+  try {
+    const db = await openDB();
+    return await new Promise((resolve) => {
+      const tx = db.transaction(STORE_DATASETS, 'readonly');
+      const request = tx.objectStore(STORE_DATASETS).get(OFFICIAL_NETWORK_DATASET_KEY);
+      request.onsuccess = () => {
+        const dataset = request.result?.dataset as OfficialNetworkDataset | undefined;
+        resolve(dataset?.version === 1 && dataset.generatedAt === generatedAt ? dataset : null);
+      };
+      request.onerror = () => resolve(null);
+    });
+  } catch {
+    return null;
+  }
+}
+
+/** Persist one versioned graph. New dataset builds replace, rather than append to, the old graph. */
+export async function cacheOfficialNetwork(dataset: OfficialNetworkDataset): Promise<void> {
+  try {
+    const db = await openDB();
+    await new Promise<void>((resolve) => {
+      const tx = db.transaction(STORE_DATASETS, 'readwrite');
+      tx.objectStore(STORE_DATASETS).put({
+        key: OFFICIAL_NETWORK_DATASET_KEY,
+        generatedAt: dataset.generatedAt,
+        dataset,
+        updatedAt: Date.now(),
+      });
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => resolve();
+    });
+  } catch {
+    // IndexedDB can be unavailable or out of quota. The app can still use the
+    // packaged data for this session and will retry caching later.
+  }
+}
 
 /**
  * Save or merge a batch of nodes into IndexedDB with spatial deduplication
@@ -218,9 +267,10 @@ export async function clearCache(): Promise<void> {
   try {
     const db = await openDB();
     return new Promise((resolve) => {
-      const tx = db.transaction([STORE_NODES, STORE_META], 'readwrite');
+      const tx = db.transaction([STORE_NODES, STORE_META, STORE_DATASETS], 'readwrite');
       tx.objectStore(STORE_NODES).clear();
       tx.objectStore(STORE_META).clear();
+      tx.objectStore(STORE_DATASETS).clear();
       tx.oncomplete = async () => {
         resolve();
       };
