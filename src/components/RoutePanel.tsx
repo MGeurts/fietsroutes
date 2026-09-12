@@ -151,28 +151,25 @@ export const RoutePanel: React.FC<RoutePanelProps> = ({
         </div>
 
         {/* Row 2: Compact Metrics Bar */}
-        <div className="px-3 py-1.5 flex items-center justify-between text-xs bg-white border-b border-slate-100">
-          <div className="flex items-center gap-2 sm:gap-3 text-slate-700">
-            <div title="Totale afstand">
-              <span className="text-[9px] text-slate-400 block uppercase font-bold leading-tight">Afstand</span>
-              <span className="font-extrabold text-slate-900 text-xs sm:text-sm">{totalDistanceKm} km</span>
+        <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 border-b border-slate-100 bg-white px-3 py-1.5 text-xs">
+          <div className="grid min-w-0 grid-cols-4 divide-x divide-slate-200 text-slate-700">
+            <div className="min-w-0 pr-1" title="Totale afstand">
+              <span className="block text-[9px] font-bold uppercase leading-tight text-slate-400">Afstand</span>
+              <span className="block whitespace-nowrap text-xs font-extrabold text-slate-900 sm:text-sm">{totalDistanceKm} km</span>
             </div>
-            <div className="h-5 w-px bg-slate-200" />
-            <div title={`Geschatte duur bij ${currentProfile.averageSpeedKmH} km/u`}>
-              <span className="text-[9px] text-slate-400 block uppercase font-bold leading-tight">Duur</span>
-              <span className="font-bold text-slate-700 text-xs sm:text-sm">{hours > 0 ? `${hours}u ` : ''}{minutes}m</span>
+            <div className="min-w-0 px-2" title={`Geschatte duur bij ${currentProfile.averageSpeedKmH} km/u`}>
+              <span className="block text-[9px] font-bold uppercase leading-tight text-slate-400">Duur</span>
+              <span className="block whitespace-nowrap text-xs font-bold text-slate-700 sm:text-sm">{hours > 0 ? `${hours}u ` : ''}{minutes}m</span>
             </div>
-            <div className="h-5 w-px bg-slate-200" />
-            <div title="Hoogtemeters klimmen">
-              <span className="text-[9px] text-slate-400 block uppercase font-bold leading-tight">Hoogte</span>
-              <span className="font-bold text-slate-700 text-xs sm:text-sm">
+            <div className="min-w-0 px-2" title="Hoogtemeters klimmen">
+              <span className="block text-[9px] font-bold uppercase leading-tight text-slate-400">Hoogte</span>
+              <span className="block whitespace-nowrap text-xs font-bold text-slate-700 sm:text-sm">
                 {elevationAvailable ? `+${elevationGainM}m` : elevationLoading ? '…' : 'n/b'}
               </span>
             </div>
-            <div className="h-5 w-px bg-slate-200" />
-            <div title={`${routeVisitCount} knooppuntpassages in de route${automaticIntermediateNodes.length ? `; ${automaticIntermediateNodes.length} verschillende automatische tussenpunten` : ''}`}>
-              <span className="text-[9px] text-slate-400 block uppercase font-bold leading-tight">KP</span>
-              <span className="font-extrabold text-emerald-800 bg-emerald-50 border border-emerald-200 px-1.5 py-0.2 rounded text-[11px]">
+            <div className="min-w-0 pl-2" title={`${routeVisitCount} knooppuntpassages in de route${automaticIntermediateNodes.length ? `; ${automaticIntermediateNodes.length} verschillende automatische tussenpunten` : ''}`}>
+              <span className="block text-[9px] font-bold uppercase leading-tight text-slate-400">KP</span>
+              <span className="inline-flex min-w-6 items-center justify-center rounded border border-emerald-200 bg-emerald-50 px-1 py-0.5 text-[11px] font-extrabold text-emerald-800">
                 {routeVisitCount}
               </span>
             </div>
