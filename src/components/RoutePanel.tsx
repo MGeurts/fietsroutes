@@ -232,8 +232,8 @@ export const RoutePanel: React.FC<RoutePanelProps> = ({
         </div>
       </div>
 
-      {/* Scrollable Middle Content: Nodes Sequence & Elevation */}
-      <div className="flex-1 min-h-0 overflow-y-auto p-2.5 space-y-2 bg-slate-50/50">
+      {/* Pinned route controls */}
+      <div className="shrink-0 space-y-2 border-b border-slate-200 bg-slate-50/80 p-2.5">
         {/* Lijn 1: Knooppunten / Hoogte Toggle (steeds op de eerste lijn) */}
         <div className="w-full">
           <div className="w-full grid grid-cols-2 gap-1 bg-slate-200/70 p-0.5 rounded-lg border border-slate-200">
@@ -339,7 +339,10 @@ export const RoutePanel: React.FC<RoutePanelProps> = ({
             </div>
           )}
         </div>
+      </div>
 
+      {/* Scrollable route details */}
+      <div className="flex-1 min-h-0 overflow-y-auto p-2.5 space-y-2 bg-slate-50/50">
         {routeError && (
           <div className="p-2.5 rounded-md bg-amber-50 border border-amber-200 text-[11px] leading-relaxed text-amber-950">
             <strong>Route niet beschikbaar.</strong> {routeError}
