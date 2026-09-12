@@ -741,15 +741,8 @@ export default function App() {
       <header className="h-16 app-header-responsive bg-slate-900 flex items-center justify-between px-4 sm:px-6 shrink-0 border-b border-slate-800 shadow-sm z-20">
         {/* Brand */}
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-emerald-500 rounded-lg flex items-center justify-center text-white shadow-lg shrink-0">
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth="2"
-                d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"
-              />
-            </svg>
+          <div className="w-10 h-10 bg-emerald-500 rounded-lg flex items-center justify-center shadow-lg shrink-0 overflow-hidden">
+            <img src="/fietsroute-logo.png" alt="FietsRoute.io" className="w-9 h-9 object-contain" />
           </div>
           <div>
             <h1 className="text-white font-bold text-base sm:text-lg leading-tight flex items-center gap-2">
