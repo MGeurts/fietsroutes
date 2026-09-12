@@ -1,4 +1,15 @@
-# Fietsroute Planner NL & BE ![](https://img.shields.io/badge/React-19-informational?style=flat&logo=react&color=61DAFB) ![](https://img.shields.io/badge/TypeScript-5.8-informational?style=flat&logo=typescript&color=3178C6) ![](https://img.shields.io/badge/Vite-6-informational?style=flat&logo=vite&color=646CFF) ![](https://img.shields.io/badge/Leaflet-1.9-informational?style=flat&logo=leaflet&color=199900) ![](https://img.shields.io/badge/Tailwind_CSS-4-informational?style=flat&logo=tailwindcss&color=06B6D4) [![Laatste release](https://img.shields.io/github/v/release/MGeurts/fietsroutes?label=release)](https://github.com/MGeurts/fietsroutes/releases/latest)
+<p align="center">
+  <img src="./public/fietsroute-logo.png" alt="Logo van Fietsroute Planner NL & BE" width="240">
+</p>
+
+# Fietsroute Planner NL & BE
+
+![](https://img.shields.io/badge/React-19-informational?style=flat&logo=react&color=61DAFB)
+![](https://img.shields.io/badge/TypeScript-5.8-informational?style=flat&logo=typescript&color=3178C6)
+![](https://img.shields.io/badge/Vite-6-informational?style=flat&logo=vite&color=646CFF)
+![](https://img.shields.io/badge/Leaflet-1.9-informational?style=flat&logo=leaflet&color=199900)
+![](https://img.shields.io/badge/Tailwind_CSS-4-informational?style=flat&logo=tailwindcss&color=06B6D4)
+[![Laatste release](https://img.shields.io/github/v/release/MGeurts/fietsroutes?label=release)](https://github.com/MGeurts/fietsroutes/releases/latest)
 
 [![Licentie: MIT](https://img.shields.io/badge/licentie-MIT-blue.svg)](LICENSE)
 [![OpenStreetMap](https://img.shields.io/badge/kaartdata-OpenStreetMap-7EBC6F?logo=openstreetmap)](https://www.openstreetmap.org)
