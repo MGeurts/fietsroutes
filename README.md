@@ -68,6 +68,18 @@ Dit proces vereist `osmium-tool` en downloadt de Geofabrik-extracten voor Belgi�
 
 Om eerder gedownloade extracten te hergebruiken, stel je `NETWORK_PBF_DIR` in op de map met `belgium-latest.osm.pbf` en `netherlands-latest.osm.pbf`.
 
+### Windows
+
+De fout `spawn osmium ENOENT` betekent dat Windows het programma `osmium` niet in `PATH` vindt. Installeer het via [Conda-forge](https://anaconda.org/conda-forge/osmium-tool) (bijvoorbeeld met Miniforge of Anaconda), heropen PowerShell en controleer de installatie:
+
+```powershell
+conda install -c conda-forge osmium-tool
+osmium --version
+npm run build:network
+```
+
+Geen Conda beschikbaar? Gebruik dan in GitHub **Actions → Build official cycle-network dataset → Run workflow**. Die handmatige workflow installeert `osmium-tool` op een Ubuntu-runner, bouwt beide datasetbestanden en commit de wijzigingen alleen wanneer de bouw slaagt.
+
 ## Publiceren
 
 `npm run build` levert een volledig statische `dist/`-map op. Publiceer de volledige inhoud daarvan op een statische webserver; zorg er vooral voor dat ook `dist/data/` bereikbaar blijft, want daarin staat de ingebouwde netwerkdataset.
