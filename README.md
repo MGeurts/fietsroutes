@@ -21,6 +21,7 @@ Een open-source planner voor fietsknooppunten in Nederland en België. De toepas
 ## Mogelijkheden
 
 - Kies knooppunten op de kaart en maak een route over het knooppuntennetwerk.
+- De planner start met een lege route. Open een bewaarde route via Bibliotheek of gebruik een deellink om een specifieke route te laden; de lokaal bewaarde werkroute wordt niet automatisch heropend.
 - Gebruik gecontroleerde geometrie uit de ingebouwde Benelux-dataset. Bij een officiële relatie zonder volledige lijngeometrie wordt alleen dat ontbrekende segment live opgehaald en duidelijk als zodanig weergegeven. Niet-geverifieerde routering blijft herkenbaar als fallback.
 - Toon automatisch gekozen tussenknooppunten, deelafstanden, totale afstand, geschatte duur en een hoogteprofiel.
 - Importeer en exporteer GPX. Een uit deze app geëxporteerde route wordt bij import opnieuw gekoppeld aan nabije, routeerbare knooppunten wanneer die beschikbaar zijn.

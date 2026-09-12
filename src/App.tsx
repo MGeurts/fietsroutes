@@ -514,6 +514,8 @@ export default function App() {
   useEffect(() => {
     if (sharedRouteHandledRef.current) return;
     sharedRouteHandledRef.current = true;
+    // Start with an empty planner. Local drafts support offline storage, but
+    // opening a route requires an explicit library choice or a shared link.
     const sharedRoute = readSharedRoute();
     if (sharedRoute) {
       applyImportedRoute(sharedRoute.nodes.map(resolveRouteableNode), sharedRoute.name);
@@ -524,9 +526,7 @@ export default function App() {
       setRouteLibraryFeedback('Deze deellink is ongeldig of onvolledig. Kies een route opnieuw of vraag een nieuwe link.');
       return;
     }
-    const draft = getRouteDraft();
-    if (draft && draft.nodes.length > 0) restoreSavedRoute(draft);
-  }, [applyImportedRoute, resolveRouteableNode, restoreSavedRoute]);
+  }, [applyImportedRoute, resolveRouteableNode]);
 
   // Reordering and removing nodes with history tracking
   const handleRemoveNode = (index: number) => {
@@ -1165,7 +1165,7 @@ export default function App() {
             onOpenLaravelModal={() => setIsLaravelModalOpen(true)}
             onOpenRouteLibrary={handleOpenRouteLibrary}
             isOnline={isOnline}
-            offlineRouteAvailable={Boolean(getRouteDraft())}
+            offlineRouteAvailable={selectedNodes.length > 0 && Boolean(getRouteDraft())}
             approachRoute={approachRoute}
             approachLoading={approachLoading}
             approachError={approachError}
