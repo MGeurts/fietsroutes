@@ -27,6 +27,9 @@ Een open-source planner voor fietsknooppunten in Nederland en België. De toepas
 - Importeer en exporteer GPX. Een uit deze app geëxporteerde route wordt bij import opnieuw gekoppeld aan nabije, routeerbare knooppunten wanneer die beschikbaar zijn.
 - Druk een compact fietsknooppuntenstrookje af met de volledige knooppuntvolgorde, inclusief automatisch gekozen tussenpunten.
 - Genereer gesloten rondritten van 15 tot 60 km. De generator stelt verschillende richtingen voor en gebruikt uitsluitend opeenvolgende knooppunten uit het netwerk.
+- Verplaats het startpunt van een berekende, gesloten rondrit via **Startpunt rondrit wijzigen** in de knooppuntenlijst. Alleen knooppunten met aansluitende opgeslagen trajectdelen worden aangeboden. De rijrichting, het traject en de totale afstand blijven behouden; knooppuntenlijst, hoogteprofiel, GPX en strookje beginnen bij het nieuwe startpunt.
+- Beheer routes in de lokale **Bibliotheek**: zoeken, favorieten, bestaande routes bijwerken of bewust een kopie bewaren. Een volledige JSON-backup bevat ook geometrie en hoogtegegevens en kan op een ander apparaat worden geïmporteerd. Import voegt routes toe zonder bestaande routes te overschrijven; identieke imports worden overgeslagen.
+- Deel de knooppuntvolgorde met een link of lokaal gegenereerde QR-code. De ontvanger berekent de actuele route opnieuw; deellinks bevatten geen opgeslagen routegeometrie. Gebruik een bibliotheekbackup voor volledige overdracht. Zeer lange links passen mogelijk niet in een QR-code. Een link naar een lokale Herd-site is alleen bruikbaar waar die site bereikbaar is.
 - Kies een fietsprofiel voor de tijdsinschatting: stadsfiets (15 km/u), gravel/toerfiets (18 km/u), e-bike (20 km/u) of racefiets (25 km/u).
 - Kies een achtergrondkaart: Standard OSM (standaard), CyclOSM, OSM + Fietsnetwerk of OpenCycleMap. Voor OpenCycleMap is een eigen Thunderforest-sleutel optioneel; zonder sleutel kan die dienst een watermerk tonen.
 

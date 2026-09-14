@@ -26,6 +26,7 @@ import {
   ShieldCheck,
 } from 'lucide-react';
 import { ElevationProfile } from './ElevationProfile';
+import { RoundTripStartOption } from '../services/roundTripStartService';
 
 interface RoutePanelProps {
   routeName: string;
@@ -45,6 +46,8 @@ interface RoutePanelProps {
   onRemoveNode: (index: number) => void;
   onMoveNode?: (index: number, direction: 'up' | 'down') => void;
   onReverseRoute: () => void;
+  roundTripStartOptions: RoundTripStartOption[];
+  onChangeRoundTripStart: (key: string) => void;
   onClearRoute: () => void;
   onFitRoute?: () => void;
   onUndo: () => void;
@@ -90,6 +93,8 @@ export const RoutePanel: React.FC<RoutePanelProps> = ({
   onChangeBike,
   onRemoveNode,
   onReverseRoute,
+  roundTripStartOptions,
+  onChangeRoundTripStart,
   onClearRoute,
   onFitRoute,
   onUndo,
@@ -545,6 +550,24 @@ export const RoutePanel: React.FC<RoutePanelProps> = ({
         ) : (
           /* Tab 1: Knooppunten Sequence */
           <div className="space-y-1.5">
+            {roundTripStartOptions.length > 0 && (
+              <div className="rounded-lg border border-emerald-200 bg-white p-2.5">
+                <label htmlFor="roundtrip-new-start" className="mb-1.5 block text-[11px] font-bold text-slate-700">Startpunt rondrit wijzigen</label>
+                <select
+                  id="roundtrip-new-start"
+                  value=""
+                  onChange={(event) => { if (event.target.value) onChangeRoundTripStart(event.target.value); }}
+                  className="w-full min-w-0 rounded-md border border-slate-300 bg-slate-50 px-2 py-2 text-xs text-slate-800 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-100 cursor-pointer"
+                >
+                  <option value="" disabled>Kies een ander startknooppunt…</option>
+                  {roundTripStartOptions.map((option) => {
+                    const locality = option.node.municipality || option.node.name || option.node.region;
+                    return <option key={option.key} value={option.key}>KP {option.node.ref}{locality ? ` — ${locality}` : ''} · {option.distanceFromStartKm.toLocaleString('nl-BE', { maximumFractionDigits: 1 })} km{option.occurrences > 1 ? ` · passage ${option.occurrence}` : ''}{option.automatic ? ' · tussenpunt' : ''}</option>;
+                  })}
+                </select>
+                <p className="mt-1.5 text-[10px] leading-relaxed text-slate-500">Dezelfde ronde en rijrichting. Alleen knooppunten waar de opgeslagen trajectdelen aansluiten worden aangeboden.</p>
+              </div>
+            )}
             {selectedNodes.length === 0 ? (
               <div className="p-6 bg-white rounded-xl border border-dashed border-slate-300 text-center space-y-2 shadow-xs">
                 <div className="w-10 h-10 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center mx-auto">

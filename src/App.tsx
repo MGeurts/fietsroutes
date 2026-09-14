@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { KnooppuntNode, RouteConnectionAnalysis, RouteLeg, ElevationPoint, BikeType, MapTileProvider, PlannedRoute } from './types';
 import { calculateBicycleLeg, calculateBicycleRouteLegs, fetchElevationProfile, downloadGpxFile, UnknownKnooppuntenConnectionError, isAbortError } from './services/routingService';
-import { createShareUrl, deleteSavedRoute, getSavedRoutes, getRouteDraft, readSharedRoute, saveRoute, saveRouteDraft, SavedRoute } from './services/routeLibraryService';
+import { createShareUrl, deleteSavedRoute, exportRouteLibrary, getSavedRoutes, getRouteDraft, importRouteLibrary, readSharedRoute, saveRoute, saveRouteDraft, setSavedRouteFavorite, SavedRoute } from './services/routeLibraryService';
+import { getRoundTripStartOptions, rotateRoundTripStart } from './services/roundTripStartService';
 import { getAllCachedNodes, replaceCachedNodes, saveNodesToCache } from './services/knooppuntenCacheService';
 import { searchPlacesAndAddresses, isKnooppuntQuery, PlaceSearchResult, PRELOADED_MAJOR_PLACES } from './services/geocodingService';
 import { MapPlanner } from './components/MapPlanner';
@@ -20,6 +21,14 @@ import { Map, List, Bike, Sparkles, Navigation, Undo2, Redo2, X, Search, MapPin,
 
 const DEFAULT_ROUTE_NAME = 'Mijn Fietsroute';
 const ROUTE_CALCULATION_DEBOUNCE_MS = 250;
+
+function routeLegsMatchNodes(nodes: KnooppuntNode[], legs: RouteLeg[]): boolean {
+  const sameNode = (left: KnooppuntNode, right: KnooppuntNode) => String(left.id) === String(right.id)
+    && left.lat === right.lat && left.lng === right.lng;
+  return nodes.length >= 2 && legs.length === nodes.length - 1
+    && legs.every((leg, index) => sameNode(leg.fromNode, nodes[index])
+      && sameNode(leg.toNode, nodes[index + 1]) && leg.coordinates.length >= 2);
+}
 
 export default function App() {
   // Available nodes in current state (preloaded + Overpass queried)
@@ -62,14 +71,23 @@ export default function App() {
   const [routeError, setRouteError] = useState<string | null>(null);
   const [isRouteLibraryOpen, setIsRouteLibraryOpen] = useState(false);
   const [savedRoutes, setSavedRoutes] = useState<SavedRoute[]>([]);
+  const [activeSavedRouteId, setActiveSavedRouteId] = useState<string | null>(null);
   const [routeLibraryFeedback, setRouteLibraryFeedback] = useState<string | null>(null);
   const [approachRoute, setApproachRoute] = useState<RouteLeg | null>(null);
   const [approachLoading, setApproachLoading] = useState(false);
   const [approachError, setApproachError] = useState<string | null>(null);
   const [focusedRouteLegIndex, setFocusedRouteLegIndex] = useState<number | null>(null);
   const restoredRouteRef = useRef<SavedRoute | null>(null);
+  // Array identity survives undo/redo. A start-point change reuses the exact
+  // travelled geometry instead of asking a router for a different loop.
+  const retainedRoutesRef = useRef(new WeakMap<KnooppuntNode[], PlannedRoute>());
+  // Explicit route replacement/clearing is also an editing-context boundary.
+  const libraryContextByNodesRef = useRef(new WeakMap<KnooppuntNode[], string | null>());
   const sharedRouteHandledRef = useRef(false);
   const [fitRouteAfterImport, setFitRouteAfterImport] = useState(false);
+  useEffect(() => {
+    if (selectedNodes.length === 0) setActiveSavedRouteId(null);
+  }, [selectedNodes.length]);
   const [mapCenter, setMapCenter] = useState({ lat: 50.912, lng: 5.590 });
   const [currentLocation, setCurrentLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [roundTripCenter, setRoundTripCenter] = useState({ lat: 50.912, lng: 5.590 });
@@ -148,6 +166,19 @@ export default function App() {
   // Recalculate route whenever selectedNodes change
   useEffect(() => {
     const controller = new AbortController();
+
+    const retainedRoute = retainedRoutesRef.current.get(selectedNodes);
+    if (retainedRoute) {
+      setRouteLegs(retainedRoute.legs);
+      setFullCoordinates(retainedRoute.fullCoordinates);
+      setTotalDistanceKm(retainedRoute.totalDistanceKm);
+      setElevationGainM(retainedRoute.elevationGainM);
+      setElevationPoints(retainedRoute.elevationPoints);
+      setElevationAvailable(retainedRoute.elevationPoints.length > 1);
+      setElevationLoading(false);
+      setRouteError(null);
+      return () => controller.abort();
+    }
 
     const restoredRoute = restoredRouteRef.current;
     if (!isOnline && restoredRoute
@@ -272,7 +303,8 @@ export default function App() {
     setSelectedNodes((current) => {
       const next = typeof updater === 'function' ? updater(current) : updater;
       // Do not push identical state
-      if (current.length === next.length && current.every((n, i) => n.ref === next[i]?.ref)) {
+      if (current.length === next.length && current.every((n, i) => String(n.id) === String(next[i]?.id)
+        && n.lat === next[i]?.lat && n.lng === next[i]?.lng)) {
         return current;
       }
       setUndoStack((prev) => [...prev, current]);
@@ -291,6 +323,9 @@ export default function App() {
       setUndoStack((prev) => prev.slice(0, -1));
       setRedoStack((prev) => [...prev, selectedNodes]);
       setSelectedNodes(prevNodes);
+      if (libraryContextByNodesRef.current.has(prevNodes)) setActiveSavedRouteId(libraryContextByNodesRef.current.get(prevNodes)!);
+      const retained = retainedRoutesRef.current.get(prevNodes);
+      if (retained) setRouteName(retained.name);
     } else if (selectedNodes.length > 0) {
       // Step backwards by popping the last node in reverse order,
       // all the way down to removing the start point (empty route)
@@ -306,6 +341,9 @@ export default function App() {
     setRedoStack((prev) => prev.slice(0, -1));
     setUndoStack((prev) => [...prev, selectedNodes]);
     setSelectedNodes(nextNodes);
+    if (libraryContextByNodesRef.current.has(nextNodes)) setActiveSavedRouteId(libraryContextByNodesRef.current.get(nextNodes)!);
+    const retained = retainedRoutesRef.current.get(nextNodes);
+    if (retained) setRouteName(retained.name);
   }, [redoStack, selectedNodes]);
 
   const canUndo = undoStack.length > 0 || selectedNodes.length > 0;
@@ -477,24 +515,32 @@ export default function App() {
   // An imported route appears in one action, but must still undo like a route
   // entered point by point. Keep every prefix as a history state.
   const applyImportedRoute = useCallback((nodes: KnooppuntNode[], name: string) => {
+    libraryContextByNodesRef.current.set(nodes, null);
+    setActiveSavedRouteId(null);
     setRouteLegs([]);
     setRouteError(null);
     setSelectedNodes((current) => {
+      libraryContextByNodesRef.current.set(current, activeSavedRouteId);
       const unchanged = current.length === nodes.length
         && current.every((node, index) => String(node.id) === String(nodes[index]?.id));
       if (unchanged) return current;
 
       const importedPrefixes = nodes.slice(0, -1).map((_, index) => nodes.slice(0, index + 1));
+      importedPrefixes.forEach((prefix) => libraryContextByNodesRef.current.set(prefix, null));
       setUndoStack((previous) => [...previous, current, ...importedPrefixes]);
       setRedoStack([]);
       return nodes;
     });
     setRouteName(name);
     setFitRouteAfterImport(true);
-  }, []);
+  }, [activeSavedRouteId]);
 
   const restoreSavedRoute = useCallback((route: SavedRoute) => {
     const nodes = route.nodes.map(resolveRouteableNode);
+    libraryContextByNodesRef.current.set(nodes, route.id);
+    setActiveSavedRouteId(route.id);
+    setUndoStack([]);
+    setRedoStack([]);
     restoredRouteRef.current = { ...route, nodes };
     setRouteName(route.name || DEFAULT_ROUTE_NAME);
     setRouteLegs(route.legs);
@@ -551,8 +597,13 @@ export default function App() {
 
   const handleClearRoute = () => {
     if (selectedNodes.length === 0) return;
-    applyRouteUpdate([]);
+    const empty: KnooppuntNode[] = [];
+    if (canSaveCurrentRoute) retainedRoutesRef.current.set(selectedNodes, persistableRoute);
+    libraryContextByNodesRef.current.set(selectedNodes, activeSavedRouteId);
+    libraryContextByNodesRef.current.set(empty, null);
+    applyRouteUpdate(empty);
     setRouteName(DEFAULT_ROUTE_NAME);
+    setActiveSavedRouteId(null);
   };
 
   // GPX Export
@@ -581,6 +632,7 @@ export default function App() {
     coordinates: [number, number][];
     waypoints: { lat: number; lng: number; name: string }[];
   }) => {
+    setActiveSavedRouteId(null);
     setRouteName(routeData.name);
     setFullCoordinates(routeData.coordinates);
     setRouteLegs([]);
@@ -634,7 +686,7 @@ export default function App() {
 
   const handleConfirmRoundTripReplacement = () => {
     // The screen centre is intentionally captured before removing the route.
-    applyRouteUpdate([]);
+    handleClearRoute();
     setIsRoundTripReplaceConfirmOpen(false);
     openRoundTripGenerator(mapCenter, 'Huidige kaartcentrum');
   };
@@ -654,6 +706,9 @@ export default function App() {
   }, [fitRouteAfterImport, selectedNodes.length, fullCoordinates, routeLegs.length, routeError]);
 
   const handleApplyRoundTrip = (nodes: KnooppuntNode[], name: string) => {
+    libraryContextByNodesRef.current.set(selectedNodes, activeSavedRouteId);
+    libraryContextByNodesRef.current.set(nodes, null);
+    setActiveSavedRouteId(null);
     setRouteLegs([]);
     setRouteError(null);
     setFitRouteAfterImport(true);
@@ -668,7 +723,7 @@ export default function App() {
   }, [mobileTab]);
 
   const currentRouteObject: PlannedRoute = {
-    id: 'active-route',
+    id: activeSavedRouteId || 'active-route',
     name: routeName || 'Fietsroute',
     nodes: selectedNodes,
     legs: routeLegs,
@@ -679,14 +734,38 @@ export default function App() {
     createdAt: new Date().toISOString(),
   };
 
+  const hasCompleteRoute = routeLegsMatchNodes(selectedNodes, routeLegs) && !routeError;
+  const canSaveCurrentRoute = hasCompleteRoute && !elevationLoading;
   const persistableRoute = useMemo<PlannedRoute>(() => ({
     ...currentRouteObject,
-    legs: routeLegs.length === Math.max(0, selectedNodes.length - 1) ? routeLegs : [],
-    fullCoordinates: routeLegs.length === Math.max(0, selectedNodes.length - 1) ? fullCoordinates : [],
-    elevationPoints: routeLegs.length === Math.max(0, selectedNodes.length - 1) ? elevationPoints : [],
-    elevationGainM: routeLegs.length === Math.max(0, selectedNodes.length - 1) ? elevationGainM : 0,
-    totalDistanceKm: routeLegs.length === Math.max(0, selectedNodes.length - 1) ? totalDistanceKm : 0,
-  }), [routeName, selectedNodes, routeLegs, fullCoordinates, totalDistanceKm, elevationGainM, elevationPoints]);
+    legs: hasCompleteRoute ? routeLegs : [],
+    fullCoordinates: hasCompleteRoute ? fullCoordinates : [],
+    elevationPoints: hasCompleteRoute ? elevationPoints : [],
+    elevationGainM: hasCompleteRoute ? elevationGainM : 0,
+    totalDistanceKm: hasCompleteRoute ? totalDistanceKm : 0,
+  }), [activeSavedRouteId, hasCompleteRoute, routeName, selectedNodes, routeLegs, fullCoordinates, totalDistanceKm, elevationGainM, elevationPoints]);
+
+  const roundTripStartOptions = useMemo(() => canSaveCurrentRoute
+    ? getRoundTripStartOptions(persistableRoute) : [], [canSaveCurrentRoute, persistableRoute]);
+
+  const handleChangeRoundTripStart = (key: string) => {
+    if (!canSaveCurrentRoute) return;
+    const rotated = rotateRoundTripStart(persistableRoute, key);
+    if (!rotated) return;
+    if (/^Rondrit KP .+ \([\d.,]+ km\)$/.test(rotated.name)) {
+      rotated.name = `Rondrit KP ${rotated.nodes[0].ref} (${rotated.totalDistanceKm} km)`;
+    }
+    retainedRoutesRef.current.set(selectedNodes, persistableRoute);
+    retainedRoutesRef.current.set(rotated.nodes, rotated);
+    // A repeated loop can have the same node IDs in the same order after a
+    // rotation, while its individual legs differ. Preserve the chosen visit.
+    setUndoStack((previous) => [...previous, selectedNodes]);
+    setRedoStack([]);
+    setSelectedNodes(rotated.nodes);
+    setRouteName(rotated.name);
+    setFocusedRouteLegIndex(null);
+    setFitRouteAfterImport(true);
+  };
 
   useEffect(() => {
     if (selectedNodes.length > 0) saveRouteDraft(persistableRoute);
@@ -697,22 +776,33 @@ export default function App() {
     setIsRouteLibraryOpen(true);
   }, []);
 
-  const handleSaveCurrentRoute = useCallback(() => {
-    if (selectedNodes.length < 2) {
-      setRouteLibraryFeedback('Kies minstens twee knooppunten voordat je een route bewaart.');
+  const handleSaveCurrentRoute = useCallback((asCopy = false) => {
+    if (!canSaveCurrentRoute) {
+      setRouteLibraryFeedback('Wacht tot de route volledig is berekend voordat je deze bewaart.');
       return;
     }
-    const saved = saveRoute({ ...persistableRoute, id: `saved-route-${Date.now()}`, createdAt: new Date().toISOString() });
+    const existing = !asCopy && activeSavedRouteId
+      ? getSavedRoutes().find((route) => route.id === activeSavedRouteId) : undefined;
+    const saved = saveRoute({
+      ...persistableRoute,
+      id: existing?.id || `saved-route-${globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`}`,
+      name: asCopy ? `${persistableRoute.name} (kopie)` : persistableRoute.name,
+      createdAt: existing?.createdAt || new Date().toISOString(),
+    });
     if (!saved) {
       setRouteLibraryFeedback('De browser kon deze route niet lokaal opslaan. Controleer beschikbare opslagruimte.');
       return;
     }
+    setActiveSavedRouteId(saved.id);
+    libraryContextByNodesRef.current.set(selectedNodes, saved.id);
+    if (asCopy) setRouteName(saved.name);
     setSavedRoutes(getSavedRoutes());
-    setRouteLibraryFeedback(`“${saved.name}” is lokaal bewaard, inclusief routegeometrie en hoogtegegevens.`);
-  }, [persistableRoute, selectedNodes.length]);
+    setRouteLibraryFeedback(`“${saved.name}” is lokaal ${existing ? 'bijgewerkt' : 'bewaard'}, inclusief routegeometrie en hoogtegegevens.`);
+  }, [persistableRoute, canSaveCurrentRoute, activeSavedRouteId]);
 
   const handleDeleteSavedRoute = useCallback((route: SavedRoute) => {
     if (deleteSavedRoute(route.id)) {
+      setActiveSavedRouteId((current) => current === route.id ? null : current);
       setSavedRoutes(getSavedRoutes());
       setRouteLibraryFeedback(`“${route.name}” is uit deze browser verwijderd.`);
     } else {
@@ -720,10 +810,46 @@ export default function App() {
     }
   }, []);
 
+  const handleToggleRouteFavorite = useCallback((id: string) => {
+    const route = getSavedRoutes().find((entry) => entry.id === id);
+    if (route && setSavedRouteFavorite(id, !route.favorite)) {
+      setSavedRoutes(getSavedRoutes());
+      setRouteLibraryFeedback(route.favorite ? 'Route uit favorieten verwijderd.' : 'Route aan favorieten toegevoegd.');
+    } else {
+      setRouteLibraryFeedback('De favoriet kon niet worden bijgewerkt in de lokale opslag.');
+    }
+  }, []);
+
+  const handleExportRouteLibrary = useCallback(() => {
+    try {
+      const data = exportRouteLibrary();
+      const url = URL.createObjectURL(new Blob([data], { type: 'application/json' }));
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = `fietsroute-bibliotheek-${new Date().toISOString().slice(0, 10)}.json`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+      setRouteLibraryFeedback('Backup gedownload met alle bewaarde routes, favorieten, geometrie en hoogtegegevens.');
+    } catch (error) {
+      setRouteLibraryFeedback(error instanceof Error ? error.message : 'De backup kon niet worden gemaakt.');
+    }
+  }, []);
+
+  const handleImportRouteLibrary = useCallback(async (file: File) => {
+    setRouteLibraryFeedback(null);
+    if (file.size > 25 * 1024 * 1024) throw new Error('Deze backup is te groot (maximaal 25 MB).');
+    const result = importRouteLibrary(await file.text());
+    setSavedRoutes(getSavedRoutes());
+    setRouteLibraryFeedback(`${result.imported} route(s) geïmporteerd; ${result.skipped} al aanwezig. Bestaande routes zijn behouden.`);
+  }, []);
+
+  const shareUrl = useMemo(() => createShareUrl(routeName, selectedNodes), [routeName, selectedNodes]);
+
   const handleCopyShareUrl = useCallback(async () => {
-    const shareUrl = createShareUrl(routeName, selectedNodes);
     if (!shareUrl) {
-      setRouteLibraryFeedback('Een deellink vereist minstens twee geldige knooppunten.');
+      setRouteLibraryFeedback('Deze route kan niet als deellink worden gedeeld: kies minstens twee knooppunten of gebruik GPX bij een te grote route.');
       return;
     }
     try {
@@ -733,7 +859,7 @@ export default function App() {
       window.prompt('Kopieer deze deellink:', shareUrl);
       setRouteLibraryFeedback('Deellink getoond om handmatig te kopiëren.');
     }
-  }, [routeName, selectedNodes]);
+  }, [shareUrl]);
 
   const [headerSearchQuery, setHeaderSearchQuery] = useState('');
   const [showHeaderSuggestions, setShowHeaderSuggestions] = useState(false);
@@ -1083,12 +1209,12 @@ export default function App() {
             {isOnline ? <Wifi className="h-3 w-3" /> : <WifiOff className="h-3 w-3" />}{isOnline ? 'Online' : 'Offline'}
           </span>
           <button
-            onClick={handleExportGpx}
+            onClick={handleOpenRouteLibrary}
             disabled={selectedNodes.length < 2 || routeLegs.length !== selectedNodes.length - 1 || Boolean(routeError)}
             className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-xs sm:text-sm font-medium px-3 sm:px-3.5 py-2 rounded-md transition-colors shadow-sm cursor-pointer tablet-touch-friendly-btn"
-            title="Download GPX bestand"
+            title="Bewaar of werk deze route bij in je lokale bibliotheek"
           >
-            Route Opslaan
+            Route opslaan
           </button>
 
           <button
@@ -1149,6 +1275,8 @@ export default function App() {
             onChangeBike={setSelectedBike}
             onRemoveNode={handleRemoveNode}
             onMoveNode={handleMoveNode}
+            roundTripStartOptions={roundTripStartOptions}
+            onChangeRoundTripStart={handleChangeRoundTripStart}
             onReverseRoute={handleReverseRoute}
             onClearRoute={handleClearRoute}
             onFitRoute={handleFitRoute}
@@ -1257,10 +1385,16 @@ export default function App() {
       <RouteLibraryModal
         isOpen={isRouteLibraryOpen}
         routes={savedRoutes}
-        canSave={selectedNodes.length >= 2}
+        canSave={canSaveCurrentRoute}
+        activeRouteId={activeSavedRouteId}
+        shareUrl={shareUrl}
         feedback={routeLibraryFeedback}
         onClose={() => setIsRouteLibraryOpen(false)}
-        onSave={handleSaveCurrentRoute}
+        onSave={() => handleSaveCurrentRoute()}
+        onSaveCopy={() => handleSaveCurrentRoute(true)}
+        onToggleFavorite={handleToggleRouteFavorite}
+        onExportLibrary={handleExportRouteLibrary}
+        onImportLibrary={handleImportRouteLibrary}
         onOpen={restoreSavedRoute}
         onDelete={handleDeleteSavedRoute}
         onCopyShareUrl={handleCopyShareUrl}
