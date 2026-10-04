@@ -71,7 +71,18 @@ function normaliseImportedEdge(
   const to = geometryTo && declaredToDistance > GEOMETRY_ENDPOINT_TOLERANCE_KM ? geometryTo : declaredTo;
 
   let coordinates = edge.coordinates;
-  if (to.id !== declaredTo.id) {
+  // Some relations begin on a side branch, reach their declared start marker,
+  // and only then follow the actual connection. Drop that approach branch.
+  if (declaredFromDistance > GEOMETRY_ENDPOINT_TOLERANCE_KM) {
+    const firstDeparture = coordinates.findIndex((coordinate, index) => index > 0
+      && distanceKm(coordinate[0], coordinate[1], from.lat, from.lng) <= GEOMETRY_ENDPOINT_TOLERANCE_KM);
+    if (firstDeparture > 0 && firstDeparture < coordinates.length - 1) {
+      coordinates = coordinates.slice(firstDeparture);
+    }
+  }
+  // Likewise, a relation can reach the real endpoint before its final coordinate
+  // and continue along a side branch. A node-to-node leg must stop on first arrival.
+  if (to.id !== declaredTo.id || declaredToDistance > GEOMETRY_ENDPOINT_TOLERANCE_KM) {
     const firstArrival = coordinates.findIndex((coordinate, index) => index > 0
       && distanceKm(coordinate[0], coordinate[1], to.lat, to.lng) <= GEOMETRY_ENDPOINT_TOLERANCE_KM);
     if (firstArrival > 0 && firstArrival < coordinates.length - 1) {

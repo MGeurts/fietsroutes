@@ -421,6 +421,16 @@ async function main() {
     ['official'],
     'KP 402 → KP 5 must not fall back to orange live geometry via KP 401 and another KP 402 marker',
   );
+
+  const live04 = liveDataset.nodes.find((node: typeof kp64) => node.id === 'osm-477373940');
+  const live02 = liveDataset.nodes.find((node: typeof kp64) => node.id === 'osm-5480718970');
+  assert.ok(live04 && live02, 'KP 04 and KP 02 near Maastricht must remain in the network dataset');
+  const live04To02 = await calculateBicycleLeg(live04, live02);
+  const live04To02End = live04To02.coordinates.at(-1)!;
+  assert.ok(
+    Math.hypot(live04To02End[0] - live02.lat, live04To02End[1] - live02.lng) < 0.001,
+    'KP 04 → KP 02 must stop at KP 02 rather than return along the parallel side branch',
+  );
   console.log('Official-network regression tests passed.');
 }
 

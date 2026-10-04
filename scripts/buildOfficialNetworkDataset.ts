@@ -154,10 +154,10 @@ function buildCoordinates(relation: OplRelation, ways: Map<number, OplWay>, node
   // endpoint-to-endpoint path from the relation members themselves.  This keeps
   // the shortest official route's real geometry and distance available.
   const endsAtDeclaredNodes = (coordinates: [number, number][] | null) => Boolean(coordinates && (
-    (close(coordinates[0], [endpointHint.from.lat, endpointHint.from.lng], EXPLICIT_ENDPOINT_TOLERANCE_DEGREES)
-      && close(coordinates[coordinates.length - 1], [endpointHint.to.lat, endpointHint.to.lng], EXPLICIT_ENDPOINT_TOLERANCE_DEGREES))
-    || (close(coordinates[0], [endpointHint.to.lat, endpointHint.to.lng], EXPLICIT_ENDPOINT_TOLERANCE_DEGREES)
-      && close(coordinates[coordinates.length - 1], [endpointHint.from.lat, endpointHint.from.lng], EXPLICIT_ENDPOINT_TOLERANCE_DEGREES))
+    (close(coordinates[0], [endpointHint.from.lat, endpointHint.from.lng], INFERRED_ENDPOINT_TOLERANCE_DEGREES)
+      && close(coordinates[coordinates.length - 1], [endpointHint.to.lat, endpointHint.to.lng], INFERRED_ENDPOINT_TOLERANCE_DEGREES))
+    || (close(coordinates[0], [endpointHint.to.lat, endpointHint.to.lng], INFERRED_ENDPOINT_TOLERANCE_DEGREES)
+      && close(coordinates[coordinates.length - 1], [endpointHint.from.lat, endpointHint.from.lng], INFERRED_ENDPOINT_TOLERANCE_DEGREES))
   ));
   if (endsAtDeclaredNodes(assembled)) return assembled;
   const path = findRelationPathGeometry(
