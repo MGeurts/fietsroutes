@@ -13,6 +13,10 @@ function distanceKm(lat1: number, lon1: number, lat2: number, lon2: number): num
 // is genuinely at the end of its geometry; 75 m is deliberately tighter than
 // the dataset importer's old endpoint tolerance.
 const GEOMETRY_ENDPOINT_TOLERANCE_KM = 0.075;
+// A displayed junction can use a small cluster of OSM markers around a bridge,
+// roundabout or crossing.  Keep the hand-off radius below a city block, while
+// still joining the three KP 402 markers that are about 100 m apart.
+const JUNCTION_ALIAS_DISTANCE_KM = 0.125;
 
 function geometryDistanceKm(coordinates: [number, number][]): number {
   let total = 0;
@@ -150,6 +154,17 @@ export function registerOfficialNetworkDataset(dataset: OfficialNetworkDataset):
   const nextDeclaredAdjacency = new Map<string, Map<string, OfficialNetworkEdge>>(
     [...nextAdjacency].map(([key, neighbours]) => [key, new Map(neighbours)]),
   );
+  const hasEquivalentVerifiedGeometry = (fromKey: string, toKey: string, source: string): boolean => {
+    const declaredFrom = nextNodes.get(fromKey);
+    if (!declaredFrom) return false;
+    for (const edge of next.values()) {
+      if (edge.source !== source || edge.coordinates.length < 2 || edge.to !== toKey) continue;
+      const geometryFrom = nextNodes.get(edge.from);
+      if (!geometryFrom || geometryFrom.ref !== declaredFrom.ref) continue;
+      if (distanceKm(geometryFrom.lat, geometryFrom.lng, declaredFrom.lat, declaredFrom.lng) <= JUNCTION_ALIAS_DISTANCE_KM) return true;
+    }
+    return false;
+  };
   const addDeclaredConnection = (fromKey: string, toKey: string, source: string) => {
     const from = nextNodes.get(fromKey);
     const to = nextNodes.get(toKey);
@@ -165,8 +180,12 @@ export function registerOfficialNetworkDataset(dataset: OfficialNetworkDataset):
       }
       nextDeclaredAdjacency.set(forwardKey, neighbours);
     };
-    add(fromKey, toKey, from, to);
-    add(toKey, fromKey, to, from);
+    // A relation can mention a duplicate marker while the same relation already
+    // has complete geometry from a nearby marker with that identical ref. Keep
+    // the verified corridor and let the short junction alias perform the handoff;
+    // otherwise an incomplete duplicate edge can win the shortest-path search.
+    if (!hasEquivalentVerifiedGeometry(fromKey, toKey, source)) add(fromKey, toKey, from, to);
+    if (!hasEquivalentVerifiedGeometry(toKey, fromKey, source)) add(toKey, fromKey, to, from);
   };
   for (const connection of dataset.declaredConnections || []) {
     addDeclaredConnection(connection.from, connection.to, connection.source);
@@ -176,7 +195,7 @@ export function registerOfficialNetworkDataset(dataset: OfficialNetworkDataset):
   // marker per carriageway). Relations may use different markers for adjacent
   // routes, fragmenting an otherwise valid node network. Join only markers with
   // the same displayed ref, both already connected to the network, and within
-  // 75 metres. This is a topology alias, not invented road geometry.
+  // 125 metres. This is a topology alias, not invented road geometry.
   const connectedByRef = new Map<string, KnooppuntNode[]>();
   for (const node of nextNodes.values()) {
     if (!(nextDeclaredAdjacency.get(String(node.id))?.size)) continue;
@@ -189,7 +208,7 @@ export function registerOfficialNetworkDataset(dataset: OfficialNetworkDataset):
       for (let otherIndex = index + 1; otherIndex < nodesWithSameRef.length; otherIndex += 1) {
         const fromNode = nodesWithSameRef[index];
         const toNode = nodesWithSameRef[otherIndex];
-        if (distanceKm(fromNode.lat, fromNode.lng, toNode.lat, toNode.lng) > 0.075) continue;
+        if (distanceKm(fromNode.lat, fromNode.lng, toNode.lat, toNode.lng) > JUNCTION_ALIAS_DISTANCE_KM) continue;
         const fromKey = String(fromNode.id);
         const toKey = String(toNode.id);
         const addAlias = (start: string, end: string) => {

@@ -410,6 +410,17 @@ async function main() {
   );
   const live88To557 = await calculateBicycleLeg(live88, live557West);
   assert.ok(live88To557.coordinates.every(([, lng]) => lng < 5.642), 'KP 88 → KP 557 must stop on the west bank before the bridge branch');
+
+  const live402 = liveDataset.nodes.find((node: typeof kp64) => node.id === 'osm-296883580');
+  const live5 = liveDataset.nodes.find((node: typeof kp64) => node.id === 'osm-247742234');
+  assert.ok(live402 && live5, 'KP 402 and KP 5 must remain in the network dataset');
+  const live402To5 = await calculateBicycleLeg(live402, live5);
+  assert.equal(live402To5.isVerified, true, 'nearby KP 402 markers must hand off to the verified KP 402 → KP 5 connection');
+  assert.deepEqual(
+    live402To5.displaySegments?.map((segment) => segment.source),
+    ['official'],
+    'KP 402 → KP 5 must not fall back to orange live geometry via KP 401 and another KP 402 marker',
+  );
   console.log('Official-network regression tests passed.');
 }
 
