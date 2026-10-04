@@ -8,6 +8,83 @@ function distanceKm(lat1: number, lon1: number, lat2: number, lon2: number): num
   return 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
+// Route relations sometimes use a second OSM marker for the same junction on a
+// nearby carriageway.  Only snap a malformed relation endpoint to a marker that
+// is genuinely at the end of its geometry; 75 m is deliberately tighter than
+// the dataset importer's old endpoint tolerance.
+const GEOMETRY_ENDPOINT_TOLERANCE_KM = 0.075;
+
+function geometryDistanceKm(coordinates: [number, number][]): number {
+  let total = 0;
+  for (let index = 1; index < coordinates.length; index += 1) {
+    total += distanceKm(
+      coordinates[index - 1][0], coordinates[index - 1][1],
+      coordinates[index][0], coordinates[index][1],
+    );
+  }
+  return Math.round(total * 100) / 100;
+}
+
+function closestSameRefEndpoint(
+  nodes: Map<string, KnooppuntNode>,
+  expected: KnooppuntNode,
+  coordinate: [number, number],
+): KnooppuntNode | null {
+  let closest: KnooppuntNode | null = null;
+  let closestDistance = GEOMETRY_ENDPOINT_TOLERANCE_KM;
+  for (const candidate of nodes.values()) {
+    if (candidate.ref !== expected.ref) continue;
+    const candidateDistance = distanceKm(coordinate[0], coordinate[1], candidate.lat, candidate.lng);
+    if (candidateDistance <= closestDistance) {
+      closest = candidate;
+      closestDistance = candidateDistance;
+    }
+  }
+  return closest;
+}
+
+/**
+ * Correct a relation whose displayed endpoint is a nearby duplicate marker,
+ * while its geometry clearly ends at the other marker.  A route that reaches
+ * that real endpoint and then returns to it through a side branch is shortened
+ * at the first arrival; the side branch is not part of a node-to-node leg.
+ */
+function normaliseImportedEdge(
+  edge: OfficialNetworkDatasetEdge,
+  nodes: Map<string, KnooppuntNode>,
+): OfficialNetworkDatasetEdge {
+  const declaredFrom = nodes.get(edge.from);
+  const declaredTo = nodes.get(edge.to);
+  if (!declaredFrom || !declaredTo) return edge;
+
+  const start = edge.coordinates[0];
+  const finish = edge.coordinates[edge.coordinates.length - 1];
+  const geometryFrom = closestSameRefEndpoint(nodes, declaredFrom, start);
+  const geometryTo = closestSameRefEndpoint(nodes, declaredTo, finish);
+  const declaredFromDistance = distanceKm(start[0], start[1], declaredFrom.lat, declaredFrom.lng);
+  const declaredToDistance = distanceKm(finish[0], finish[1], declaredTo.lat, declaredTo.lng);
+  const from = geometryFrom && declaredFromDistance > GEOMETRY_ENDPOINT_TOLERANCE_KM ? geometryFrom : declaredFrom;
+  const to = geometryTo && declaredToDistance > GEOMETRY_ENDPOINT_TOLERANCE_KM ? geometryTo : declaredTo;
+
+  let coordinates = edge.coordinates;
+  if (to.id !== declaredTo.id) {
+    const firstArrival = coordinates.findIndex((coordinate, index) => index > 0
+      && distanceKm(coordinate[0], coordinate[1], to.lat, to.lng) <= GEOMETRY_ENDPOINT_TOLERANCE_KM);
+    if (firstArrival > 0 && firstArrival < coordinates.length - 1) {
+      coordinates = coordinates.slice(0, firstArrival + 1);
+    }
+  }
+
+  if (from.id === declaredFrom.id && to.id === declaredTo.id && coordinates === edge.coordinates) return edge;
+  return {
+    ...edge,
+    from: String(from.id),
+    to: String(to.id),
+    coordinates,
+    distanceKm: geometryDistanceKm(coordinates),
+  };
+}
+
 export interface OfficialNetworkEdge {
   fromKey: string;
   toKey: string;
@@ -41,7 +118,8 @@ export function registerOfficialNetworkDataset(dataset: OfficialNetworkDataset):
   const next = new Map<string, OfficialNetworkDatasetEdge>();
   const nextNodes = new Map(dataset.nodes.map((node) => [String(node.id), node]));
   const nextAdjacency = new Map<string, Map<string, OfficialNetworkEdge>>();
-  for (const edge of dataset.edges) {
+  for (const rawEdge of dataset.edges) {
+    const edge = normaliseImportedEdge(rawEdge, nextNodes);
     if (!allowedNodeIds.has(edge.from) || !allowedNodeIds.has(edge.to) || edge.coordinates.length < 2 || edge.distanceKm <= 0) continue;
     next.set(edgeKey(edge.from, edge.to), edge);
     const reverse = {
@@ -300,7 +378,9 @@ export function findNearbyDirectSameRefNode(
     && Math.abs(candidate.lng - requested.lng) < 0.003);
   const direct = nearby.filter((candidate) => {
     const path = findOfficialNetworkPath(from, candidate);
-    return path?.edges.length === 1 && !path.edges[0].isJunctionAlias;
+    return path?.edges.length === 1
+      && !path.edges[0].isJunctionAlias
+      && path.edges[0].coordinates.length >= 2;
   });
   if (direct.length === 0) return null;
   return direct.reduce((nearest, candidate) => {

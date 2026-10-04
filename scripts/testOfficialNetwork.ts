@@ -48,26 +48,40 @@ async function main() {
   assert.equal(graph.adjacency.get(getNodeKey(kp64))?.has(getNodeKey(kp251)), true, 'the graph must retain imported verified edges');
 
   const duplicateStart = { id: 'duplicate-start', ref: '88', lat: 50.8385, lng: 5.6366 };
-  const direct557 = { id: 'duplicate-557-direct', ref: '557', lat: 50.8315, lng: 5.6439 };
-  const clicked557 = { id: 'duplicate-557-detour', ref: '557', lat: 50.8304, lng: 5.6412 };
+  const bridge557 = { id: 'duplicate-557-bridge', ref: '557', lat: 50.8315, lng: 5.6439 };
+  const clicked557 = { id: 'duplicate-557-west', ref: '557', lat: 50.8304, lng: 5.6412 };
   const detour402 = { id: 'duplicate-402', ref: '402', lat: 50.8106, lng: 5.6693 };
   registerOfficialNetworkDataset({
     version: 1,
     generatedAt: new Date().toISOString(),
-    nodes: [duplicateStart, direct557, clicked557, detour402],
+    nodes: [duplicateStart, bridge557, clicked557, detour402],
     edges: [
-      { from: duplicateStart.id, to: direct557.id, distanceKm: 1.43, coordinates: [[duplicateStart.lat, duplicateStart.lng], [direct557.lat, direct557.lng]], source: 'direct', verifiedAt: 'test' },
+      {
+        from: duplicateStart.id,
+        to: bridge557.id,
+        distanceKm: 1.43,
+        // The relation claims the eastern marker, but reaches the western marker,
+        // briefly follows a side branch, then returns to that same western marker.
+        coordinates: [
+          [duplicateStart.lat, duplicateStart.lng],
+          [clicked557.lat, clicked557.lng],
+          [bridge557.lat, bridge557.lng],
+          [clicked557.lat, clicked557.lng],
+        ],
+        source: 'malformed direct relation',
+        verifiedAt: 'test',
+      },
       { from: duplicateStart.id, to: detour402.id, distanceKm: 3, coordinates: [[duplicateStart.lat, duplicateStart.lng], [detour402.lat, detour402.lng]], source: 'detour', verifiedAt: 'test' },
       { from: detour402.id, to: clicked557.id, distanceKm: 3, coordinates: [[detour402.lat, detour402.lng], [clicked557.lat, clicked557.lng]], source: 'detour', verifiedAt: 'test' },
     ],
   });
   assert.equal(
-    findNearbyDirectSameRefNode(duplicateStart, clicked557, [clicked557, direct557])?.id,
-    direct557.id,
-    'a nearby duplicate junction marker must use the direct official connection instead of a detour through another junction',
+    findNearbyDirectSameRefNode(duplicateStart, bridge557, [clicked557, bridge557])?.id,
+    clicked557.id,
+    'a malformed duplicate endpoint must be repaired to the geometry endpoint before selecting a direct official connection',
   );
   assert.equal(
-    findNearbyDirectSameRefNode(detour402, clicked557, [clicked557, direct557])?.id,
+    findNearbyDirectSameRefNode(detour402, clicked557, [clicked557, bridge557])?.id,
     clicked557.id,
     'the clicked marker remains selected when it is the direct official connection',
   );
@@ -386,14 +400,16 @@ async function main() {
   const liveDataset = JSON.parse(readFileSync('public/data/benelux_network.json', 'utf8'));
   registerOfficialNetworkDataset(liveDataset);
   const live88 = liveDataset.nodes.find((node: typeof kp64) => node.id === 'osm-247742183');
-  const live557Clicked = liveDataset.nodes.find((node: typeof kp64) => node.id === 'osm-30124778');
-  const live557Direct = liveDataset.nodes.find((node: typeof kp64) => node.id === 'osm-5135685066');
-  assert.ok(live88 && live557Clicked && live557Direct, 'KP 88 and both nearby KP 557 markers must remain in the network dataset');
+  const live557West = liveDataset.nodes.find((node: typeof kp64) => node.id === 'osm-30124778');
+  const live557Bridge = liveDataset.nodes.find((node: typeof kp64) => node.id === 'osm-5135685066');
+  assert.ok(live88 && live557West && live557Bridge, 'KP 88 and both nearby KP 557 markers must remain in the network dataset');
   assert.equal(
-    findNearbyDirectSameRefNode(live88, live557Clicked, [live557Clicked, live557Direct])?.id,
-    live557Direct.id,
-    'KP 88 → KP 557 must select its direct official connection, not the nearby KP 557 marker reached through KP 402',
+    findNearbyDirectSameRefNode(live88, live557Bridge, [live557West, live557Bridge])?.id,
+    live557West.id,
+    'KP 88 → KP 557 must use the west-bank marker where the verified geometry ends',
   );
+  const live88To557 = await calculateBicycleLeg(live88, live557West);
+  assert.ok(live88To557.coordinates.every(([, lng]) => lng < 5.642), 'KP 88 → KP 557 must stop on the west bank before the bridge branch');
   console.log('Official-network regression tests passed.');
 }
 

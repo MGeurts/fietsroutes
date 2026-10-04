@@ -263,6 +263,22 @@ function resolveEndpoints(relation: OplRelation, coordinates: [number, number][]
   const explicit = getExplicitEndpoints(relation, nodes);
   const start = coordinates[0];
   const finish = coordinates[coordinates.length - 1];
+  const inferredFrom = findUniqueJunction(start, junctionIndex);
+  const inferredTo = findUniqueJunction(finish, junctionIndex);
+
+  // The actual geometry endpoints are more precise than a relation ref when
+  // OSM has two nearby markers with the same displayed number (for example on
+  // either side of a canal).  Prefer those exact, unambiguous markers.  If a
+  // relation reaches its endpoint, makes a side trip and returns, retain only
+  // the first endpoint-to-endpoint portion rather than rendering the detour.
+  if (inferredFrom && inferredTo && inferredFrom.id !== inferredTo.id) {
+    const firstArrival = coordinates.findIndex((coordinate, index) => index > 0
+      && close(coordinate, [inferredTo.lat, inferredTo.lng], INFERRED_ENDPOINT_TOLERANCE_DEGREES));
+    const trimmed = firstArrival > 0 && firstArrival < coordinates.length - 1
+      ? coordinates.slice(0, firstArrival + 1)
+      : coordinates;
+    return { from: inferredFrom, to: inferredTo, coordinates: trimmed };
+  }
   // `ref=29-567` was already matched to concrete OSM junction objects from the
   // relation's own way ends. Prefer that evidence over a spatial lookup: local
   // duplicate markers can otherwise make a perfectly valid endpoint ambiguous.
@@ -277,8 +293,8 @@ function resolveEndpoints(relation: OplRelation, coordinates: [number, number][]
     if (close(start, [to.lat, to.lng], EXPLICIT_ENDPOINT_TOLERANCE_DEGREES) && close(finish, [from.lat, from.lng], EXPLICIT_ENDPOINT_TOLERANCE_DEGREES)) return { from, to, coordinates: [...coordinates].reverse() };
     return null;
   }
-  const from = findUniqueJunction(start, junctionIndex);
-  const to = findUniqueJunction(finish, junctionIndex);
+  const from = inferredFrom;
+  const to = inferredTo;
   if (!from || !to || from.id === to.id) return null;
   return { from, to, coordinates };
 }
