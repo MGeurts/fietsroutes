@@ -3,6 +3,7 @@ import { KnooppuntNode, RouteConnectionAnalysis, RouteLeg, ElevationPoint, BikeT
 import { calculateBicycleLeg, calculateBicycleRouteLegs, fetchElevationProfile, downloadGpxFile, UnknownKnooppuntenConnectionError, isAbortError } from './services/routingService';
 import { createShareUrl, deleteSavedRoute, exportRouteLibrary, getSavedRoutes, getRouteDraft, importRouteLibrary, readSharedRoute, saveRoute, saveRouteDraft, setSavedRouteFavorite, SavedRoute } from './services/routeLibraryService';
 import { getRoundTripStartOptions, rotateRoundTripStart } from './services/roundTripStartService';
+import { findNearbyDirectSameRefNode } from './services/officialNetworkService';
 import { getAllCachedNodes, replaceCachedNodes, saveNodesToCache } from './services/knooppuntenCacheService';
 import { searchPlacesAndAddresses, isKnooppuntQuery, PlaceSearchResult, PRELOADED_MAJOR_PLACES } from './services/geocodingService';
 import { MapPlanner } from './components/MapPlanner';
@@ -40,8 +41,14 @@ export default function App() {
   // An OSM area can contain an unconnected duplicate marker with the same ref
   // close to the actual junction. Resolve that stale map/cache marker back to
   // the routeable identity at click time as a final safety net.
-  const resolveRouteableNode = useCallback((node: KnooppuntNode): KnooppuntNode => {
+  const resolveRouteableNode = useCallback((node: KnooppuntNode, previousNode?: KnooppuntNode): KnooppuntNode => {
     const candidates = routeableNodesByRefRef.current.get(node.ref) || [];
+    // Prefer a nearby duplicate marker only when it makes the preceding
+    // junction an explicit one-hop network connection. For example, KP 88 →
+    // KP 557 must not be redirected through KP 402 merely because OSM stores
+    // another nearby marker carrying number 557.
+    const directMatch = previousNode ? findNearbyDirectSameRefNode(previousNode, node, candidates) : null;
+    if (directMatch) return directMatch;
     if (candidates.some((candidate) => String(candidate.id) === String(node.id))) return node;
     let closest: KnooppuntNode | undefined;
     let closestDistance = Infinity;
@@ -377,8 +384,8 @@ export default function App() {
 
   // Click on a node: append to route
   const handleNodeClick = useCallback((node: KnooppuntNode) => {
-    const routeableNode = resolveRouteableNode(node);
     applyRouteUpdate((prev) => {
+      const routeableNode = resolveRouteableNode(node, prev.at(-1));
       // Don't add same physical node twice consecutively
       if (prev.length > 0 && String(prev[prev.length - 1].id || prev[prev.length - 1].ref) === String(routeableNode.id || routeableNode.ref)) {
         return prev;

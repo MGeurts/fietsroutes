@@ -280,6 +280,36 @@ export function findOfficialNetworkPath(from: KnooppuntNode, to: KnooppuntNode):
   };
 }
 
+/**
+ * OSM can contain several nearby markers carrying the same junction number.
+ * When the rider just selected a neighbouring junction, prefer the nearby
+ * marker that has an explicit one-hop official connection from it. This keeps
+ * a direct signed connection direct, rather than routing to another marker
+ * with the same displayed number through unrelated junctions.
+ *
+ * The exact marker remains the fallback: no identity is replaced unless the
+ * official graph provides this unambiguous direct alternative.
+ */
+export function findNearbyDirectSameRefNode(
+  from: KnooppuntNode,
+  requested: KnooppuntNode,
+  candidates: KnooppuntNode[],
+): KnooppuntNode | null {
+  const nearby = candidates.filter((candidate) => candidate.ref === requested.ref
+    && Math.abs(candidate.lat - requested.lat) < 0.003
+    && Math.abs(candidate.lng - requested.lng) < 0.003);
+  const direct = nearby.filter((candidate) => {
+    const path = findOfficialNetworkPath(from, candidate);
+    return path?.edges.length === 1 && !path.edges[0].isJunctionAlias;
+  });
+  if (direct.length === 0) return null;
+  return direct.reduce((nearest, candidate) => {
+    const candidateDistance = Math.hypot(candidate.lat - requested.lat, candidate.lng - requested.lng);
+    const nearestDistance = Math.hypot(nearest.lat - requested.lat, nearest.lng - requested.lng);
+    return candidateDistance < nearestDistance ? candidate : nearest;
+  });
+}
+
 /** Build an adjacency graph exclusively from verified, endpoint-matched corridors. */
 export function buildOfficialNetworkGraph(nodes: KnooppuntNode[]): OfficialNetworkGraph {
   const nodeMap = new Map<string, KnooppuntNode>();
