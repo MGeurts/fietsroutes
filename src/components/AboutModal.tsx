@@ -1,5 +1,5 @@
 import React from 'react';
-import { ExternalLink, Github, X } from 'lucide-react';
+import { ExternalLink, GitBranch, X } from 'lucide-react';
 import { APP_VERSION } from '../appVersion';
 
 interface AboutModalProps {
@@ -47,7 +47,7 @@ export const AboutModal: React.FC<AboutModalProps> = ({ isOpen, onClose }) => {
             rel="noopener noreferrer"
             className="mt-4 flex items-center justify-center gap-2 rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800"
           >
-            <Github className="w-4 h-4" />
+            <GitBranch className="w-4 h-4" />
             Bekijk op GitHub
             <ExternalLink className="w-3.5 h-3.5" />
           </a>
