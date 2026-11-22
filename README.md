@@ -2,7 +2,7 @@
   <img src="public/logo.svg" alt="Fietsroutes Vlaanderen logo" width="128" height="128">
 </p>
 
-# Fietsroutes Vlaanderen v1.0.0
+# Fietsroutes Vlaanderen
 
 ![TypeScript 7](https://img.shields.io/badge/TypeScript-7-3178C6?logo=typescript&logoColor=white)
 ![React 19](https://img.shields.io/badge/React-19-149ECA?logo=react&logoColor=white)
