@@ -1,8 +1,26 @@
+<p align="center">
+  <img src="public/logo.svg" alt="Fietsroutes Vlaanderen logo" width="128" height="128">
+</p>
+
 # Fietsroutes Vlaanderen v1.0.0
+
+![TypeScript 7](https://img.shields.io/badge/TypeScript-7-3178C6?logo=typescript&logoColor=white)
+![React 19](https://img.shields.io/badge/React-19-149ECA?logo=react&logoColor=white)
+![Leaflet 1.9](https://img.shields.io/badge/Leaflet-1.9-199900?logo=leaflet&logoColor=white)
+![Vite 8](https://img.shields.io/badge/Vite-8-646CFF?logo=vite&logoColor=white)
+![Vitest 5](https://img.shields.io/badge/Vitest-5-6E9F18?logo=vitest&logoColor=white)
+![Node.js 26](https://img.shields.io/badge/Node.js-26-339933?logo=nodedotjs&logoColor=white)
+![PHP Flock](https://img.shields.io/badge/PHP-Flock-777BB4?logo=php&logoColor=white)
+![PWA Workbox](https://img.shields.io/badge/PWA-Workbox-5A0FC8?logo=pwa&logoColor=white)
+
+[![Release](https://img.shields.io/github/v/release/MGeurts/fietsroutes)](https://github.com/MGeurts/fietsroutes/releases/latest)
+
+[![Donate via PayPal](https://img.shields.io/badge/Donate-PayPal-blue.svg?logo=paypal)](https://www.paypal.me/MGeurtsKREAWEB)
+[![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-orange.svg?logo=buy-me-a-coffee&logoColor=white)](https://buymeacoffee.com/MGeurts)
 
 Repository: [MGeurts/fietsroutes](https://github.com/MGeurts/fietsroutes).
 
-Webapp om fietsroutes op het officiële Vlaamse knooppuntennetwerk te plannen, te bewaren en op een smartphone te volgen. Gebouwd met React, TypeScript, Vite en Leaflet. Het oude project diende als referentie voor functies en indeling; de implementatie en data-import zijn vanaf nul geschreven.
+Webapp om fietsroutes op het officiële Vlaamse knooppuntennetwerk te plannen, te bewaren en op een smartphone te volgen. Gebouwd met React, TypeScript, Vite en Leaflet.
 
 ## Documentatie
 
@@ -90,11 +108,8 @@ node scripts/export-logo.mjs
 
 De logo-export schrijft `public/logo.ico` (16–256 px), `public/logo.png` (512 × 512) en `public/logo.svg`. Het bestaande `public/icon.svg` blijft het favicon/PWA-icoon.
 
-`npm run data:refresh` vervangt alleen de lokale dataset. `npm run data:update` voert achtereenvolgens de refresh, tests en build inclusief ZIP uit. `npm update` werkt alleen afhankelijkheden bij; voer daarna tests en een build uit. Geen van deze opdrachten uploadt automatisch naar Antagonist.
+`npm run data:refresh` vervangt alleen de lokale dataset. `npm run data:update` voert achtereenvolgens de refresh, tests en build inclusief ZIP uit. `package.json` gebruikt `^`-versiebereiken voor compatibele updates. `npm update` werkt afhankelijkheden binnen die bereiken bij en vernieuwt het lockbestand; `npm ci` installeert juist de vastgelegde versies uit het lockbestand. Updates worden dus niet tijdens het draaien van de app gedownload. `npm update` werkt alleen afhankelijkheden bij; voer daarna tests en een build uit. Geen van deze opdrachten uploadt automatisch naar Antagonist.
 
 ## Bronvermelding
 
 Netwerkgegevens: Toerisme Vlaanderen en de provinciale toeristische organisaties, [modellicentie voor gratis hergebruik](https://data.vlaanderen.be/doc/licentie/modellicentie-gratis-hergebruik/v1.0). Kaartgegevens: © [OpenStreetMap-bijdragers](https://www.openstreetmap.org/copyright), ODbL. Fietskaart: [CyclOSM](https://www.cyclosm.org/). Voor de openbare OSM-tegels geldt het [tegelgebruiksbeleid](https://operations.osmfoundation.org/policies/tiles/), dat offline bulkdownloads uitsluit.
-
-
-

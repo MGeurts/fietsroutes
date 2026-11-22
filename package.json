@@ -14,28 +14,28 @@
     "data:update": "npm run data:refresh && npm test && npm run build"
   },
   "overrides": {
-    "glob": "14.0.6",
-    "minimatch": "11.0.9"
+    "glob": "^14.0.6",
+    "minimatch": "^11.0.9"
   },
   "dependencies": {
-    "leaflet": "1.9.4",
-    "lucide-react": "^1.73.0",
-    "react": "19.3.1",
-    "react-dom": "19.3.1"
+    "leaflet": "^1.9.4",
+    "lucide-react": "^1.77.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1"
   },
   "devDependencies": {
-    "@types/leaflet": "^1.9.0",
-    "@types/node": "^26.0.0",
-    "@types/react": "^19.0.0",
-    "@types/react-dom": "^19.0.0",
-    "@vitejs/plugin-react": "6.3.0",
+    "@types/leaflet": "^1.9.22",
+    "@types/node": "^26.6.6",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.3.0",
     "fflate": "^0.8.3",
     "jsdom": "^31.0.1",
     "sharp": "^0.35.5",
-    "typescript": "7.0.2",
-    "vite": "8.3.8",
-    "vite-plugin-pwa": "2.0.0",
-    "vitest": "5.1.1",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.8",
+    "vite-plugin-pwa": "^2.0.0",
+    "vitest": "^5.1.1",
     "workbox-core": "^7.4.1",
     "workbox-precaching": "^7.4.1",
     "workbox-routing": "^7.4.1",
