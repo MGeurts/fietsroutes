@@ -58,3 +58,5 @@ Bij de overstap vanaf een oudere versie kan de oude serviceworker nog actief zij
 De knop Bijwerken activeert expliciet de wachtende serviceworker en herstart zodra deze de pagina overneemt. De melding toont deze stap; bij een fout of na 15 seconden zonder overname worden de knoppen opnieuw beschikbaar. De bewaarde werkroute blijft behouden.
 
 De appupdateknop vernieuwt geen officiële brondata: een nieuwe snapshot komt uitsluitend mee met een gepubliceerde build. De knop Bijwerken bij een geopende bibliotheekroute heeft een andere functie: daarmee bewaar je wijzigingen in die route.
+
+Als een andere tab de update al activeerde, herlaadt Bijwerken de actieve appversie. De herstart wacht op activatie of controleovername, zodat een ontbrekend controllerchange-event de knop niet laat vastlopen. Bij fouten toont de melding de concrete oorzaak.

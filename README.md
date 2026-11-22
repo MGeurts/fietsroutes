@@ -24,6 +24,7 @@ Webapp om fietsroutes op het officiële Vlaamse knooppuntennetwerk te plannen, t
 
 ## Documentatie
 
+- [Releasebeschrijving v1.0.1](docs/RELEASE-v1.0.1.md).
 - [Releasebeschrijving v1.0.0](docs/RELEASE-v1.0.0.md).
 
 - [Gebruikershandleiding](docs/GEBRUIK.md): plannen, kaartbediening, rondritten, bibliotheek, GPX en fietsmodus.

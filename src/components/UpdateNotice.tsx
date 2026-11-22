@@ -18,7 +18,7 @@ export function UpdateNotice({ riding, preserve, allowReload }: Props) {
     if (!preserve()) { setError('De werkroute kon niet veilig worden bewaard. Bewaar of exporteer haar eerst.'); return; }
     setError(''); setBusy(true); allowReload.current = true;
     try { await activateUpdate(); }
-    catch { allowReload.current = false; setBusy(false); setError('Bijwerken is niet afgerond. Probeer opnieuw of ververs de pagina. Je werkroute is bewaard.'); }
+    catch (cause) { allowReload.current = false; setBusy(false); const detail = cause instanceof Error ? cause.message : 'Onbekende updatefout.'; setError(`Bijwerken is niet afgerond: ${detail} Je werkroute is bewaard. Probeer opnieuw of ververs de pagina.`); }
   }
   return <div className="update-banner" role="status"><span>{error || (busy ? 'De update wordt geactiveerd. De app herstart zodra hij klaar is (maximaal 15 seconden).' : riding ? 'Nieuwe versie beschikbaar. Stop de navigatie om bij te werken.' : 'Nieuwe versie beschikbaar. Je werkroute wordt hersteld na de update.')}</span>{needRefresh && <button disabled={riding || busy} onClick={() => void update()}>{busy ? 'Bijwerken…' : 'Bijwerken'}</button>}<button disabled={busy} onClick={() => { setNeedRefresh(false); setError(''); }}>Later</button></div>;
 }

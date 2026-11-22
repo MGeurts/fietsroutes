@@ -12,7 +12,7 @@ it('activeert de werkelijk wachtende worker en herstart pas zodra die controle h
   const { worker, container } = setup(), reload = vi.fn();
   const result = activateUpdate(reload); await Promise.resolve();
   expect(worker.postMessage).toHaveBeenCalledWith({ type: 'SKIP_WAITING' });
-  worker.state = 'activated'; worker.dispatchEvent(new Event('statechange')); expect(reload).not.toHaveBeenCalled();
+  worker.dispatchEvent(new Event('statechange')); expect(reload).not.toHaveBeenCalled();
   container.controller = worker; container.dispatchEvent(new Event('controllerchange'));
   await result; expect(reload).toHaveBeenCalledTimes(1);
   container.dispatchEvent(new Event('controllerchange')); expect(reload).toHaveBeenCalledTimes(1);
@@ -25,5 +25,17 @@ it('stopt wachten na 15 seconden zonder onverwacht later te herstarten', async (
 });
 it('meldt wanneer de update al door een andere tab is afgehandeld', async () => {
   setup(); vi.mocked(navigator.serviceWorker.getRegistration).mockResolvedValue(undefined);
-  await expect(activateUpdate(vi.fn())).rejects.toThrow('Geen wachtende update');
+  await expect(activateUpdate(vi.fn())).rejects.toThrow('geen volledig geïnstalleerde');
+});
+
+it('herlaadt de reeds geactiveerde versie wanneer de wachtende update verdwenen is', async () => {
+  setup(); const reload = vi.fn();
+  vi.mocked(navigator.serviceWorker.getRegistration).mockResolvedValue({ waiting: null, active: { state: 'activated' } } as unknown as ServiceWorkerRegistration);
+  await activateUpdate(reload); expect(reload).toHaveBeenCalledTimes(1);
+});
+it('herlaadt na activatie ook wanneer geen controllerchange op de huidige pagina volgt', async () => {
+  const { worker } = setup(), reload = vi.fn();
+  const result = activateUpdate(reload); await Promise.resolve();
+  worker.state = 'activated'; worker.dispatchEvent(new Event('statechange'));
+  await result; expect(reload).toHaveBeenCalledTimes(1);
 });

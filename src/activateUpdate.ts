@@ -3,7 +3,12 @@ export async function activateUpdate(reload: () => void = () => window.location.
   const serviceWorker = navigator.serviceWorker;
   const registration = await serviceWorker?.getRegistration();
   const worker = registration?.waiting;
-  if (!worker) throw new Error('Geen wachtende update.');
+  if (!worker) {
+    // A different tab may have activated it after the banner appeared.
+    // Reload onto the active installation instead of leaving a stale prompt.
+    if (registration?.active?.state === 'activated') { reload(); return; }
+    throw new Error('Er is nog geen volledig geïnstalleerde appversie beschikbaar.');
+  }
   await new Promise<void>((resolve, reject) => {
     const cleanup = () => {
       clearTimeout(timeout);
@@ -11,7 +16,7 @@ export async function activateUpdate(reload: () => void = () => window.location.
       worker.removeEventListener('statechange', changed);
     };
     const changed = () => {
-      if (serviceWorker.controller === worker) {
+      if (serviceWorker.controller === worker || worker.state === 'activated') {
         cleanup(); reload(); resolve();
       } else if (worker.state === 'redundant') {
         cleanup(); reject(new Error('Update vervallen.'));

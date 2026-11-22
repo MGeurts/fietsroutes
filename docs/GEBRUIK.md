@@ -56,7 +56,7 @@ Naast de titel **Knooppunten** staan:
 | Ongedaan maken / Opnieuw | Gaat terug of vooruit in de bewerkingen van de puntkeuze. |
 | Volledige route centreren | Toont het hele geplande traject op de kaart. Op een gsm opent dit ook het kaartscherm. |
 | Route omkeren | Keert de gekozen puntvolgorde om en berekent de verbindingen opnieuw. |
-| Route verwijderen | Maakt de werkroute leeg; herstel is mogelijk via Ongedaan maken. Een opgeslagen route in de bibliotheek blijft bestaan. |
+| Route verwijderen | Maakt de werkroute leeg en zet de naam terug op Mijn fietsroute; de puntkeuze herstellen is mogelijk via Ongedaan maken. Een opgeslagen route in de bibliotheek blijft bestaan. |
 
 **Nieuwe route** maakt eveneens de werkroute leeg en zet de naam terug op Mijn fietsroute. Tijdens het fietsen zijn routebewerkingen uitgeschakeld.
 
