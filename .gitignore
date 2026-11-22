@@ -1,0 +1,22 @@
+# Lokale configuratie en geheimen
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Lokale editor- en besturingssysteembestanden
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Logbestanden
+*.log
+node_modules/
+dist/
+.cache/
+coverage/
+*.tsbuildinfo
+releases/
