@@ -24,6 +24,7 @@ Webapp om fietsroutes op het officiële Vlaamse knooppuntennetwerk te plannen, t
 
 ## Documentatie
 
+- [Releasebeschrijving v1.0.2](docs/RELEASE-v1.0.2.md).
 - [Releasebeschrijving v1.0.1](docs/RELEASE-v1.0.1.md).
 - [Releasebeschrijving v1.0.0](docs/RELEASE-v1.0.0.md).
 
@@ -71,7 +72,7 @@ Met Flock is geen afzonderlijk serverproces nodig om de gebouwde app te openen. 
 - Vaste markeringen voor Start, manuele en automatische tussenpunten en Einde, consistent op kaart, in de lijst en in de volledige knooppuntvolgorde.
 - **E-bike · 20 km/u** als standaard fietsprofiel. Ook stadsfiets, toerfiets en racefiets zijn beschikbaar voor de tijdsinschatting.
 - Punten verwijderen, werkroute leegmaken, ongedaan maken/opnieuw, route omkeren en de volledige route centreren. De werkroute wordt lokaal automatisch hersteld na herladen; het logo wist de route niet.
-- Rondritten met een gewenste afstand. De standaardnaam begint met het startnummer, bijvoorbeeld `535 - Rondrit 32,2 km`.
+- Vier rondritvoorstellen met een gewenste afstand, één per windrichting, met kaartvooruitzicht en keuze vóór toepassing. De standaardnaam begint met het startnummer, bijvoorbeeld `535 - Rondrit 32,2 km`.
 - Lokale routebibliotheek met favorieten, zoeken, datum en tijd van de laatste bewaring, bijwerken, genummerde kopieën en JSON-backups.
 - GPX-export met behoud van de decimale komma in bestandsnamen, herimport van eigen GPX, deellinks en een afdrukbaar knooppuntenstrookje.
 - Gestippelde fietsaanrijroute naar de start via BRouter, afzonderlijk van de geplande route en haar afstand/export.

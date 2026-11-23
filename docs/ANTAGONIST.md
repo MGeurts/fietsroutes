@@ -1,4 +1,4 @@
-# Publiceren van v1.0.1 op Antagonist Slim zonder Node.js
+# Publiceren van v1.0.2 op Antagonist Slim zonder Node.js
 
 ## Productieopzet
 

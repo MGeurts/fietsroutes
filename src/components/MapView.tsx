@@ -6,12 +6,13 @@ import type { Approach } from '../domain/approach';
 import { mapPointRoles, pointRoleLabels, type PointRole } from '../domain/pointRoles';
 import { SpatialGrid, lineBox, pointBox, type Box } from '../domain/spatialIndex';
 
-interface Props { network: Network | null; route: PlannedRoute | null; approach: Approach | null; accuracy: number; onSelect: (id: string) => void; focus: { position?: Position; route?: boolean; token: number }; location: Position | null; riding: boolean; tileLayer: string; zoomCommand: { delta: number; token: number }; onZoomChange: (zoom: number) => void }
+interface Props { network: Network | null; route: PlannedRoute | null; approach: Approach | null; accuracy: number; onSelect: (id: string) => void; focus: { position?: Position; route?: boolean; token: number }; location: Position | null; riding: boolean; tileLayer: string; zoomCommand: { delta: number; token: number }; onZoomChange: (zoom: number) => void; onCenterChange?: (position: Position) => void }
 const viewport = (map: L.Map): Box => { const b = map.getBounds().pad(0.15); return { west: b.getWest(), south: b.getSouth(), east: b.getEast(), north: b.getNorth() }; };
 const icon = (number: string, role?: PointRole) => L.divIcon({ className: 'junction-icon', html: `<span class="${role ? `point-badge role-${role}` : 'junction'}">${number.replace(/[^0-9]/g, '')}</span>`, iconSize: [32, 32], iconAnchor: [16, 16] });
-export function MapView({ network, route, approach, accuracy, onSelect, focus, location, riding, tileLayer, zoomCommand, onZoomChange }: Props) {
+export function MapView({ network, route, approach, accuracy, onSelect, focus, location, riding, tileLayer, zoomCommand, onZoomChange, onCenterChange }: Props) {
   const element = useRef<HTMLDivElement>(null), mapRef = useRef<L.Map | null>(null);
   const callback = useRef(onSelect); callback.current = onSelect;
+  const centerCallback = useRef(onCenterChange); centerCallback.current = onCenterChange;
   const zoomCallback = useRef(onZoomChange); zoomCallback.current = onZoomChange;
   const roles = useMemo(() => route ? mapPointRoles(route) : new Map<string, PointRole>(), [route]);
   const viewState = useRef({ roles, tileLayer }); viewState.current = { roles, tileLayer };
@@ -25,7 +26,9 @@ export function MapView({ network, route, approach, accuracy, onSelect, focus, l
     map.createPane('network-lines').style.zIndex = '350';
     const directions = map.createPane('route-directions'); directions.style.zIndex = '450'; directions.style.pointerEvents = 'none';
     L.control.scale({ position: 'bottomleft', imperial: false }).addTo(map);
+    map.attributionControl.setPrefix(false);
     mapRef.current = map;
+    const reportCenter = () => { const c = map.getCenter(); centerCallback.current?.([c.lng, c.lat]); }; map.on('moveend', reportCenter); reportCenter();
     const report = () => zoomCallback.current(map.getZoom()); map.on('zoomend', report); report();
     const observer = new ResizeObserver(() => map.invalidateSize()); observer.observe(element.current!);
     return () => { observer.disconnect(); map.remove(); mapRef.current = null; };
@@ -33,10 +36,8 @@ export function MapView({ network, route, approach, accuracy, onSelect, focus, l
   useEffect(() => { if (zoomCommand.delta) mapRef.current!.setZoom(mapRef.current!.getZoom() + zoomCommand.delta); }, [zoomCommand]);
   useEffect(() => {
     const map = mapRef.current!;
-    const layer = L.tileLayer(tileLayer === 'cycle' ? 'https://{s}.tile-cyclosm.openstreetmap.fr/cyclosm/{z}/{x}/{y}.png' : 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>' + (tileLayer === 'cycle' ? ' · <a href="https://www.cyclosm.org/">CyclOSM</a>' : '') }).addTo(map);
-    const credit = 'Fietsnetwerk: <a href="https://toerismevlaanderen.be/nl/cijfers/open-data">Toerisme Vlaanderen & provincies</a>';
-    if (tileLayer === 'network') map.attributionControl.addAttribution(credit);
-    return () => { layer.remove(); if (tileLayer === 'network') map.attributionControl.removeAttribution(credit); };
+    const layer = L.tileLayer(tileLayer === 'cycle' ? 'https://{s}.tile-cyclosm.openstreetmap.fr/cyclosm/{z}/{x}/{y}.png' : 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap-bijdragers</a>' + (tileLayer === 'cycle' ? ' · <a href="https://www.cyclosm.org/">CyclOSM</a>' : '') }).addTo(map);
+    return () => { layer.remove(); };
   }, [tileLayer]);
   useEffect(() => {
     if (!index) return;

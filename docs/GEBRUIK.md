@@ -18,7 +18,7 @@ De kaartlagen staan in deze volgorde:
 | OSM + Fietsnetwerk | Standaardkeuze; OSM met duidelijk zichtbare rode lijnen van het beschikbare officiële netwerk. |
 | CyclOSM | Fietsgerichte achtergrond met fietsinfrastructuur en reliëf. |
 
-Zoek op een plaatsnaam, knooppuntnummer of netwerknaam. Voor plaatsen zijn minstens twee letters en internet nodig. Hoofdletters maken geen verschil; ook kleinere gemeenten zoals Zutendaal worden opgezocht. Klik op een resultaat om de kaart daar te centreren; daarmee voeg je nog geen punt toe aan je route.
+Zoek op een plaatsnaam, knooppuntnummer of netwerknaam. Voor plaatsen zijn minstens twee letters en internet nodig. Hoofdletters maken geen verschil; ook kleinere gemeenten zoals Zutendaal worden opgezocht. Alle lokale knooppuntresultaten en alle ontvangen plaatsresultaten verschijnen in een scrollbare lijst, zonder extra zoekaanvragen. Bij gelijke knooppuntnummers staan de punten dichtst bij het huidige kaartcentrum bovenaan. Verschuif de kaart om in een andere regio te zoeken. Klik op een resultaat om de kaart daar te centreren; daarmee voeg je nog geen punt toe aan je route.
 
 ## Een route plannen
 
@@ -62,7 +62,9 @@ Naast de titel **Knooppunten** staan:
 
 ## Rondritten
 
-Kies een startknooppunt en klik op **Maak er een rondrit van**. Stel een gewenste afstand van 15 tot 80 km in en kies **Rondrit voorstellen**. De generator probeert een lus met weinig dubbel bereden trajecten te vinden. Het resultaat kan van de gevraagde afstand afwijken; als geen geschikte lus beschikbaar is, verschijnt een melding.
+Kies een startknooppunt en klik op **Maak er een rondrit van**. Stel een gewenste afstand van 15 tot 80 km in en kies **Rondritten voorstellen**. De app berekent op de achtergrond één voorstel per windrichting: noord, oost, zuid en west. De voortgang verschijnt per onderzochte richting. Elk beschikbaar voorstel toont een kaartvooruitzicht, de werkelijke afstand en de geschatte fietstijd voor je fietsprofiel. Kies een voorstel met **Kies Noord/Oost/Zuid/West**; pas dan vervangt het je werkroute. Sluiten van de modal behoudt de bestaande route.
+
+Een voorstel mag maximaal 20% van de gevraagde afstand afwijken en maximaal 15% dubbel bereden trajectlengte bevatten. De richting wordt bepaald door het naar trajectlengte gewogen middelpunt van de lus ten opzichte van de Start. Door de vorm en de beschikbaarheid van het officiële netwerk kan een richting geen geschikte lus opleveren; dan verschijnt bij die richting een melding. Een gewijzigde afstand annuleert de vorige berekening en wist de oude voorstellen. De routeberekening zelf werkt lokaal; de achtergrondkaarten in de vooruitzichten vereisen internet.
 
 De standaardnaam bevat het startnummer en de berekende lengte, bijvoorbeeld `535 - Rondrit 32,2 km`. Je kunt deze naam aanpassen. Bij latere routebewerkingen wordt een bestaande naam niet automatisch bijgewerkt; de afstandsweergave toont wel de opnieuw berekende lengte.
 

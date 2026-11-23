@@ -1,4 +1,4 @@
-import type { Position } from './network';
+import { distance, type Network, type Position } from './network';
 
 export interface PlaceResult { key: string; label: string; sub: string; position: Position }
 export const normalizeSearch = (query: string) => query.trim().normalize('NFD').replace(/\p{Diacritic}/gu, '').toLocaleLowerCase('nl-BE').replace(/\s+/g, ' ');
@@ -23,7 +23,7 @@ export function parsePlaces(data: unknown, query: string): PlaceResult[] {
     results.push({ key: `place:${String(p.osm_type)}:${String(p.osm_id)}:${identity}`, label: p.name, sub: [kind, ...area].join(' · '), position });
   }
   const normalized = normalizeSearch(query);
-  return results.sort((a, b) => Number(normalizeSearch(b.label) === normalized) - Number(normalizeSearch(a.label) === normalized)).slice(0, 6);
+  return results.sort((a, b) => Number(normalizeSearch(b.label) === normalized) - Number(normalizeSearch(a.label) === normalized));
 }
 export async function searchPlaces(query: string, signal: AbortSignal): Promise<PlaceResult[]> {
   const response = await fetch(placesUrl(query), { signal, credentials: 'omit', referrerPolicy: 'no-referrer' });
@@ -31,3 +31,12 @@ export async function searchPlaces(query: string, signal: AbortSignal): Promise<
   return parsePlaces(await response.json(), query);
 }
 
+
+export function searchJunctions(network: Network, query: string, origin: Position): PlaceResult[] {
+  const q = normalizeSearch(query);
+  if (!q) return [];
+  return [...network.nodes.values()]
+    .filter(n => n.number && network.adjacency.has(n.id) && (n.number === q || normalizeSearch(n.network ?? '').includes(q)))
+    .sort((a, b) => Number(b.number === q) - Number(a.number === q) || distance(origin, a.position) - distance(origin, b.position) || a.id.localeCompare(b.id))
+    .map(n => ({ key: n.id, label: 'Knooppunt ' + n.number, sub: n.network, position: n.position }));
+}

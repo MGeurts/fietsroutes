@@ -141,3 +141,7 @@ De tests controleren routering, datasetgeometrie, rondritten, lussen bij GPS, ge
 Openstaande onderwerpen zijn validatie van eenrichtingstrajecten en bronconflicten, praktijktests op Android en iPhone, externe GPX-koppeling, hoogteprofielen, verplaatsen van routepunten, een ander startpunt voor een bestaande gesloten lus, offline kaarten en eventuele synchronisatie of gesproken aanwijzingen. Behoud bij toekomstige uitbreidingen de productievoorwaarde: Antagonist Slim zonder Node-runtime.
 
 
+
+## Rondritvoorstellen per windrichting
+
+`src/domain/roundTrips.ts` zoekt afzonderlijke lussen voor noord, oost, zuid en west. Kandidaten gebruiken uitsluitend officiële netwerkverbindingen; het gewogen geometrische middelpunt bepaalt de richting. De maximale afstandsafwijking is 20%, de maximale dubbel bereden trajectlengte 15%. Ontbrekende lussen worden expliciet getoond. `src/roundTrips.worker.ts` berekent buiten de UI-thread en rapporteert per richting. De worker wordt beëindigd bij sluiten of gewijzigde invoer. `RoundTripChooser` toont OSM-kaartvooruitzichten met zichtbare bronvermelding; pas kiezen past de werkroute aan. De worker wordt mee gebouwd en geprecachet voor offline routeberekening.
