@@ -24,6 +24,7 @@ Webapp om fietsroutes op het officiële Vlaamse knooppuntennetwerk te plannen, t
 
 ## Documentatie
 
+- [Releasebeschrijving v1.1.0](docs/RELEASE-v1.1.0.md).
 - [Releasebeschrijving v1.0.2](docs/RELEASE-v1.0.2.md).
 - [Releasebeschrijving v1.0.1](docs/RELEASE-v1.0.1.md).
 - [Releasebeschrijving v1.0.0](docs/RELEASE-v1.0.0.md).
@@ -61,7 +62,7 @@ flock pin root dist
 npm run check:host
 ```
 
-Met Flock is geen afzonderlijk serverproces nodig om de gebouwde app te openen. `npm run dev` (Vite met live herladen) en `npm run preview` zijn alternatieven voor ontwikkeling zonder Flock. Een echte smartphone heeft een bereikbaar HTTPS-adres nodig voor GPS en installatie. Het lokale `.test`-adres is niet automatisch bereikbaar vanaf je gsm.
+Met Flock is geen afzonderlijk serverproces nodig om de gebouwde app te openen. `npm run dev` (Vite met live herladen) en `npm run preview` zijn alternatieven voor ontwikkeling zonder Flock. Een echte smartphone heeft een bereikbaar HTTPS-adres nodig voor GPS en installatie. Het lokale `.test`-adres is niet automatisch bereikbaar vanaf je mobiele telefoon.
 
 ## Huidige functies
 
@@ -73,17 +74,18 @@ Met Flock is geen afzonderlijk serverproces nodig om de gebouwde app te openen. 
 - **E-bike · 20 km/u** als standaard fietsprofiel. Ook stadsfiets, toerfiets en racefiets zijn beschikbaar voor de tijdsinschatting.
 - Punten verwijderen, werkroute leegmaken, ongedaan maken/opnieuw, route omkeren en de volledige route centreren. De werkroute wordt lokaal automatisch hersteld na herladen; het logo wist de route niet.
 - Vier rondritvoorstellen met een gewenste afstand, één per windrichting, met kaartvooruitzicht en keuze vóór toepassing. De standaardnaam begint met het startnummer, bijvoorbeeld `535 - Rondrit 32,2 km`.
+- Knop **Suggestie** voor een gestructureerde routenaam, bijvoorbeeld `534 - Naar 64 - 25,3 km` of `534 - Rondrit - 32,2 km`.
 - Lokale routebibliotheek met favorieten, zoeken, datum en tijd van de laatste bewaring, bijwerken, genummerde kopieën en JSON-backups.
-- GPX-export met behoud van de decimale komma in bestandsnamen, herimport van eigen GPX, deellinks en een afdrukbaar knooppuntenstrookje.
+- GPX-export met behoud van de decimale komma in bestandsnamen, herimport van eigen GPX, deellinks met QR-code en routenaam voor overdracht naar je mobiele telefoon en een afdrukbaar knooppuntenstrookje.
 - Gestippelde fietsaanrijroute naar de start via BRouter, afzonderlijk van de geplande route en haar afstand/export.
-- Fietsmodus met GPS-volging, volgend knooppunt, resterende afstand en melding bij afwijken of onnauwkeurige GPS. Na het bereiken van de start of bevestigde routevoortgang stopt de aanrijrouteberekening tijdens die rit.
+- Fietsmodus met grotere rode positiestip, kaartrotatie met rijrichting bovenaan en schakelknop naar noorden bovenaan, GPS-volging, volgend en daaropvolgend knooppunt met afstand, compacte groene balk met actuele snelheid, resterende afstand en ETA, en melding bij afwijken of onnauwkeurige GPS. De ETA gebruikt het gekozen fietsprofiel. Na het bereiken van de start of bevestigde routevoortgang stopt de aanrijrouteberekening tijdens die rit.
 - Installeerbare PWA met offline appbestanden en netwerkgegevens na een volledige eerste online installatie.
 
 ## Gegevens en beperkingen
 
-De meegeleverde snapshot van 21 november 2026 bevat **5.138 netwerkpunten**, waarvan **5.002 genummerd**, en **7.575 bruikbare trajecten**. Het aantal knooppunten en trajecten staat in de informatiemodal. De bron is [Toerisme Vlaanderen en de provinciale toeristische organisaties](https://metadata.vlaanderen.be/srv/api/records/c91e9b9d-6465-4dec-beeb-16fdc6d759a0).
+De meegeleverde snapshot van 22 november 2026 bevat **5.138 netwerkpunten**, waarvan **5.002 genummerd**, en **7.655 bruikbare trajecten**, waarvan **80 éénrichtingstrajecten**. Het aantal knooppunten en trajecten staat in de informatiemodal. De bron is [Toerisme Vlaanderen en de provinciale toeristische organisaties](https://metadata.vlaanderen.be/srv/api/records/c91e9b9d-6465-4dec-beeb-16fdc6d759a0).
 
-De importer sluit eenrichtingstrajecten en onduidelijke of ongeldige aansluitingen voorlopig uit. Daardoor is nog niet elke officiële verbinding routeerbaar. De [ontwikkelaarsdocumentatie](docs/ONTWIKKELING.md#netwerkgegevens) beschrijft de controles en tellingen.
+Eénrichtingstrajecten zijn opgenomen in de toegestane richting. De importer sluit onduidelijke of ongeldige aansluitingen, geometriefouten en onbekende of tegenstrijdige richtingscodes uit. Daardoor is nog niet elke officiële verbinding routeerbaar. De [ontwikkelaarsdocumentatie](docs/ONTWIKKELING.md#netwerkgegevens) beschrijft de controles en tellingen.
 
 Kaarttegels, nieuwe plaatszoekopdrachten en het berekenen van aanrijroutes vereisen internet. GPX uit andere apps koppelen aan het knooppuntennetwerk, achtergrondnavigatie en gesproken afslagaanwijzingen zijn nog niet beschikbaar. De fietsmodus moet nog op echte Android- en iPhone-toestellen op de fiets worden getest.
 
@@ -114,4 +116,7 @@ De logo-export schrijft `public/logo.ico` (16–256 px), `public/logo.png` (512 
 
 ## Bronvermelding
 
-Netwerkgegevens: Toerisme Vlaanderen en de provinciale toeristische organisaties, [modellicentie voor gratis hergebruik](https://data.vlaanderen.be/doc/licentie/modellicentie-gratis-hergebruik/v1.0). Kaartgegevens: © [OpenStreetMap-bijdragers](https://www.openstreetmap.org/copyright), ODbL. Fietskaart: [CyclOSM](https://www.cyclosm.org/). Voor de openbare OSM-tegels geldt het [tegelgebruiksbeleid](https://operations.osmfoundation.org/policies/tiles/), dat offline bulkdownloads uitsluit.
+- Netwerkgegevens: Toerisme Vlaanderen en de provinciale toeristische organisaties, <a href="https://data.vlaanderen.be/doc/licentie/modellicentie-gratis-hergebruik/v1.0" target="_blank" rel="noopener noreferrer">modellicentie voor gratis hergebruik</a>.
+- Kaartgegevens: © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap-bijdragers</a>, ODbL.
+- Fietskaart: <a href="https://www.cyclosm.org/" target="_blank" rel="noopener noreferrer">CyclOSM</a>.
+- Voor de openbare OSM-tegels geldt het <a href="https://operations.osmfoundation.org/policies/tiles/" target="_blank" rel="noopener noreferrer">tegelgebruiksbeleid</a>, dat offline bulkdownloads uitsluit.

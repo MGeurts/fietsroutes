@@ -60,3 +60,7 @@ De knop Bijwerken activeert expliciet de wachtende serviceworker en herstart zod
 De appupdateknop vernieuwt geen officiële brondata: een nieuwe snapshot komt uitsluitend mee met een gepubliceerde build. De knop Bijwerken bij een geopende bibliotheekroute heeft een andere functie: daarmee bewaar je wijzigingen in die route.
 
 Als een andere tab de update al activeerde, herlaadt Bijwerken de actieve appversie. De herstart wacht op activatie of controleovername, zodat een ontbrekend controllerchange-event de knop niet laat vastlopen. Bij fouten toont de melding de concrete oorzaak.
+
+## Samenhang tussen app en netwerk
+
+Publiceer de appbestanden en netwerksnapshot samen. Eénrichtingsroutering vereist zowel de nieuwe oneWay-eigenschap in de dataset als de bijbehorende appcode; alleen network.json vervangen is niet voldoende. QR-codes zijn lokaal gegenereerde publieke deellinks. Om de meegestuurde routenaam over te nemen, moet de ontvangende online app die naamparameter ondersteunen. Een wijziging aan een lokale build of ZIP vervangt geen reeds gepubliceerde GitHub-release en uploadt niet automatisch naar Antagonist.

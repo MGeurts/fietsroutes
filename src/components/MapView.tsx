@@ -1,15 +1,16 @@
 import { useEffect, useMemo, useRef } from 'react';
-import L from 'leaflet';
+import L from '../leafletRuntime';
+import 'leaflet-rotate';
 import 'leaflet/dist/leaflet.css';
 import type { Network, PlannedRoute, Position } from '../domain/network';
 import type { Approach } from '../domain/approach';
 import { mapPointRoles, pointRoleLabels, type PointRole } from '../domain/pointRoles';
 import { SpatialGrid, lineBox, pointBox, type Box } from '../domain/spatialIndex';
 
-interface Props { network: Network | null; route: PlannedRoute | null; approach: Approach | null; accuracy: number; onSelect: (id: string) => void; focus: { position?: Position; route?: boolean; token: number }; location: Position | null; riding: boolean; tileLayer: string; zoomCommand: { delta: number; token: number }; onZoomChange: (zoom: number) => void; onCenterChange?: (position: Position) => void }
+interface Props { heading?: number | null; headingUp?: boolean; network: Network | null; route: PlannedRoute | null; approach: Approach | null; accuracy: number; onSelect: (id: string) => void; focus: { position?: Position; route?: boolean; token: number }; location: Position | null; riding: boolean; tileLayer: string; zoomCommand: { delta: number; token: number }; onZoomChange: (zoom: number) => void; onCenterChange?: (position: Position) => void }
 const viewport = (map: L.Map): Box => { const b = map.getBounds().pad(0.15); return { west: b.getWest(), south: b.getSouth(), east: b.getEast(), north: b.getNorth() }; };
 const icon = (number: string, role?: PointRole) => L.divIcon({ className: 'junction-icon', html: `<span class="${role ? `point-badge role-${role}` : 'junction'}">${number.replace(/[^0-9]/g, '')}</span>`, iconSize: [32, 32], iconAnchor: [16, 16] });
-export function MapView({ network, route, approach, accuracy, onSelect, focus, location, riding, tileLayer, zoomCommand, onZoomChange, onCenterChange }: Props) {
+export function MapView({ network, route, approach, accuracy, onSelect, focus, location, riding, tileLayer, zoomCommand, onZoomChange, onCenterChange, heading = null, headingUp = true }: Props) {
   const element = useRef<HTMLDivElement>(null), mapRef = useRef<L.Map | null>(null);
   const callback = useRef(onSelect); callback.current = onSelect;
   const centerCallback = useRef(onCenterChange); centerCallback.current = onCenterChange;
@@ -22,9 +23,9 @@ export function MapView({ network, route, approach, accuracy, onSelect, focus, l
     nodes: new SpatialGrid([...network.nodes.values()].filter(n => n.number && network.adjacency.has(n.id)).map(node => ({ value: node, box: pointBox(...node.position) }))),
   } : null, [network]);
   useEffect(() => {
-    const map = L.map(element.current!, { center: [51.05, 3.73], zoom: 12, zoomControl: false });
-    map.createPane('network-lines').style.zIndex = '350';
-    const directions = map.createPane('route-directions'); directions.style.zIndex = '450'; directions.style.pointerEvents = 'none';
+    const map = L.map(element.current!, { center: [51.05, 3.73], zoom: 12, zoomControl: false, rotate: true, rotateControl: false, touchRotate: false, shiftKeyRotate: false });
+    map.createPane('network-lines', map.getPane('rotatePane')).style.zIndex = '350';
+    const directions = map.createPane('route-directions', map.getPane('norotatePane')); directions.style.zIndex = '450'; directions.style.pointerEvents = 'none';
     L.control.scale({ position: 'bottomleft', imperial: false }).addTo(map);
     map.attributionControl.setPrefix(false);
     mapRef.current = map;
@@ -36,7 +37,7 @@ export function MapView({ network, route, approach, accuracy, onSelect, focus, l
   useEffect(() => { if (zoomCommand.delta) mapRef.current!.setZoom(mapRef.current!.getZoom() + zoomCommand.delta); }, [zoomCommand]);
   useEffect(() => {
     const map = mapRef.current!;
-    const layer = L.tileLayer(tileLayer === 'cycle' ? 'https://{s}.tile-cyclosm.openstreetmap.fr/cyclosm/{z}/{x}/{y}.png' : 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap-bijdragers</a>' + (tileLayer === 'cycle' ? ' · <a href="https://www.cyclosm.org/">CyclOSM</a>' : '') }).addTo(map);
+    const layer = L.tileLayer(tileLayer === 'cycle' ? 'https://{s}.tile-cyclosm.openstreetmap.fr/cyclosm/{z}/{x}/{y}.png' : 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a>' + (tileLayer === 'cycle' ? ' · <a href="https://www.cyclosm.org/">CyclOSM</a>' : '') }).addTo(map);
     return () => { layer.remove(); };
   }, [tileLayer]);
   useEffect(() => {
@@ -73,9 +74,9 @@ export function MapView({ network, route, approach, accuracy, onSelect, focus, l
       }
     };
     const schedule = () => { cancelAnimationFrame(frame); frame = requestAnimationFrame(draw); };
-    refresh.current = schedule; draw(); map.on('moveend', schedule);
+    refresh.current = schedule; draw(); map.on('moveend rotate', schedule);
     return () => {
-      cancelAnimationFrame(frame); refresh.current = () => {}; map.off('moveend', schedule);
+      cancelAnimationFrame(frame); refresh.current = () => {}; map.off('moveend rotate', schedule);
       for (const { layer } of visibleEdges.values()) layer.remove();
       for (const { marker } of visibleNodes.values()) marker.remove();
       renderer.remove();
@@ -115,7 +116,7 @@ export function MapView({ network, route, approach, accuracy, onSelect, focus, l
       const arrows = grid.query(viewport(map)), ids = new Set(arrows.map(a => a.id));
       for (const [id, marker] of visible) if (!ids.has(id)) { marker.remove(); visible.delete(id); }
       for (const arrow of arrows) if (!visible.has(arrow.id)) visible.set(arrow.id, L.marker(arrow.position, {
-        pane: 'route-directions', interactive: false, keyboard: false,
+        pane: 'route-directions', rotateWithView: true, interactive: false, keyboard: false,
         icon: L.divIcon({ className: 'route-direction-icon', iconSize: [24, 24], iconAnchor: [12, 12], html: `<svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true" style="transform:rotate(${arrow.angle}deg)"><path d="M5 5 L19 12 L5 19 L9 12 Z" fill="white" stroke="#0759d3" stroke-width="2" stroke-linejoin="round"/></svg>` }),
       }).addTo(map));
     };
@@ -136,6 +137,10 @@ export function MapView({ network, route, approach, accuracy, onSelect, focus, l
     if (focus.position) mapRef.current!.setView([focus.position[1], focus.position[0]], 14);
     else if (focus.route && route?.steps.length) mapRef.current!.fitBounds(L.latLngBounds(route.steps.flatMap(s => s.coordinates.map(p => L.latLng(p[1], p[0])))), { padding: [50, 50] });
   }, [focus]);
+  useEffect(() => {
+    // A clockwise travel bearing requires the opposite map rotation.
+    mapRef.current!.setBearing(riding && headingUp && heading !== null ? -heading : 0);
+  }, [riding, headingUp, heading]);
   const userMarker = useRef<L.CircleMarker | null>(null), accuracyCircle = useRef<L.Circle | null>(null);
   useEffect(() => {
     const map = mapRef.current!; userMarker.current = L.circleMarker([0, 0], { radius: 9, fillColor: '#1865e8', fillOpacity: 1, color: 'white', weight: 4, className: 'current-location' }).bindTooltip('Je huidige locatie');
@@ -145,7 +150,9 @@ export function MapView({ network, route, approach, accuracy, onSelect, focus, l
   useEffect(() => {
     const map = mapRef.current!, marker = userMarker.current!, circle = accuracyCircle.current!;
     if (!location) { marker.remove(); circle.remove(); return; }
-    const latLng = L.latLng(location[1], location[0]); circle.setLatLng(latLng).setRadius(accuracy).addTo(map); marker.setLatLng(latLng).addTo(map);
+    marker.setRadius(riding ? 12 : 9).setStyle({ fillColor: riding ? '#e32636' : '#1865e8', color: 'white', weight: riding ? 5 : 4, fillOpacity: 1 });
+    circle.setStyle({ fillColor: riding ? '#f8bbd0' : '#1865e8', fillOpacity: riding ? 0.3 : 0.07, color: riding ? '#e78ba5' : '#1865e8' });
+    const latLng = L.latLng(location[1], location[0]); circle.setLatLng(latLng).setRadius(accuracy * (riding ? 2 : 1)).addTo(map); marker.setLatLng(latLng).addTo(map);
     if (riding) map.setView(latLng, 16, { animate: false });
   }, [location, accuracy, riding]);
   return <div className="map-canvas" ref={element} aria-label="Kaart van het Vlaamse fietsknooppuntennetwerk" />;

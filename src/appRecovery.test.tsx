@@ -28,15 +28,17 @@ it('herstelt een werkroute inclusief profiel en kaartlaag en verliest niets bij 
   expect(click.defaultPrevented).toBe(true); expect(captured.map.route.stops).toEqual(['1', '2']); expect(readDraft()).toEqual(draft);
 });
 it('geeft een geldige deellink voorrang en herstelt na herladen de daarna bewerkte werkroute', async () => {
-  writeDraft(draft); window.history.replaceState(null, '', '/#route=2,3');
+  writeDraft(draft); window.history.replaceState(null, '', '/#route=2,3&name=' + encodeURIComponent('534 - Café & bos - 25,3 km'));
   let complete!: (response: Response) => void;
   vi.mocked(fetch).mockImplementationOnce(() => new Promise(resolve => { complete = resolve; }) as Promise<Response>);
   await act(async () => root.render(<App/>)); expect(readDraft()).toEqual(draft);
   await act(async () => complete({ ok: true, json: async () => data } as Response));
   expect(captured.map.route.stops).toEqual(['2', '3']); expect(window.location.hash).toBe('');
+  expect((element.querySelector('#route-name') as HTMLInputElement).value).toBe('534 - Café & bos - 25,3 km');
   await act(async () => captured.map.onSelect('1')); expect(readDraft()?.stops).toEqual(['2', '3', '1']);
   await act(async () => root.unmount()); root = createRoot(element);
   await act(async () => root.render(<App/>)); expect(captured.map.route.stops).toEqual(['2', '3', '1']);
+  expect((element.querySelector('#route-name') as HTMLInputElement).value).toBe('534 - Café & bos - 25,3 km');
 });
 it('verwijdert de herstelkopie wanneer bewust een nieuwe lege route wordt gestart', async () => {
   writeDraft(draft); await act(async () => root.render(<App/>));
@@ -50,4 +52,28 @@ it('toont de actuele versie direct links van de infoknop', async () => {
   const info = element.querySelector('[aria-label="Over de app"]')!;
   expect(info.previousElementSibling?.textContent).toBe('v' + __APP_VERSION__);
   expect(info.previousElementSibling?.classList.contains('header-version')).toBe(true);
+});
+
+it('behoudt de werkroute wanneer omkeren tegen eenrichting geen terugweg oplevert', async () => {
+  writeDraft(draft);
+  vi.mocked(fetch).mockResolvedValueOnce({ ok: true, json: async () => ({ ...data, edges: [{ ...data.edges[0], oneWay: true }] }) } as Response);
+  await act(async () => root.render(<App/>));
+  await act(async () => (element.querySelector('[aria-label="Route omkeren"]') as HTMLButtonElement).click());
+  expect(captured.map.route.stops).toEqual(['1','2']);
+  expect((element.querySelector('#route-name') as HTMLInputElement).value).toBe(draft.name);
+  expect(element.textContent).toContain('toegestane rijrichting');
+});
+
+it('start met rijrichting bovenaan en laat de navigatieknop schakelen naar noord', async()=>{
+  const original=Object.getOwnPropertyDescriptor(navigator,'geolocation');
+  Object.defineProperty(navigator,'geolocation',{configurable:true,value:{}});
+  try {
+    writeDraft(draft);await act(async()=>root.render(<App/>));
+    const start=[...element.querySelectorAll('button')].find(b=>b.textContent==='Start met fietsen')!;
+    await act(async()=>start.click());expect(captured.map.riding).toBe(true);expect(captured.map.headingUp).toBe(true);
+    const toggle=element.querySelector('[aria-label="Rijrichting bovenaan"]') as HTMLButtonElement;
+    expect(toggle.nextElementSibling?.getAttribute('aria-label')).toBe('Kaart centreren');
+    await act(async()=>toggle.click());expect(captured.map.headingUp).toBe(false);
+    expect(element.querySelector('[aria-label="Noorden bovenaan"]')?.textContent).toBe('');
+  } finally {if(original)Object.defineProperty(navigator,'geolocation',original);else Reflect.deleteProperty(navigator,'geolocation');}
 });

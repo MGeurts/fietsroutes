@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { copyRouteName, gpxFilename, roundTripName } from './routeNames';
+import { copyRouteName, gpxFilename, roundTripName, suggestedRouteName } from './routeNames';
 it('behoudt de decimale komma in de gedownloade bestandsnaam', () => {
   expect(gpxFilename('Rondrit 62,8 km')).toBe('Rondrit 62,8 km.gpx');
   expect(gpxFilename('29 - Rondrit 62,8 km')).toBe('29 - Rondrit 62,8 km.gpx');
@@ -22,4 +22,10 @@ it('houdt ook kopieën van lange routenamen binnen de opslaglimiet', () => {
   expect(first.length).toBeLessThanOrEqual(120);
   expect(second.length).toBeLessThanOrEqual(120);
   expect(first).not.toBe(second);
+});
+
+it('maakt gestructureerde suggesties met de actuele afstand en onderscheidt gelijke nummers van een echte rondrit', () => {
+  expect(suggestedRouteName('534','64',25300,false)).toBe('534 - Naar 64 - 25,3 km');
+  expect(suggestedRouteName('534','534',32200,true)).toBe('534 - Rondrit - 32,2 km');
+  expect(suggestedRouteName('64','64',15000,false)).toBe('64 - Naar 64 - 15 km');
 });

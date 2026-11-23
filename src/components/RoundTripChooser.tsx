@@ -6,9 +6,9 @@ import type { Network, PlannedRoute } from '../domain/network';
 function Preview({ route, label }: { route: PlannedRoute; label: string }) {
   const element = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    const map = L.map(element.current!, { zoomControl: false, dragging: false, scrollWheelZoom: false, doubleClickZoom: false, boxZoom: false, keyboard: false, touchZoom: false });
+    const map = L.map(element.current!, { rotateControl: false, zoomControl: false, dragging: false, scrollWheelZoom: false, doubleClickZoom: false, boxZoom: false, keyboard: false, touchZoom: false });
     map.attributionControl.setPrefix(false);
-    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>' }).addTo(map);
+    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a>' }).addTo(map);
     const points: L.LatLngTuple[] = route.steps.flatMap(s => s.coordinates.map(p => [p[1], p[0]] as L.LatLngTuple));
     L.polyline(points, { color: '#195dd4', weight: 4, interactive: false }).addTo(map);
     L.circleMarker(points[0], { radius: 6, color: '#075530', fillColor: '#16a361', fillOpacity: 1, weight: 2, interactive: false }).addTo(map);

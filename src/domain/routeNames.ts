@@ -26,3 +26,8 @@ export function copyRouteName(name: string, existingNames: string[]): string {
   } while (taken.has(normalize(candidate)));
   return candidate;
 }
+
+export function suggestedRouteName(startNumber: string, endNumber: string, meters: number, closed: boolean): string {
+  const length = (meters / 1000).toLocaleString('nl-BE', { maximumFractionDigits: 1 });
+  return [startNumber, closed ? 'Rondrit' : 'Naar ' + endNumber, length + ' km'].join(' - ');
+}

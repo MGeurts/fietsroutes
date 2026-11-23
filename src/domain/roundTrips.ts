@@ -26,7 +26,7 @@ export function directionalRoundTrip(network: Network, start: string, targetKm: 
     const key = a + ':' + b;
     if (!paths.has(key)) {
       const steps = shortestPath(network, a, b); paths.set(key, steps);
-      paths.set(b + ':' + a, [...steps].reverse().map(s => ({ ...s, from: s.to, to: s.from, coordinates: [...s.coordinates].reverse() })));
+      // Return paths may differ: never reverse a cached path in a directed graph.
     }
     return paths.get(key)!;
   };

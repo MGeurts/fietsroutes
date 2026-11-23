@@ -1,7 +1,7 @@
 export type Position = [number, number]; // longitude, latitude (GeoJSON)
 export interface Junction { id: string; number: string | null; position: Position; network: string; owner: string }
-export interface Edge { id: string; from: string; to: string; coordinates: Position[] }
-export interface Dataset { version: number; fetchedAt: string; attribution: string; junctions: Junction[]; edges: Edge[]; report: { skippedEdges: number; ambiguousIds: number; invalidGeometry: number } }
+export interface Edge { id: string; from: string; to: string; coordinates: Position[]; oneWay?: boolean }
+export interface Dataset { version: number; fetchedAt: string; attribution: string; junctions: Junction[]; edges: Edge[]; report: { skippedEdges: number; ambiguousIds: number; invalidGeometry: number; oneWayEdges?: number; unknownDirection?: number; directionConflict?: number } }
 export interface Step { edge: Edge; from: string; to: string; coordinates: Position[]; meters: number }
 export interface PlannedRoute { stops: string[]; steps: Step[]; junctions: string[]; meters: number }
 export interface Network { data: Dataset; nodes: Map<string, Junction>; adjacency: Map<string, Step[]> }
@@ -17,8 +17,11 @@ export function createNetwork(data: Dataset): Network {
   const adjacency = new Map<string, Step[]>();
   for (const edge of data.edges) {
     if (!nodes.has(edge.from) || !nodes.has(edge.to) || edge.coordinates.length < 2) throw Error('Ongeldige netwerkverbinding.');
+    if (edge.oneWay != null && typeof edge.oneWay !== 'boolean') throw Error('Ongeldige rijrichting.');
+    if (!adjacency.has(edge.from)) adjacency.set(edge.from, []);
+    if (!adjacency.has(edge.to)) adjacency.set(edge.to, []);
     const meters = lineLength(edge.coordinates);
-    for (const reverse of [false, true]) {
+    for (const reverse of edge.oneWay ? [false] : [false, true]) {
       const from = reverse ? edge.to : edge.from, to = reverse ? edge.from : edge.to;
       const step = { edge, from, to, meters, coordinates: reverse ? [...edge.coordinates].reverse() : edge.coordinates };
       adjacency.set(from, [...(adjacency.get(from) ?? []), step]);
@@ -68,7 +71,7 @@ export function shortestPath(network: Network, from: string, to: string): Step[]
       if (candidate < (costs.get(step.to) ?? Infinity)) { costs.set(step.to, candidate); previous.set(step.to, step); queue.push([step.to, candidate]); }
     }
   }
-  throw Error('Geen aaneengesloten verbinding gevonden in het beschikbare officiële netwerk. Kies een ander knooppunt.');
+  throw Error('Geen aaneengesloten verbinding gevonden in de toegestane rijrichting van het officiële netwerk. Kies een ander knooppunt.');
 }
 export function planRoute(network: Network, stops: string[]): PlannedRoute {
   const steps = stops.slice(1).flatMap((to, i) => shortestPath(network, stops[i], to));
@@ -99,7 +102,7 @@ export function roundTrip(network: Network, start: string, targetKm: number): Pl
   return best;
 }
 
-export interface Progress { meters: number; remaining: number; offRoute: number; next: string | null; nextDistance: number; arrived: boolean }
+export interface Progress { meters: number; remaining: number; offRoute: number; next: string | null; nextAfter: string | null; nextDistance: number; arrived: boolean }
 export function locateOnRoute(route: PlannedRoute, location: Position, previousMeters = 0, network?: Network): Progress {
   let passed = 0, bestDistance = Infinity, projected = previousMeters;
   const ends: { id: string; meters: number }[] = [];
@@ -118,6 +121,7 @@ export function locateOnRoute(route: PlannedRoute, location: Position, previousM
     if (!network || network.nodes.get(step.to)?.number) ends.push({ id: step.to, meters: passed });
   }
   const meters = bestDistance <= 75 ? Math.max(previousMeters, projected) : previousMeters;
-  const next = ends.find(e => e.meters > meters + 25);
-  return { meters, remaining: Math.max(0, route.meters - meters), offRoute: bestDistance, next: next?.id ?? null, nextDistance: next ? next.meters - meters : 0, arrived: route.meters - meters < 35 && bestDistance < 50 };
+  const nextIndex = ends.findIndex(e => e.meters > meters + 25);
+  const next = ends[nextIndex];
+  return { meters, remaining: Math.max(0, route.meters - meters), offRoute: bestDistance, next: next?.id ?? null, nextAfter: nextIndex >= 0 ? ends[nextIndex + 1]?.id ?? null : null, nextDistance: next ? next.meters - meters : 0, arrived: route.meters - meters < 35 && bestDistance < 50 };
 }

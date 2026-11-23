@@ -1,8 +1,14 @@
+import { updateRideSpeed, type RideSpeedState } from './domain/rideSpeed';
+import { updateHeading, type HeadingState } from './domain/heading';
 import { useEffect, useRef, useState } from 'react';
 import type { Position } from './domain/network';
 
 export function useDeviceLocation(onCenter: (position: Position) => void) {
   const [location, setLocation] = useState<Position | null>(null), [accuracy, setAccuracy] = useState(0), [lastFix, setLastFix] = useState(0);
+  const [currentSpeed, setCurrentSpeed] = useState<number | null>(null);
+  const speedState = useRef<RideSpeedState>({ anchor: null, speedKmh: null });
+  const [heading, setHeading] = useState<number | null>(null);
+  const headingState = useRef<HeadingState>({ anchor: null, heading: null });
   const [status, setStatus] = useState('Je locatie bepalen…'), [retry, setRetry] = useState(0);
   const center = useRef(onCenter); center.current = onCenter;
   useEffect(() => {
@@ -12,10 +18,15 @@ export function useDeviceLocation(onCenter: (position: Position) => void) {
     const watch = navigator.geolocation.watchPosition(p => {
       if (!active) return;
       const position: Position = [p.coords.longitude, p.coords.latitude];
+      headingState.current = updateHeading(headingState.current, { position, accuracy: p.coords.accuracy, timestamp: p.timestamp, heading: p.coords.heading ?? null, speed: p.coords.speed ?? null });
+      setHeading(headingState.current.heading);
+      speedState.current = updateRideSpeed(speedState.current, { position, accuracy: p.coords.accuracy, timestamp: p.timestamp, heading: p.coords.heading ?? null, speed: p.coords.speed ?? null });
+      setCurrentSpeed(speedState.current.speedKmh);
       setLocation(position); setAccuracy(p.coords.accuracy); setLastFix(p.timestamp); setStatus('');
       if (!centered) { centered = true; center.current(position); }
     }, error => {
       if (!active) return;
+      setCurrentSpeed(null); speedState.current = { anchor: null, speedKmh: null };
       setStatus(error.code === 1 ? 'Locatietoegang geweigerd. Geef toestemming via je browser.' : error.code === 3 ? 'Je locatie bepalen duurt te lang. Probeer opnieuw.' : 'Je locatie is momenteel niet beschikbaar.');
     }, { enableHighAccuracy: true, maximumAge: 0, timeout: 15000 });
     return () => { active = false; navigator.geolocation.clearWatch(watch); };
@@ -24,5 +35,5 @@ export function useDeviceLocation(onCenter: (position: Position) => void) {
     if (location) center.current(location);
     setRetry(value => value + 1);
   }
-  return { location, accuracy, lastFix, status, locate };
+  return { location, accuracy, lastFix, heading, currentSpeed, status, locate };
 }

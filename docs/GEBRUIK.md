@@ -2,13 +2,17 @@
 
 ## Starten en de kaart bedienen
 
-Open de app en geef de browser toestemming voor je locatie. Bij elke start vraagt de app een verse GPS-locatie op en centreert de kaart bij de eerste fix. De blauwe stip toont je positie; de kring geeft de gemelde nauwkeurigheid weer. Zonder toestemming kun je nog steeds routes plannen via de kaart of het zoekvak.
+Open de app en geef de browser toestemming voor je locatie. Bij elke start vraagt de app een verse GPS-locatie op en centreert de kaart bij de eerste fix. Tijdens het plannen toont de blauwe stip je positie; de kring geeft de gemelde GPS-nauwkeurigheid weer. Tijdens navigatie is de stip rood en wordt de omringende cirkel visueel tweemaal zo breed en lichtroze weergegeven. Zonder toestemming kun je nog steeds routes plannen via de kaart of het zoekvak.
 
-Rechts op de kaart staan, van boven naar beneden:
+De header toont **Fietsroutes**, het versienummer en twee knoppen: informatie (**Over deze app**) en de bibliotheek (**Bewaarde routes**). Op een smal scherm kunnen de knoppen alleen als icoon verschijnen.
+
+Rechts op de kaart staan tijdens het plannen, van boven naar beneden:
 
 1. Het vizier: centreert op je locatie en vraagt opnieuw een locatiebepaling aan.
 2. De zoomselector: toont het actuele niveau, met knoppen voor in- en uitzoomen. Het niveau verandert ook mee bij zoomen op de kaart.
 3. De kaartlagenknop: opent de keuze van de achtergrondkaart.
+
+Tijdens navigatie staat boven het vizier een even grote ronde richtingknop zonder tekst. Het navigatiepijltje betekent rijrichting bovenaan; het kompas betekent noorden bovenaan. De verklarende titel en toegankelijkheidsnaam geven de actieve stand aan.
 
 De kaartlagen staan in deze volgorde:
 
@@ -22,7 +26,7 @@ Zoek op een plaatsnaam, knooppuntnummer of netwerknaam. Voor plaatsen zijn minst
 
 ## Een route plannen
 
-Klik op een genummerd knooppunt om de Start te kiezen. Kies vervolgens andere knooppunten op de kaart. De app zoekt de kortste aaneengesloten verbindingen in het beschikbare officiële netwerk en neemt de nodige automatische tussenpunten op. De blauwe lijn toont de geplande route.
+Klik op een genummerd knooppunt om de Start te kiezen. Kies vervolgens andere knooppunten op de kaart. De app zoekt de kortste aaneengesloten verbindingen in het beschikbare officiële netwerk en neemt de nodige automatische tussenpunten op. De blauwe lijn toont de geplande route. Eénrichtingstrajecten worden alleen in de toegestane richting gebruikt.
 
 De lijst **Knooppunten** toont elk genummerd bezoek in rijvolgorde. Een knooppunt kan vaker voorkomen, ook met hetzelfde nummer. Dat kan een herhaald bezoek of een afzonderlijk bronpunt met hetzelfde nummer zijn.
 
@@ -54,9 +58,11 @@ Naast de titel **Knooppunten** staan:
 | Knop | Werking |
 | --- | --- |
 | Ongedaan maken / Opnieuw | Gaat terug of vooruit in de bewerkingen van de puntkeuze. |
-| Volledige route centreren | Toont het hele geplande traject op de kaart. Op een gsm opent dit ook het kaartscherm. |
-| Route omkeren | Keert de gekozen puntvolgorde om en berekent de verbindingen opnieuw. |
+| Volledige route centreren | Toont het hele geplande traject op de kaart. Op een mobiele telefoon opent dit ook het kaartscherm. |
+| Route omkeren | Keert de gekozen puntvolgorde om en berekent de verbindingen opnieuw in de toegestane rijrichtingen. De terugweg kan anders of langer zijn; zonder geldige terugweg blijft de huidige route behouden en verschijnt een melding. |
 | Route verwijderen | Maakt de werkroute leeg en zet de naam terug op Mijn fietsroute; de puntkeuze herstellen is mogelijk via Ongedaan maken. Een opgeslagen route in de bibliotheek blijft bestaan. |
+
+Onder de rondritknop staan de acties in drie rijen: **Bewaren/Bijwerken · Delen**, **GPX Export · GPX Import** en **Strookje · Nieuwe route**.
 
 **Nieuwe route** maakt eveneens de werkroute leeg en zet de naam terug op Mijn fietsroute. Tijdens het fietsen zijn routebewerkingen uitgeschakeld.
 
@@ -76,7 +82,7 @@ Deze aanrijroute volgt fietsbare wegen uit OpenStreetMap en hoeft niet over het 
 
 ## Bewaren en de bibliotheek
 
-Geef de route een naam en kies **Bewaren**. Open de bibliotheek via **Mijn routes**. Daar kun je zoeken, favorieten instellen, routes openen en routes verwijderen. Iedere route toont het aantal gekozen punten en de lokale datum en tijd van de laatste bewaring. Automatische punten worden bij openen opnieuw berekend.
+Geef de route een naam en kies **Bewaren**. Zodra een geldige route met begin- en eindpunt bestaat, kun je naast de naam **Suggestie** kiezen. Dit vervangt de naam door bijvoorbeeld `534 - Naar 64 - 25,3 km` of `534 - Rondrit - 32,2 km`. De suggestie gebruikt de actuele afstand en voegt geen externe zoekaanvragen toe. Je kunt de naam nadien zelf aanpassen. Tijdens navigatie is de knop uitgeschakeld. Open de bibliotheek via **Mijn routes**. Daar kun je zoeken, favorieten instellen, routes openen en routes verwijderen. Iedere route toont het aantal gekozen punten en de lokale datum en tijd van de laatste bewaring. Automatische punten worden bij openen opnieuw berekend.
 
 Na het openen van een bewaarde route verandert Bewaren in **Bijwerken**. Daarmee overschrijf je die route. **Als nieuwe kopie bewaren** maakt een aparte route met een volgnummer: `(kopie 1)`, `(kopie 2)`, enzovoort. Ook bij een kopie van een kopie loopt de nummering door. De nieuwe kopie wordt daarna de actieve route. Bestaande gelijknamige routes worden niet achteraf hernoemd.
 
@@ -84,17 +90,25 @@ Routes staan in de browseropslag van dit apparaat en dit webadres. Een andere br
 
 ## GPX, backups, delen en afdrukken
 
-- **GPX export** downloadt het traject en de gekozen knooppunt-ID's. Een komma in de naam blijft behouden, bijvoorbeeld `535 - Rondrit 32,2 km.gpx`.
-- **Importeren** opent GPX uit deze app of een JSON-bibliotheekbackup. GPX van andere apps aan het netwerk koppelen wordt nog niet ondersteund.
+- **GPX Export** downloadt het traject en de gekozen knooppunt-ID's. Een komma in de naam blijft behouden, bijvoorbeeld `535 - Rondrit 32,2 km.gpx`.
+- **GPX Import** opent GPX uit deze app of een JSON-bibliotheekbackup. GPX van andere apps aan het netwerk koppelen wordt nog niet ondersteund.
 - **Backup downloaden** in Mijn routes bewaart de bibliotheek als JSON. Backupimport voegt routes toe zonder bestaande te overschrijven en slaat identieke naam/puntcombinaties over.
-- **Delen** gebruikt de deelmogelijkheden van je apparaat of kopieert een link. De link bevat de gekozen knooppunten; de ontvanger moet dezelfde app op een bereikbaar adres kunnen openen. Een lokaal `.test`-adres is niet zomaar vanaf andere apparaten bereikbaar.
-- **Strookje** opent afdrukken met de volledige genummerde knooppuntvolgorde.
+- **Delen** opent een QR-code die je met de camera van je mobiele telefoon kunt scannen. De QR-code en de kopieerbare link gebruiken altijd `https://fietsroutes.kreaweb.be/`, ook als je op de laptop via Flock werkt. Open de link op je mobiele telefoon en kies daar **Bewaren**. **Link kopiëren** en, indien ondersteund, **Deel link** zijn eveneens beschikbaar. De QR-code wordt volledig lokaal gemaakt, zonder externe QR-dienst. De routenaam en gekozen knooppunten worden overgedragen; fietsprofiel en bibliotheek worden niet meegestuurd. De route wordt op de netwerkversie van de ontvanger opnieuw berekend.
+- **Strookje** opent afdrukken met de routenaam, afstand, datum en volledige genummerde knooppuntvolgorde. Er staat geen netwerkopmerking onder het strookje.
 
 GPX-herimport, bibliotheekroutes en deellinks worden op de aanwezige netwerkversie opnieuw berekend. Een JSON-backup bevat gekozen punten, namen, favorieten en bewaartijden, geen historische trajectgeometrie of fietsprofiel.
 
 ## Fietsen en offline gebruik
 
-Kies **Start met fietsen** voor GPS-volging, het volgende knooppunt en de resterende routeafstand. Houd de app op de voorgrond. De app probeert het scherm wakker te houden als je browser dit ondersteunt. Bij onnauwkeurige GPS of afwijken verschijnt een melding; er wordt geen omleiding buiten het knooppuntennetwerk berekend.
+Kies **Start met fietsen** voor GPS-volging. Het zoekvak verdwijnt en routebewerkingen worden uitgeschakeld. De witte hoofding toont op één rij het volgende knooppunt, de afstand ernaartoe en het daaropvolgende knooppunt. De groene onderbalk toont met iconen, van links naar rechts, de actuele snelheid (km/u), resterende afstand (km) en geschatte aankomsttijd. De compacte vierkante stopknop rechts beëindigt de navigatie. Waarschuwingen voor GPS of routeafwijking blijven in de hoofding zichtbaar.
+
+Snelheid komt uit de GPS, met een terugval op recente betrouwbare verplaatsingen als de browser geen snelheid levert. Onbetrouwbare of ontbrekende snelheid wordt als een streepje getoond. De ETA is een schatting op basis van de resterende routeafstand en het gekozen fietsprofiel, zonder pauzes. Bij ontbrekende/onnauwkeurige GPS of routeafwijking verschijnt geen ETA. Tijdens navigatie is je positie een grotere rode stip met witte rand. De lichtroze cirkel rond de rode stip wordt voor zichtbaarheid tweemaal zo breed getekend; de gemeten GPS-nauwkeurigheid en de waarschuwingsdrempels veranderen hierdoor niet. De kaart volgt je positie op zoomniveau 16 en draait standaard met je rijrichting bovenaan. De ronde richtingknop boven het centreervizier schakelt tussen rijrichting en noorden bovenaan. Hij toont alleen het navigatiepijltje of kompas; er staat geen tekst in de knop. In de Noord-stand blijft het noorden bovenaan; buiten navigatie staat de kaart eveneens met het noorden bovenaan.
+
+De rijrichting komt uit de GPS-koers wanneer beschikbaar, of uit voldoende verplaatsing tussen nauwkeurige GPS-fixes. Tot een richting bekend is, blijft noord bovenaan. Bij stilstand of slechte GPS wordt de laatste bruikbare richting vastgehouden; kleine koersschommelingen worden gedempt. De oriëntatie volgt je beweging, niet de richting waarin je de telefoon vasthoudt.
+
+Bij het naderen van een genummerd knooppunt schakelt de weergave binnen ongeveer 25 meter door naar het volgende bezoek. Er is geen aparte pieptoon of gesproken aankondiging. Meer dan ongeveer 75 meter van het passende routegedeelte verschijnt een afwijkingsmelding en stopt de voortgang. Bij gemelde GPS-nauwkeurigheid slechter dan 75 meter stopt de voortgang eveneens; na meer dan 20 seconden zonder fix verschijnt Wachten op GPS. Dicht bij het route-einde verschijnt Aangekomen; de navigatie stopt pas met de stopknop.
+
+Houd de app op de voorgrond. De app probeert het scherm wakker te houden als je browser dit ondersteunt. Bij onnauwkeurige GPS of afwijken verschijnt een melding; er wordt geen omleiding buiten het knooppuntennetwerk berekend.
 
 Installeer de app eventueel via Toevoegen aan beginscherm in je browser. Na de eerste volledige online installatie van de productieversie zijn appbestanden, netwerkgegevens en lokale routes offline bruikbaar. Achtergrondkaarten, nieuwe plaatszoekopdrachten en nieuwe aanrijrouteberekeningen vereisen internet.
 

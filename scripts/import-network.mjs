@@ -1,3 +1,4 @@
+import { normalizeSourceEdge } from './normalize-edge.mjs';
 import { mkdir, writeFile, rename, readFile } from 'node:fs/promises';
 
 const base = 'https://geodata.toerismevlaanderen.be/geoserver/wfs';
@@ -21,8 +22,9 @@ const cached = process.argv.includes('--cached') ? JSON.parse(await readFile('.c
 const nodes = cached?.nodes ?? await download('knoop_fiets');
 const lines = cached?.lines ?? await download('traject_fiets');
 await mkdir('.cache', { recursive: true });
-await writeFile('.cache/wfs-source.json', JSON.stringify({ nodes, lines }));
-const report = { skippedNodes: 0, skippedEdges: 0, directions: {}, ambiguousIds: 0, mergedRecords: 0, invalidGeometry: 0 };
+const sourceFetchedAt = cached ? (cached.fetchedAt ?? JSON.parse(await readFile('public/data/network.json', 'utf8')).fetchedAt) : new Date().toISOString();
+await writeFile('.cache/wfs-source.json', JSON.stringify({ nodes, lines, fetchedAt: sourceFetchedAt }));
+const report = { oneWayEdges: 0, unknownDirection: 0, directionConflict: 0, skippedNodes: 0, skippedEdges: 0, directions: {}, ambiguousIds: 0, mergedRecords: 0, invalidGeometry: 0 };
 const junctions = [];
 const ids = new Set();
 const groups = Map.groupBy(nodes, f => f.properties.geoid);
@@ -39,21 +41,22 @@ for (const f of nodes) {
   junctions.push({ id, number: Number.isInteger(p.knoopnr) && p.knoopnr >= 0 ? String(p.knoopnr) : null, position: f.geometry.coordinates, network: p.naam, owner: p.eigenaar });
 }
 const edges = [];
+const nodeMap = new Map(junctions.map(n => [n.id, n]));
 for (const f of lines) {
   const p = f.properties;
   report.directions[String(p.direction)] = (report.directions[String(p.direction)] ?? 0) + 1;
-  if (!ids.has(String(p.begin_geoid)) || !ids.has(String(p.end_geoid)) || f.geometry?.type !== 'LineString' || (p.direction != null && p.direction !== '')) { report.skippedEdges++; continue; }
-  // Retain source topology. Never infer connections by node number or proximity.
-  const coordinates = f.geometry.coordinates.filter((c, i, all) => !i || c[0] !== all[i - 1][0] || c[1] !== all[i - 1][1]);
-  if (coordinates.length < 2) { report.skippedEdges++; continue; }
-  const start = junctions.find(n => n.id === String(p.begin_geoid)).position;
-  const end = junctions.find(n => n.id === String(p.end_geoid)).position;
-  if (distance(start, coordinates[0]) + distance(end, coordinates.at(-1)) > distance(start, coordinates.at(-1)) + distance(end, coordinates[0])) coordinates.reverse();
-  if (distance(start, coordinates[0]) > 40 || distance(end, coordinates.at(-1)) > 40) { report.invalidGeometry++; continue; }
-  edges.push({ id: String(p.objectid), from: String(p.begin_geoid), to: String(p.end_geoid), coordinates });
+  const result = normalizeSourceEdge(f, nodeMap);
+  if (!result.edge) {
+    const reason = result.reason;
+    if (reason === 'unknownDirection' || reason === 'directionConflict') { report[reason]++; report.skippedEdges++; }
+    else report[reason]++;
+    continue;
+  }
+  edges.push(result.edge);
+  if (result.edge.oneWay) report.oneWayEdges++;
 }
 if (junctions.length < 4000 || edges.length < 7000) throw Error(`Datasetcontrole mislukt: ${JSON.stringify(report)}`);
-const dataset = { version: 1, fetchedAt: new Date().toISOString(), source: base, attribution: 'Toerisme Vlaanderen en de vijf provinciale toeristische organisaties', junctions, edges, report };
+const dataset = { version: 1, fetchedAt: sourceFetchedAt, processedAt: new Date().toISOString(), source: base, attribution: 'Toerisme Vlaanderen en de vijf provinciale toeristische organisaties', junctions, edges, report };
 await mkdir('public/data', { recursive: true });
 await writeFile('public/data/network.json.tmp', JSON.stringify(dataset));
 await rename('public/data/network.json.tmp', 'public/data/network.json');

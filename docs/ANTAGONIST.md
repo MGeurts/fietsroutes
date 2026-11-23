@@ -1,4 +1,4 @@
-# Publiceren van v1.0.2 op Antagonist Slim zonder Node.js
+# Publiceren van v1.1.0 op Antagonist Slim zonder Node.js
 
 ## Productieopzet
 
@@ -52,8 +52,10 @@ dist/
 1. Maak zo nodig eerst een backup van de bestaande website in de doelmap.
 2. Verbind via de bestandsbeheerder of FTPES met je hostingpakket. Antagonist noemt `public_html` als uploadmap; zie [de FTP-instellingen](https://help.antagonist.nl/hc/nl/articles/8524008537489-Welke-instellingen-heb-ik-nodig-voor-FTP). Kies bij een subdomein de bijbehorende documentroot uit DirectAdmin.
 3. Upload de **inhoud** van `dist/` naar die map. Maak dus geen extra `dist`-map onder de documentroot.
-4. Neem ook `.htaccess`, `data/`, de serviceworker en alle bestanden met een hash in de naam mee. Laat verborgen bestanden in je bestandsbeheerder tonen om `.htaccess` te controleren.
+4. Neem ook `.htaccess`, `data/`, de serviceworker en alle bestanden met een hash in de naam mee, inclusief de rondritworker en de afzonderlijk geladen QR-deelmodule. Laat verborgen bestanden in je bestandsbeheerder tonen om `.htaccess` te controleren.
 5. Open het HTTPS-adres en voer de onderstaande controles uit.
+
+De QR-deellink gebruikt het publieke adres `https://fietsroutes.kreaweb.be/`. Bij verhuizing naar een ander domein moet `publicAppUrl` in `src/domain/sharing.ts` worden aangepast en opnieuw worden gebouwd. Ontvangers hebben dezelfde nieuwe appfunctionaliteit en passende netwerkgegevens nodig om een meegestuurde naam en éénrichtingstrajecten te gebruiken.
 
 Upload niet de volledige repository, `src/`, `web/`, `node_modules/`, `.git/`, `.cache/`, ontwikkelconfiguratie of de `index.php` uit de projectroot. Gebruik de bestanden uit `dist/`. De officiële netwerksnapshot en iconen mogen wel publiek beschikbaar zijn.
 

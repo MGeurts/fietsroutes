@@ -1,3 +1,4 @@
+vi.mock('leaflet-rotate', () => ({}));
 // @vitest-environment jsdom
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
@@ -12,7 +13,7 @@ vi.mock('leaflet', () => {
   return { default: {
     map: () => {
       const events = new Map<string, Set<() => void>>(); let zoom = 12;
-      const map: any = { createPane: () => ({ style: {} }), on: (names: string, fn: () => void) => { for (const n of names.split(' ')) { const set = events.get(n) ?? new Set(); set.add(fn); events.set(n, set); } }, off: (names: string, fn: () => void) => { for (const n of names.split(' ')) events.get(n)?.delete(fn); }, emit: (name: string) => { for (const fn of events.get(name) ?? []) fn(); }, getCenter: () => ({ lng: (state.bounds.west + state.bounds.east) / 2, lat: (state.bounds.south + state.bounds.north) / 2 }), getZoom: () => zoom, setZoom: (value: number) => { zoom = value; map.emit('zoomend'); map.emit('moveend'); }, getBounds: () => { const b: any = { pad: () => b, getWest: () => state.bounds.west, getEast: () => state.bounds.east, getSouth: () => state.bounds.south, getNorth: () => state.bounds.north }; return b; }, project: (p: number[], z: number) => { state.project(); const scale = 10000 * 2 ** (z - 12); return { x: p[1] * scale, y: p[0] * scale }; }, unproject: (p: any, z: number) => { const scale = 10000 * 2 ** (z - 12); return { lng: p.x / scale, lat: p.y / scale }; }, setView: vi.fn(), fitBounds: vi.fn(), invalidateSize: vi.fn(), remove: vi.fn(), attributionControl: { setPrefix: vi.fn(), addAttribution: vi.fn(), removeAttribution: vi.fn() } };
+      const map: any = { setBearing: vi.fn(), getPane: vi.fn(), createPane: () => ({ style: {} }), on: (names: string, fn: () => void) => { for (const n of names.split(' ')) { const set = events.get(n) ?? new Set(); set.add(fn); events.set(n, set); } }, off: (names: string, fn: () => void) => { for (const n of names.split(' ')) events.get(n)?.delete(fn); }, emit: (name: string) => { for (const fn of events.get(name) ?? []) fn(); }, getCenter: () => ({ lng: (state.bounds.west + state.bounds.east) / 2, lat: (state.bounds.south + state.bounds.north) / 2 }), getZoom: () => zoom, setZoom: (value: number) => { zoom = value; map.emit('zoomend'); map.emit('moveend'); }, getBounds: () => { const b: any = { pad: () => b, getWest: () => state.bounds.west, getEast: () => state.bounds.east, getSouth: () => state.bounds.south, getNorth: () => state.bounds.north }; return b; }, project: (p: number[], z: number) => { state.project(); const scale = 10000 * 2 ** (z - 12); return { x: p[1] * scale, y: p[0] * scale }; }, unproject: (p: any, z: number) => { const scale = 10000 * 2 ** (z - 12); return { lng: p.x / scale, lat: p.y / scale }; }, setView: vi.fn(), fitBounds: vi.fn(), invalidateSize: vi.fn(), remove: vi.fn(), attributionControl: { setPrefix: vi.fn(), addAttribution: vi.fn(), removeAttribution: vi.fn() } };
       state.map = map; return map;
     },
     control: { scale: () => layer() }, tileLayer: () => layer(), canvas: () => layer(), layerGroup: () => layer(),
@@ -46,4 +47,17 @@ it('hergebruikt zichtbare knooppunten, netwerkgeometrie en locatiestip tijdens v
   const projections = state.project.mock.calls.length;
   await act(async () => state.map.emit('moveend')); expect(state.project).toHaveBeenCalledTimes(projections);
   await act(async () => state.map.setZoom(13)); expect(state.project.mock.calls.length).toBeGreaterThan(projections);
+});
+
+it('draait met de rijrichting mee, biedt noorden bovenaan en toont tijdens navigatie een grotere rode stip', async () => {
+  const props = { network: null, route: null, approach: null, accuracy: 10, onSelect: vi.fn(), onZoomChange: vi.fn(), focus: { token: 0 }, zoomCommand: { token: 0, delta: 0 }, location: [3,51] as [number,number], riding: true, tileLayer: 'osm', heading: 90, headingUp: true };
+  await act(async()=>root.render(<MapView {...props}/>));
+  expect(state.map.setBearing).toHaveBeenLastCalledWith(-90);
+  expect(state.circles[0].setRadius).toHaveBeenLastCalledWith(12);
+  expect(state.circles[0].setStyle).toHaveBeenLastCalledWith(expect.objectContaining({fillColor:'#e32636',weight:5}));
+  await act(async()=>root.render(<MapView {...props} headingUp={false}/>));
+  expect(state.map.setBearing).toHaveBeenLastCalledWith(0);
+  await act(async()=>root.render(<MapView {...props} riding={false}/>));
+  expect(state.map.setBearing).toHaveBeenLastCalledWith(0);
+  expect(state.circles[0].setRadius).toHaveBeenLastCalledWith(9);
 });

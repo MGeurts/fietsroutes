@@ -4,7 +4,7 @@
 
 De productieomgeving is **Antagonist.nl Slim shared hosting zonder Node.js**. Runtimecode draait in de browser; de webserver levert gebouwde HTML, JavaScript, CSS, afbeeldingen en de netwerksnapshot. Voeg geen Node-runtime, SSR-server, serverless functie of achtergrondproces toe als productievereiste. Node.js 26 en npm blijven lokale/CI-bouwgereedschappen. Zie [publiceren op Antagonist](ANTAGONIST.md).
 
-De app gebruikt React, TypeScript, Vite, Leaflet en een door Workbox gegenereerde serviceworker. Er is geen accountbackend of database. PHP is alleen een optionele ingang voor PHP-hosting en de lokale Flock-server.
+De app gebruikt React, TypeScript, Vite, Leaflet en een eigen serviceworker met Workbox-precaching. Er is geen accountbackend of database. PHP is alleen een optionele ingang voor PHP-hosting en de lokale Flock-server.
 
 ## Projectstructuur
 
@@ -25,7 +25,12 @@ De app gebruikt React, TypeScript, Vite, Leaflet en een door Workbox gegenereerd
 | `src/domain/gpx.ts` | GPX-uitvoer, eigen GPX-herimport en bestandsdownload. |
 | `src/domain/places.ts`, `src/usePlaces.ts` | Photon-adapter, vertraagd zoeken, annulering en tijdelijke cache. |
 | `src/domain/approach.ts`, `src/useApproach.ts` | BRouter-adapter, geometriecontrole, herberekening en tijdelijke cache. |
-| `src/useDeviceLocation.ts` | Verse GPS-watch bij opstart, eerste centrering, fouten en opruimen. |
+| `src/useDeviceLocation.ts` | GPS-watch, eerste centrering, koers, actuele snelheid en fouten. |
+| `src/domain/heading.ts`, `src/domain/rideSpeed.ts` | Koersfiltering en actuele snelheid uit GPS of betrouwbare verplaatsing. |
+| `src/components/RidePanels.tsx` | Compacte navigatiehoofding, snelheids-/afstand-/ETA-balk en stopknop. |
+| `src/components/ShareRoute.tsx`, `src/domain/sharing.ts` | QR-code en publieke link met routenaam en gekozen knooppunten. |
+| `src/leafletRuntime.ts`, `src/leaflet-rotate.d.ts` | Gedeelde Leaflet-instance en typen voor kaartrotatie. |
+| `scripts/normalize-edge.mjs` | Expliciete richtingscodes en controle van officiële trajectgeometrie. |
 | `public/` | Te kopiëren statische bestanden, Apache-configuratie en optionele PHP-ingang. |
 | `scripts/import-network.mjs` | Import en kwaliteitscontroles van de officiële WFS-data. |
 | `scripts/export-logo.mjs` | Reproduceerbare SVG-, PNG- en ICO-export van het headerlogo. |
@@ -61,14 +66,15 @@ npm test
 npm run build
 ```
 
-Het resultaat staat in `public/data/network.json`, met ophaaldatum, bronvermelding en kwaliteitsrapport. De snapshot van 21 november 2026 bevat 5.138 punten, waarvan 5.002 genummerd, en 7.575 bruikbare trajecten. De bronrecords bevatten tevens ongenummerde aansluitpunten.
+Het resultaat staat in `public/data/network.json`, met ophaaldatum, bronvermelding en kwaliteitsrapport. De snapshot van 22 november 2026 bevat 5.138 punten, waarvan 5.002 genummerd, en 7.655 bruikbare trajecten, waarvan 80 éénrichtingstrajecten. De bronrecords bevatten tevens ongenummerde aansluitpunten.
 
 De topologie volgt `geoid`, `begin_geoid` en `end_geoid`. Gedeelde bronidentiteiten worden alleen samengevoegd bij consistente nummers en posities. Identieke nummers of nabije coördinaten zijn op zichzelf nooit een aansluiting. Trajectgeometrie wordt georiënteerd en tegen de uiteinden gecontroleerd; ontbrekende geometrie wordt niet door rechte lijnen vervangen.
 
 Het rapport van deze snapshot bevat:
 
-- 158 uitgesloten trajecten wegens ontbrekende/ambigue aansluitingen of eenrichting, waaronder 90 eenrichtingstrajecten waarvan de richtingsemantiek nog moet worden gevalideerd.
-- 7 uitgesloten trajecten wegens geometrieproblemen.
+- 75 uitgesloten trajecten wegens ontbrekende/ambigue aansluitingen; onbekende of tegenstrijdige richtingscodes vallen eveneens in deze telling (momenteel 0).
+- Van 90 bronrecords met Eenrichting zijn 80 bruikbaar; 10 falen de aansluitings- of geometriecontrole.
+- 10 uitgesloten trajecten wegens geometrieproblemen.
 - 31 uitgesloten knooppuntrecords met conflicterende bronidentiteit.
 - 44 samengevoegde knooppuntrecords.
 
@@ -132,16 +138,44 @@ php -l public/index.php
 
 De tests controleren routering, datasetgeometrie, rondritten, lussen bij GPS, geolocatie, geweigerde toestemming, annulering van zoek- en aanrijaanvragen, XML-escaping, backups, roltoekenning, deelafstanden, tijden, kopienummering en bestandsnamen. De GitHub-workflow voert `npm ci`, `npm test` en `npm run build` uit op Node.js 26.
 
-`npm run check:host` vereist de lokale Flock-site. Met `npm run check:host -- https://jouwdomein.nl` controleer je dezelfde productie-ingang op een andere host. De controle vergelijkt `/` en `/index.html`, controleert JavaScript-MIME-types en controleert dat bronpaden 404 opleveren. Dit is geen controle van GPS of mobiele navigatie.
+`npm run check:host` vereist de lokale Flock-site. Met `npm run check:host -- https://jouwdomein.nl` controleer je dezelfde productie-ingang op een andere host. De controle vergelijkt `/` met de actuele lokale `dist/index.html` én met `/index.html`, controleert JavaScript-MIME-types en controleert dat bronpaden 404 opleveren. Dit is geen controle van GPS of mobiele navigatie.
 
 ## Logo en verdere ontwikkeling
 
 `node scripts/export-logo.mjs` genereert vanuit het headerlogo `public/logo.svg`, `public/logo.png` (512 px) en `public/logo.ico` (16, 24, 32, 48, 64, 128 en 256 px). Sharp is hiervoor een ontwikkelafhankelijkheid; de hosting heeft Sharp of Node.js niet nodig. `public/icon.svg` blijft afzonderlijk in gebruik als favicon/PWA-icoon.
 
-Openstaande onderwerpen zijn validatie van eenrichtingstrajecten en bronconflicten, praktijktests op Android en iPhone, externe GPX-koppeling, hoogteprofielen, verplaatsen van routepunten, een ander startpunt voor een bestaande gesloten lus, offline kaarten en eventuele synchronisatie of gesproken aanwijzingen. Behoud bij toekomstige uitbreidingen de productievoorwaarde: Antagonist Slim zonder Node-runtime.
+Openstaande onderwerpen zijn verdere validatie van bronconflicten, praktijktests op Android en iPhone, externe GPX-koppeling, hoogteprofielen, verplaatsen van routepunten, een ander startpunt voor een bestaande gesloten lus, offline kaarten en eventuele synchronisatie of gesproken aanwijzingen. Behoud bij toekomstige uitbreidingen de productievoorwaarde: Antagonist Slim zonder Node-runtime.
 
 
 
 ## Rondritvoorstellen per windrichting
 
 `src/domain/roundTrips.ts` zoekt afzonderlijke lussen voor noord, oost, zuid en west. Kandidaten gebruiken uitsluitend officiële netwerkverbindingen; het gewogen geometrische middelpunt bepaalt de richting. De maximale afstandsafwijking is 20%, de maximale dubbel bereden trajectlengte 15%. Ontbrekende lussen worden expliciet getoond. `src/roundTrips.worker.ts` berekent buiten de UI-thread en rapporteert per richting. De worker wordt beëindigd bij sluiten of gewijzigde invoer. `RoundTripChooser` toont OSM-kaartvooruitzichten met zichtbare bronvermelding; pas kiezen past de werkroute aan. De worker wordt mee gebouwd en geprecachet voor offline routeberekening.
+
+## Eénrichtingstrajecten
+
+De WFS-velden zijn gecontroleerd via [DescribeFeatureType](https://geodata.toerismevlaanderen.be/geoserver/wfs?service=WFS&version=2.0.0&request=DescribeFeatureType&typeNames=routes:traject_fiets). De bron gebruikt null/leeg en de tekst Eenrichting. De app interpreteert Eenrichting als begin_geoid naar end_geoid. Bij alle 90 éénrichtingsrecords in de broncache wijst ook de lijngeometrie van begin naar einde; het openbare schema documenteert geen afzonderlijke voorwaartse/achterwaartse code. Dit is de expliciet gekozen broninterpretatie, geen afleiding uit knooppuntnummers.
+
+De normalisator in scripts/normalize-edge.mjs zet hiervoor oneWay: true. Een onbekende code of bij eenrichting tegengestelde geometrie wordt uitgesloten en gerapporteerd, niet geraden. Oudere trajecten zonder oneWay blijven tweerichting. createNetwork maakt voor eenrichting uitsluitend de voorwaartse verbinding aan, maar houdt ook eindpunten zonder uitgaande verbinding in de index. Dijkstra zelf blijft ongewijzigd.
+
+De rondritcache bewaart heen- en terugpaden afzonderlijk. Omkeren, openen van bewaarde routes, GPX en deellinks berekenen opnieuw over het gerichte netwerk; een terugweg kan anders, langer of onmogelijk zijn. Een onmogelijke bewerking vervangt de bestaande werkroute niet.
+
+De bestaande broncache is opnieuw verwerkt op 23 november 2026, zonder nieuwe WFS-download. fetchedAt bewaart de oorspronkelijke ophaaltijd; processedAt vermeldt het moment van normaliseren. --cached bewaart de ophaaltijd voortaan ook in de broncache. De publiceerbare snapshot bevat 7.655 trajecten en 85 uitgesloten brontrajecten.
+
+## Route delen met QR-code
+
+`src/domain/sharing.ts` bouwt een publiek HTTPS-adres op basis van `publicAppUrl` (https://fietsroutes.kreaweb.be/). Het lokale Flock-adres, queryparameters en GPS-gegevens worden niet overgenomen. Het fragment route bevat de gekozen knooppunt-ID’s, met behoud van volgorde en herhalingen; name bevat de URL-gecodeerde routenaam (maximaal 120 tekens). De ontvanger neemt die over en verwijdert beide parameters na import uit de adresbalk. Links zonder naam blijven bruikbaar. `ShareRoute` rendert lokaal een SVG via qrcode.react, met M-foutcorrectie en een witte marge van vier modules. Lange routes krijgen een groter vooruitzicht. Er wordt geen QR-API aangeroepen. De ontvanger gebruikt de bestaande deellinkimport en bewaart de route zelf. Bij een domeinwijziging moet publicAppUrl worden aangepast. Tests lezen daadwerkelijk gegenereerde QR-codes terug met jsQR, inclusief 200 gekozen punten; sharp en jsQR zijn uitsluitend ontwikkelafhankelijkheden.
+
+## Kaartrotatie tijdens navigatie
+
+leaflet-rotate breidt de gedeelde Leaflet-instance uit via src/leafletRuntime.ts. De kaart roteert met de negatieve GPS-koers (oost = -90 graden); controls en knooppuntlabels blijven rechtop. De netwerkpane staat in rotatePane, pijlen in norotatePane met rotateWithView. De ruimtelijke index en zichtbare pijlen verversen ook bij rotate-events. Vooruitzichtkaarten schakelen de extra plugincontrol uit.
+
+useDeviceLocation levert heading via domain/heading.ts. Een koers wordt alleen gebruikt bij nauwkeurigheid tot 50 m en snelheid vanaf 1 m/s, anders wordt bij voldoende betrouwbare verplaatsing een geografische koers berekend. Expliciete stilstand, oude fixes en GPS-ruis worden genegeerd; hoeken worden over 0/360 heen gedempt. Tot een bruikbare koers bestaat geldt noord. Elke nieuwe navigatie start met rijrichting bovenaan; de gebruiker kan naar noord omschakelen. Navigatie behoudt de bestaande automatische centrering op zoom 16. Tests controleren de echte Leaflet-coördinatentransformatie, naast GPS-filtering, de kleur van de stip en de schakelknop. Mobiele praktijktests blijven nodig.
+
+## Navigatiepanelen en actuele snelheid
+
+RidePanels toont bovenaan de volgende genummerde bezoek-ID, afstand en daaropvolgende bezoek-ID. locateOnRoute levert next en nextAfter op basis van de positie in de reeks, zodat herhaalde bezoeken aan dezelfde ID niet door elkaar raken. Normale begeleiding heeft geen extra tekstregels; GPS-, afwijkings- en aankomstmeldingen blijven zichtbaar. De groene balk bevat Gauge, Route en Clock3 als verklarende iconen in de volgorde snelheid, resterende afstand, ETA. De compacte stopknop behoudt een verklarende title en aria-label.
+
+updateRideSpeed gebruikt coords.speed in m/s en rekent om naar km/u. Zonder die waarde gebruikt de terugval fixes met 2–15 seconden tussenruimte en nauwkeurigheid tot 25 meter; kleine verplaatsingen worden als stilstand beschouwd en onmogelijke snelheden geweigerd. GPS-snelheid vereist nauwkeurigheid tot 50 meter. Bij ontbrekende/verouderde of onnauwkeurige GPS worden geen actuele snelheid en ETA gesuggereerd. ETA = huidige tijd + resterende afstand / gekozen fietsprofielsnelheid; pauzes en de gemeten snelheid veranderen deze schatting niet. Bij routeafwijking wordt geen ETA getoond.
+
+De roteerknop gebruikt alleen Navigation of Compass en heeft dezelfde standaardafmetingen als centreren en kaartlagen. Tijdens navigatie gebruikt de positie-indicator een rode stip (radius 12 px) met witte rand en schaduw. De lichtroze cirkel heeft visueel tweemaal de gemelde GPS-radius; dit verandert de gebruikte nauwkeurigheidswaarde en voortgangslogica niet. ShareRoute wordt pas geladen bij openen van de deelmodal; de chunk wordt wel geprecachet voor offline gebruik.
