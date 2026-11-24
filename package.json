@@ -20,7 +20,7 @@
   "dependencies": {
     "leaflet": "^1.9.4",
     "leaflet-rotate": "^0.6.2",
-    "lucide-react": "^1.78.0",
+    "lucide-react": "^1.79.0",
     "qrcode.react": "^4.2.0",
     "react": "^19.3.1",
     "react-dom": "^19.3.1"
