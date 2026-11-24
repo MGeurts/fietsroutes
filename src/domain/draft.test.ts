@@ -4,6 +4,7 @@ import { draftKey, readDraft, readRecovery, writeDraft, type RouteDraft } from '
 const draft: RouteDraft = { version: 1, name: 'Werkrit', stops: ['1', '2'], speed: 20, tileLayer: 'network', activeId: 'saved-route' };
 beforeEach(() => localStorage.clear());
 it('herstelt puntkeuze, naam, fietsprofiel, kaartlaag en bibliotheekidentiteit', () => { writeDraft(draft); expect(readDraft()).toEqual(draft); });
+it('herstelt de toeristische kaartlaag', () => { writeDraft({ ...draft, tileLayer: 'tourism' }); expect(readDraft()?.tileLayer).toBe('tourism'); });
 it('bewaart ook een enkel startpunt en verwijdert een bewust leeggemaakte werkroute', () => {
   writeDraft({ ...draft, stops: ['1'] }); expect(readDraft()?.stops).toEqual(['1']);
   writeDraft({ ...draft, stops: [] }); expect(readDraft()).toBeNull();

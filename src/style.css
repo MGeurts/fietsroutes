@@ -39,6 +39,44 @@
 
 /* Keep the route summary compact and the junction actions within reach. */
 .missing-start{color:#b42335}
+.tourism-controls{display:flex;flex-direction:column;width:46px;border:1px solid #d3dfd6;border-radius:10px;background:white;box-shadow:0 3px 12px #123b3025}
+.map-control-stack .tourism-controls .map-button{width:44px;min-width:44px;height:44px;min-height:44px;border:0;border-radius:9px 9px 0 0;box-shadow:none}
+.map-control-stack .tourism-controls .tourism-toggle{border-top:1px solid #e2e9e4;border-radius:0 0 9px 9px}
+@media(orientation:landscape) and (max-height:550px){.during-ride .tourism-controls{width:37px}.map-control-stack.during-ride .tourism-controls .map-button{width:35px;min-width:35px;height:35px;min-height:35px}}
+.tourism-options{border:1px solid #dce5e1;border-radius:10px;margin:18px 0;padding:12px}
+.tourism-choice{display:flex;align-items:center;gap:10px;min-height:44px;font-size:.9rem;line-height:1.4;cursor:pointer}
+.tourism-choice input{width:19px;height:19px;accent-color:#176b47;flex-shrink:0}
+.ride-tourism-distance{display:block;font-size:.75rem;font-weight:400;color:#6d8177;margin-top:2px}
+.tourism-popup button{display:flex;width:100%;margin-top:12px;font-size:.8rem;background:#eef6ec}
+.pause-summary{background:#f1f6fa;border-radius:9px;padding:12px;margin:12px 0}
+.pause-summary>div{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.pause-summary .text-button{text-align:left;overflow-wrap:anywhere}
+.pause-summary small{display:block;font-size:.75rem;line-height:1.4}
+.ride-tourism{list-style:none;margin:12px 0 0;padding:10px 0 0;border-top:1px solid #ead7d9;display:flex;flex-direction:column;gap:8px;max-height:130px;overflow:auto}
+.ride-tourism li{display:flex;align-items:center;gap:10px;font-size:.9rem;font-weight:600;line-height:1.4;overflow-wrap:anywhere}
+.ride-tourism .tourism-pin{flex-shrink:0}
+.tourism-proximity-icon{pointer-events:none}
+.tourism-proximity-pulse{display:block;width:76px;height:76px;border:2px solid #e7657080;border-radius:50%;background:#f6a3ac55;animation:tourism-proximity-pulse 3.5s ease-in-out infinite}
+@keyframes tourism-proximity-pulse{0%,100%{transform:scale(.7);opacity:.45}50%{transform:scale(1);opacity:.9}}
+@media(prefers-reduced-motion:reduce){.tourism-proximity-pulse{animation:none;opacity:.65}}
+.tourism-toggle[aria-pressed=true]{color:#176b47;background:#e4f3e6;border-color:#77ad85;box-shadow:0 0 0 2px #176b4726}
+.route-viewpoint{display:flex;align-items:center;gap:12px;margin:9px 0 4px 16px;padding:10px 8px 10px 14px;border-left:2px solid #9db7ce;background:#f1f6fa;border-radius:0 8px 8px 0;color:#426781}
+.route-viewpoint>.tourism-pin{flex-shrink:0}
+.route-viewpoint .stop-label small{white-space:normal;line-height:1.4}
+.route-viewpoint .stop-label strong{white-space:normal;overflow-wrap:anywhere;line-height:1.4}
+.network-details{list-style:none;margin:0 0 16px;padding:0;display:flex;flex-direction:column;gap:5px;font-size:.9rem;line-height:1.5}
+.tourism-pin{display:grid;place-items:center;width:28px;height:28px;border:2px solid #fff;border-radius:8px;box-shadow:0 1px 5px #18393055;font-size:16px;background:#e9e1f5}
+.tourism-food{background:#fff0d9}.tourism-sight{background:#e2edf9}.tourism-service{background:#e1f1e3}
+.tourism-icon:focus-visible{outline:3px solid #7cafed;outline-offset:3px}
+.tourism-popup{min-width:150px;max-width:260px;overflow-wrap:anywhere}
+.tourism-popup strong{display:block;font-size:.95rem}
+.tourism-popup p{margin:6px 0;font-size:.8rem;line-height:1.4}
+.tourism-popup a{display:inline-block;margin:6px 12px 0 0}
+.tourism-status{position:absolute;z-index:460;left:26px;top:82px;max-width:calc(100% - 100px);padding:7px 10px;background:#fffffff2;border:1px solid #dce5e1;border-radius:8px;color:#506e60;font-size:.73rem;line-height:1.4;pointer-events:auto}
+.tourism-status button{min-height:28px;padding:3px 7px;margin-left:8px;font-size:.73rem}
+.tourism-status.during-ride{top:auto;bottom:215px}
+@media(max-width:700px){.tourism-status{left:12px;top:72px;max-width:calc(100% - 24px)}}
+@media print{.tourism-status{display:none}}
 .library-item.is-active{background:#f0f6ed;border-color:#a5c9ad}
 .library-active-label{display:inline-flex;align-items:center;gap:4px;color:#176b47;font-size:.72rem;font-weight:600;margin-top:4px}
 .library-bike-profile{display:flex;align-items:center;gap:7px;margin-top:5px;color:#506e60;font-size:.75rem}

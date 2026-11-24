@@ -1,12 +1,14 @@
 import { Clock3, Gauge, Route, Square, Navigation } from 'lucide-react';
 import type { Network, Progress } from '../domain/network';
-interface Props { network: Network | null; progress: Progress | null; totalMeters: number; currentSpeed: number | null; profileSpeed: number; accuracy: number; gpsStale: boolean; now: number; onStop: () => void }
+import type { RouteViewpoint } from '../domain/routeViewpoints';
+import { tourismCategories } from '../domain/tourism';
+interface Props { nearbyTourism?: RouteViewpoint[]; pauseMinutes?: number; network: Network | null; progress: Progress | null; totalMeters: number; currentSpeed: number | null; profileSpeed: number; accuracy: number; gpsStale: boolean; now: number; onStop: () => void }
 const km = (meters: number) => (meters / 1000).toLocaleString('nl-BE', { maximumFractionDigits: 1 });
 const nextDistance = (meters: number) => meters < 1000 ? Math.round(meters / 10) * 10 + ' m' : km(meters) + ' km';
-export function RidePanels({ network, progress, totalMeters, currentSpeed, profileSpeed, accuracy, gpsStale, now, onStop }: Props) {
+export function RidePanels({ nearbyTourism, pauseMinutes = 0, network, progress, totalMeters, currentSpeed, profileSpeed, accuracy, gpsStale, now, onStop }: Props) {
   const reliable = !gpsStale && accuracy <= 75, offRoute = Boolean(progress && progress.offRoute > 75);
   const remaining = progress?.remaining ?? totalMeters;
-  const eta = reliable && !offRoute && progress ? new Date(now + remaining / (profileSpeed * 1000) * 3600000).toLocaleTimeString('nl-BE', { hour: '2-digit', minute: '2-digit' }) : '—';
+  const eta = reliable && !offRoute && progress ? new Date(now + remaining / (profileSpeed * 1000) * 3600000 + pauseMinutes * 60000).toLocaleTimeString('nl-BE', { hour: '2-digit', minute: '2-digit' }) : '—';
   const status = gpsStale ? 'WACHTEN OP GPS' : accuracy > 75 ? 'GPS ONNAUWKEURIG' : progress?.arrived ? 'EINDE BEREIKT' : offRoute ? 'JE WIJKT AF VAN DE ROUTE' : '';
   return <>
     <div className="ride-card">
@@ -17,6 +19,7 @@ export function RidePanels({ network, progress, totalMeters, currentSpeed, profi
         <span className="ride-after"><small>Daarna</small><b aria-label="Daaropvolgend knooppunt">{network?.nodes.get(progress?.nextAfter ?? '')?.number ?? '—'}</b></span>
       </div>}
       {status && !progress?.arrived && <p>{gpsStale ? 'Wacht op je locatie.' : accuracy > 75 ? 'Voortgang staat stil tot GPS nauwkeuriger is.' : 'Keer terug naar de blauwe lijn.'}</p>}
+      {Boolean(nearbyTourism?.length) && <ul className="ride-tourism" aria-label="Toeristische punten in de buurt">{nearbyTourism!.map(({ place, metersFromStart }) => <li key={place.id}><span className={`tourism-pin tourism-${place.category}`} aria-hidden="true">{tourismCategories[place.category].symbol}</span><span>{place.name}<small className="ride-tourism-distance">{progress && progress.meters > metersFromStart ? 'Net voorbij' : 'Over ' + Math.round(Math.max(0, (nearbyTourism!.find(p => p.place.id === place.id)?.metersFromStart ?? 0) - (progress?.meters ?? 0))) + ' m'}</small></span></li>)}</ul>}
     </div>
     <div className="ride-footer">
       <span className="ride-metric" aria-label="Actuele snelheid" title="Actuele snelheid"><Gauge size={17} aria-hidden="true"/><strong>{reliable && currentSpeed !== null ? currentSpeed.toLocaleString('nl-BE', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) : '—'}<small> km/u</small></strong></span>

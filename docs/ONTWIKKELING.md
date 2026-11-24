@@ -66,7 +66,7 @@ npm test
 npm run build
 ```
 
-Het resultaat staat in `public/data/network.json`, met ophaaldatum, bronvermelding en kwaliteitsrapport. De snapshot van 22 november 2026 bevat 5.138 punten, waarvan 5.002 genummerd, en 7.655 bruikbare trajecten, waarvan 80 éénrichtingstrajecten. De bronrecords bevatten tevens ongenummerde aansluitpunten.
+Het resultaat staat in `public/data/network.json`, met ophaaldatum, bronvermelding en kwaliteitsrapport. De snapshot van 24 november 2026 bevat 5.138 punten, waarvan 5.002 genummerd, en 7.655 bruikbare trajecten, waarvan 80 éénrichtingstrajecten. De bronrecords bevatten tevens ongenummerde aansluitpunten.
 
 De topologie volgt `geoid`, `begin_geoid` en `end_geoid`. Gedeelde bronidentiteiten worden alleen samengevoegd bij consistente nummers en posities. Identieke nummers of nabije coördinaten zijn op zichzelf nooit een aansluiting. Trajectgeometrie wordt georiënteerd en tegen de uiteinden gecontroleerd; ontbrekende geometrie wordt niet door rechte lijnen vervangen.
 
@@ -184,3 +184,23 @@ De roteerknop gebruikt alleen Navigation of Compass en heeft dezelfde standaarda
 ## Bewaarstatus en route vervangen (v1.2.0)
 
 De bewaarstatus vergelijkt naam, gekozen punten en fietsprofiel met de actieve bibliotheekroute. Vervangende acties lopen via confirmReplacement; een nieuwe werkroute met alleen een startpunt vraagt geen bevestiging. De vervolgactie wordt pas uitgevoerd na Verwerpen of een geslaagde opslag. Bij een opslagfout blijft de dialoog met foutmelding open. De bibliotheek markeert activeId als Geopend en toont per route het fietsprofiel. De knooppuntenbalk gebruikt position: sticky binnen panel-scroll, zonder negatieve zijmarges die horizontale overflow veroorzaken.
+
+
+## Toerismegegevens
+
+`npm run data:tourism` haalt een nieuwe OpenStreetMap-snapshot op via Overpass en schrijft `public/data/tourism.json`. Dit is een expliciete onderhoudsactie, geen zoekdienst voor iedere kaartbeweging. Het gebied wordt afgeleid van de netwerkomvang, met 0,02 graad marge. Node-, way- en relation-objecten worden genormaliseerd; gebouwen gebruiken hun bounding-boxcentrum. Mislukte/onvolledige antwoorden vervangen geen bestaande snapshot. Bron: OpenStreetMap-bijdragers, ODbL. De eerste snapshot bevat 33.864 plaatsen.
+
+`MapView` laadt de snapshot alleen bij de toerismelaag en hergebruikt die tijdens de sessie. `tourismLayer` gebruikt een ruimtelijke index, toont vanaf zoom 14 alleen zichtbare plaatsen, met spreiding over schermcellen en maximaal 250 iconen. Knooppunten liggen in een hogere Leaflet-pane. Popups gebruiken tekstnodes en uitsluitend HTTP(S)-websites. Wisselen van laag annuleert laden en verwijdert markers en listeners. De PWA-precache en build-ZIP bevatten de snapshot. De browser deelt geen kaartgebied of GPS-positie met Overpass; alleen de onderhoudsopdracht raadpleegt die dienst. De schakelaar wordt als tourismEnabled in werkrouteherstel bewaard. Oud herstel met kaartlaag-ID tourism wordt geopend als network met toerisme ingeschakeld.
+
+Na verversen: `npm test` en `npm run build`. Publiceer tourism.json samen met de appbestanden. Dit verhoogt de download- en offlineopslagomvang met ongeveer 5,5 MB.
+
+`routeViewpoints` projecteert OSM-bezienswaardigheden (uitkijkpunten, attracties en musea) en openbare toiletten en drinkwaterpunten op de trajectsegmenten en selecteert maximaal 50 meter afstand. Een ruimtelijke index beperkt de kandidaten per segment; afstanden langs de geometrie worden geschaald naar de gebruikte trajectlengte. Iedere OSM-plaats verschijnt eenmaal bij de dichtstbijzijnde passage, bij gelijke afstand de eerste. De routelijst voegt ze tussen de genummerde bezoeken in zonder de knooppuntvolgorde, navigatie, GPX of routeafstand te veranderen. Dezelfde geladen toerismesnapshot wordt via MapView aan App doorgegeven; berekening gebeurt uitsluitend met Toerisme ingeschakeld en wordt gememoiseerd voor GPS-updates.
+
+
+## Toerismefilters en pauzeplaatsen
+
+De categoriekeuze en 500-meterfilter staan onder fietsroutes:tourism-filter. MapView filtert de bestaande snapshot via routeViewpoints met configureerbare radius. RoutePointList stuurt de geselecteerde TourismPlace mee; MapView opent de veilige popup ook wanneer de dichtheidsfilter de oorspronkelijke marker weglaat. De navigatiebadge gebruikt dezelfde actieve lijst als de pulscirkels en toont de afstand langs de route.
+
+PauseStop bevat een synthetisch numeriek node-ID, de anchor, TourismPlace, pauzeminuten en afzonderlijke heen/teruggeometrie. withPauses maakt een afgeleid netwerk met twee gerichte BRouter-verbindingen. Het oorspronkelijke bronbestand blijft intact. De gekozen stop wordt tussen bestaande gekozen knooppunten ingevoegd. Voorstel en afstand worden vóór toepassing berekend; fouten behouden de route. Actieve pauzes worden opgeslagen in SavedRoute en RouteDraft en gevalideerd bij import. GPX neemt ze mee als fr:pauses in metadata/extensions. QR-deellinks blijven uitsluitend voor routes zonder pauzeplaatsen beschikbaar; pauzeroutes delen via GPX.
+
+Geometrie van pauzeverbindingen komt van BRouter/OpenStreetMap en niet van het officiële knooppuntennetwerk. De routingdienst ontvangt uitsluitend de gekozen openbare POI- en knooppuntcoördinaten voor die verbindingen. Bestaande routes zonder pauses blijven compatibel. Tests controleren routering, geometrievalidatie, persistentie, GPX-herimport, voorstel vóór bevestiging, filters en geopende details.

@@ -9,8 +9,8 @@ De header toont **Fietsroutes**, het versienummer en twee knoppen: informatie (*
 Rechts op de kaart staan tijdens het plannen, van boven naar beneden:
 
 1. Het vizier: centreert op je locatie en vraagt opnieuw een locatiebepaling aan.
-2. De zoomselector: toont het actuele niveau, met knoppen voor in- en uitzoomen. Het niveau verandert ook mee bij zoomen op de kaart.
-3. De kaartlagenknop: opent de keuze van de achtergrondkaart.
+2. Het Toerisme-bedieningsblok: instellingen bovenaan, toerisme aan/uit eronder. Beide knoppen zijn even groot en staan onder elkaar.
+3. Het zoom- en kaartlagenblok: actueel niveau, inzoomen, uitzoomen en daaronder Kaartlagen in één blok. Het niveau verandert mee bij zoomen op de kaart.
 
 Tijdens navigatie staat boven het vizier een even grote ronde richtingknop zonder tekst. Het navigatiepijltje betekent rijrichting bovenaan; het kompas betekent noorden bovenaan. De verklarende titel en toegankelijkheidsnaam geven de actieve stand aan.
 
@@ -112,7 +112,7 @@ GPX-herimport, bibliotheekroutes en deellinks worden op de aanwezige netwerkvers
 
 Kies **Start met fietsen** voor GPS-volging. Het zoekvak verdwijnt en routebewerkingen worden uitgeschakeld. De witte hoofding toont op één rij het volgende knooppunt, de afstand ernaartoe en het daaropvolgende knooppunt. De groene onderbalk toont met iconen, van links naar rechts, de actuele snelheid (km/u), resterende afstand (km) en geschatte aankomsttijd. De compacte vierkante stopknop rechts beëindigt de navigatie. Waarschuwingen voor GPS of routeafwijking blijven in de hoofding zichtbaar.
 
-Snelheid komt uit de GPS, met een terugval op recente betrouwbare verplaatsingen als de browser geen snelheid levert. Onbetrouwbare of ontbrekende snelheid wordt als een streepje getoond. De ETA is een schatting op basis van de resterende routeafstand en het gekozen fietsprofiel, zonder pauzes. Bij ontbrekende/onnauwkeurige GPS of routeafwijking verschijnt geen ETA. Tijdens navigatie is je positie een grotere rode stip met witte rand. De lichtroze cirkel rond de rode stip wordt voor zichtbaarheid tweemaal zo breed getekend; de gemeten GPS-nauwkeurigheid en de waarschuwingsdrempels veranderen hierdoor niet. De kaart volgt je positie op zoomniveau 16 en draait standaard met je rijrichting bovenaan. De ronde richtingknop boven het centreervizier schakelt tussen rijrichting en noorden bovenaan. Hij toont alleen het navigatiepijltje of kompas; er staat geen tekst in de knop. In de Noord-stand blijft het noorden bovenaan; buiten navigatie staat de kaart eveneens met het noorden bovenaan.
+Snelheid komt uit de GPS, met een terugval op recente betrouwbare verplaatsingen als de browser geen snelheid levert. Onbetrouwbare of ontbrekende snelheid wordt als een streepje getoond. De ETA is een schatting op basis van de resterende routeafstand en het gekozen fietsprofiel, inclusief de geplande tijd van nog niet gepasseerde pauzeplaatsen. Bij ontbrekende/onnauwkeurige GPS of routeafwijking verschijnt geen ETA. Tijdens navigatie is je positie een grotere rode stip met witte rand. De lichtroze cirkel rond de rode stip wordt voor zichtbaarheid tweemaal zo breed getekend; de gemeten GPS-nauwkeurigheid en de waarschuwingsdrempels veranderen hierdoor niet. De kaart volgt je positie op zoomniveau 16 en draait standaard met je rijrichting bovenaan. De ronde richtingknop boven het centreervizier schakelt tussen rijrichting en noorden bovenaan. Hij toont alleen het navigatiepijltje of kompas; er staat geen tekst in de knop. In de Noord-stand blijft het noorden bovenaan; buiten navigatie staat de kaart eveneens met het noorden bovenaan.
 
 De rijrichting komt uit de GPS-koers wanneer beschikbaar, of uit voldoende verplaatsing tussen nauwkeurige GPS-fixes. Tot een richting bekend is, blijft noord bovenaan. Bij stilstand of slechte GPS wordt de laatste bruikbare richting vastgehouden; kleine koersschommelingen worden gedempt. De oriëntatie volgt je beweging, niet de richting waarin je de telefoon vasthoudt.
 
@@ -125,3 +125,25 @@ Installeer de app eventueel via Toevoegen aan beginscherm in je browser. Na de e
 Achtergrondnavigatie, gesproken afslagaanwijzingen en automatische synchronisatie tussen apparaten zijn nog niet beschikbaar. Deze versie moet nog op de fiets worden getest. Het netwerk bevat bovendien uitgesloten trajecten; volg onderweg ook de bewegwijzering en controleer de geplande route vooraf.
 
 Bij een verouderde weergave: herlaad de app, op een computer zo nodig met Ctrl+Shift+R. Wis de sitegegevens niet als oplossing zonder eerst je bibliotheek te exporteren.
+
+
+## Toeristische kaartlaag
+
+Klik op **Toerisme**, het informatie-icoon onderaan het Toerisme-bedieningsblok onder de centreerknop. De groene knop betekent dat toeristische informatie aan staat. Nogmaals klikken schakelt ze uit. Dit werkt met iedere achtergrondkaart. Het fietsnetwerk blijft zichtbaar. Vanaf zoomniveau 14 verschijnen aanklikbare iconen voor overnachtingen (B&B/gastenverblijven, hotels, hostels en campings), horeca, musea, attracties, uitkijkpunten, drinkwater, toiletten en fietsherstelpunten. Een popup toont naam, type en beschikbare adres-, website- en openingsgegevens zonder afzonderlijke OpenStreetMap-link; de kaart behoudt de bronvermelding. Plaatsen zijn informatiepunten; aanklikken voegt geen routepunt toe.
+
+De laag gebruikt een meegeleverde OpenStreetMap-momentopname van het rechthoekige netwerkgebied met een kleine marge, inclusief plaatsen over de gewest- en landsgrenzen binnen dat gebied. Gegevens kunnen ontbreken of verouderd zijn; openingsuren zijn geen live beschikbaarheid. De aantallen en downloaddatums staan onder Netwerkgegevens in Over deze app. In drukke gebieden worden iconen uitgedund; zoom verder in voor meer plaatsen. Na volledige installatie zijn de gegevens offline beschikbaar; achtergrondkaarten en externe websites vereisen internet.
+
+Wanneer Toerisme ingeschakeld is, bevat de routelijst ook bezienswaardigheden (uitkijkpunten, attracties en musea) en openbare toiletten en drinkwaterpunten op maximaal 50 meter van het berekende traject. Ze staan tussen de knooppunten in routevolgorde, met hun afstand vanaf de start en tot de route. Aanklikken centreert de kaart. Elk uitkijkpunt verschijnt eenmaal, bij de dichtstbijzijnde passage. Dit zijn informatiepunten: ze voegen geen omweg, gekozen knooppunt of pauzetijd toe. Bij het uitschakelen van Toerisme verdwijnen ze uit de lijst.
+
+Tijdens het fietsen worden de toeristische punten uit de routelijst gemarkeerd met een langzaam pulserende lichtrode cirkel, vanaf 200 meter vóór de passage tot 100 meter erna, gemeten langs de route. Hun icoon en naam verschijnen tegelijkertijd onderaan de bovenste navigatiebadge. Bij meerdere actieve punten staan ze onder elkaar. De markeringen verdwijnen bij het uitschakelen van Toerisme, stoppen van de navigatie, verouderde of onnauwkeurige GPS of routeafwijking. Bij verminderde-bewegingsvoorkeur blijft de cirkel statisch zichtbaar.
+
+
+## Toerisme instellen en pauzes plannen
+
+De instellingenknop bovenaan het Toerisme-bedieningsblok opent de categoriekeuze: overnachten, eten en drinken, bezienswaardigheden en onderweg. Kies desgewenst Alleen langs mijn route om de kaart tot plaatsen binnen 500 meter van het traject te beperken. Deze voorkeuren blijven op dit apparaat bewaard. Standaard staat Toerisme aan, Overnachten uit en staan de andere categorieën en Alleen langs mijn route aan. Eerder opgeslagen keuzes blijven behouden. De gewone Toerisme-knop blijft een aan/uitknop; rechtsklikken opent eveneens de instellingen.
+
+Een klik op een toeristische plaats in de routelijst centreert de kaart, markeert de plaats kort en opent meteen de details. Tijdens navigatie toont de bovenste badge bij actieve plaatsen ook Over … m of Net voorbij.
+
+Kies in de kaartpopup Als pauzeplaats toevoegen. Kies een pauzetijd (of geen), bekijk de berekende extra afstand en bevestig. De app zoekt het dichtstbijzijnde genummerde knooppunt op de route en berekent afzonderlijk een fietsbare verbinding naar de plaats en terug via BRouter. Dit kan een omweg zijn. Nieuwe verbindingen vereisen internet; er wordt geen rechte lijn verzonnen bij een routeringsfout. Pauzes zijn tijdens het fietsen niet bewerkbaar.
+
+Onder de lijst staan gekozen pauzeplaatsen, de pauzetijd en de geschatte totale tijd inclusief pauzes. Daar kun je een pauzeplaats ook verwijderen. De omweg telt mee in de routeafstand en GPX. Bewaren slaat de plaats, verbindingen en pauzetijd op; ook automatisch herstel en bibliotheekbackups behouden die. Delen van routes met pauzeplaatsen gebeurt via GPX, omdat de bestaande QR-deellink alleen knooppunten bevat. Openen van een bewaarde pauzeroute vereist geen nieuwe BRouter-aanvraag. De ETA bevat de geplande tijd van nog niet gepasseerde pauzeplaatsen; dit is geen automatische pauzetimer.

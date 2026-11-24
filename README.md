@@ -24,6 +24,7 @@ Webapp om fietsroutes op het officiële Vlaamse knooppuntennetwerk te plannen, t
 
 ## Documentatie
 
+- [Releasebeschrijving v1.3.0](docs/RELEASE-v1.3.0.md).
 - [Releasebeschrijving v1.2.0](docs/RELEASE-v1.2.0.md).
 - [Releasebeschrijving v1.1.0](docs/RELEASE-v1.1.0.md).
 - [Releasebeschrijving v1.0.2](docs/RELEASE-v1.0.2.md).
@@ -67,6 +68,10 @@ Met Flock is geen afzonderlijk serverproces nodig om de gebouwde app te openen. 
 
 ## Huidige functies
 
+- Toeristische OpenStreetMap-plaatsen met categorieën en een filter binnen 500 meter langs de route; standaard aan met horeca, bezienswaardigheden en voorzieningen. Overnachtingen zijn optioneel.
+- Bezienswaardigheden, toiletten en drinkwater binnen 50 meter in de routelijst; aanklikken opent details en markeert de plaats kort. Tijdens fietsen pulseren naderende punten en verschijnen naam, icoon en afstand in de navigatiebadge.
+- Pauzeplaatsen met een vooraf berekende fietsbare omweg via BRouter en gekozen pauzetijd. Bewaren, backups en GPX behouden de pauzeplaatsen en verbindingen; pauzeroutes delen via GPX.
+
 - Compact routeblad met een vastblijvende knooppuntenbalk en actieknoppen tijdens scrollen. Het aantal bewaarde routes blijft ook op smalle schermen zichtbaar.
 - Bewaarstatus bij de routenaam, bescherming tegen het vervangen van niet bewaarde wijzigingen en fietsprofiel per bibliotheekroute. De geopende route en het bewaarde fietstype zijn herkenbaar in Mijn routes.
 
@@ -82,12 +87,12 @@ Met Flock is geen afzonderlijk serverproces nodig om de gebouwde app te openen. 
 - Lokale routebibliotheek met favorieten, zoeken, datum en tijd van de laatste bewaring, bijwerken, genummerde kopieën en JSON-backups.
 - GPX-export met behoud van de decimale komma in bestandsnamen, herimport van eigen GPX, deellinks met QR-code en routenaam voor overdracht naar je mobiele telefoon en een afdrukbaar knooppuntenstrookje.
 - Gestippelde fietsaanrijroute naar de start via BRouter, afzonderlijk van de geplande route en haar afstand/export.
-- Fietsmodus met grotere rode positiestip, kaartrotatie met rijrichting bovenaan en schakelknop naar noorden bovenaan, GPS-volging, volgend en daaropvolgend knooppunt met afstand, compacte groene balk met actuele snelheid, resterende afstand en ETA, en melding bij afwijken of onnauwkeurige GPS. De ETA gebruikt het gekozen fietsprofiel. Na het bereiken van de start of bevestigde routevoortgang stopt de aanrijrouteberekening tijdens die rit.
+- Fietsmodus met grotere rode positiestip, kaartrotatie met rijrichting bovenaan en schakelknop naar noorden bovenaan, GPS-volging, volgend en daaropvolgend knooppunt met afstand, compacte groene balk met actuele snelheid, resterende afstand en ETA, en melding bij afwijken of onnauwkeurige GPS. De ETA gebruikt het gekozen fietsprofiel en de geplande tijd van nog niet gepasseerde pauzeplaatsen. Na het bereiken van de start of bevestigde routevoortgang stopt de aanrijrouteberekening tijdens die rit.
 - Installeerbare PWA met offline appbestanden en netwerkgegevens na een volledige eerste online installatie.
 
 ## Gegevens en beperkingen
 
-De meegeleverde snapshot van 22 november 2026 bevat **5.138 netwerkpunten**, waarvan **5.002 genummerd**, en **7.655 bruikbare trajecten**, waarvan **80 éénrichtingstrajecten**. Het aantal knooppunten en trajecten staat in de informatiemodal. De bron is [Toerisme Vlaanderen en de provinciale toeristische organisaties](https://metadata.vlaanderen.be/srv/api/records/c91e9b9d-6465-4dec-beeb-16fdc6d759a0).
+De meegeleverde snapshot van 24 november 2026 bevat **5.138 netwerkpunten**, waarvan **5.002 genummerd**, en **7.655 bruikbare trajecten**, waarvan **80 éénrichtingstrajecten**. Het aantal knooppunten en trajecten staat in de informatiemodal. De bron is [Toerisme Vlaanderen en de provinciale toeristische organisaties](https://metadata.vlaanderen.be/srv/api/records/c91e9b9d-6465-4dec-beeb-16fdc6d759a0).
 
 Eénrichtingstrajecten zijn opgenomen in de toegestane richting. De importer sluit onduidelijke of ongeldige aansluitingen, geometriefouten en onbekende of tegenstrijdige richtingscodes uit. Daardoor is nog niet elke officiële verbinding routeerbaar. De [ontwikkelaarsdocumentatie](docs/ONTWIKKELING.md#netwerkgegevens) beschrijft de controles en tellingen.
 
@@ -124,3 +129,10 @@ De logo-export schrijft `public/logo.ico` (16–256 px), `public/logo.png` (512 
 - Kaartgegevens: © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap-bijdragers</a>, ODbL.
 - Fietskaart: <a href="https://www.cyclosm.org/" target="_blank" rel="noopener noreferrer">CyclOSM</a>.
 - Voor de openbare OSM-tegels geldt het <a href="https://operations.osmfoundation.org/policies/tiles/" target="_blank" rel="noopener noreferrer">tegelgebruiksbeleid</a>, dat offline bulkdownloads uitsluit.
+
+
+## Toeristische kaartlaag
+
+Klik op **Toerisme**, het informatie-icoon onderaan het Toerisme-bedieningsblok onder de centreerknop. De groene knop betekent dat toeristische informatie aan staat. Nogmaals klikken schakelt ze uit. Dit werkt met iedere achtergrondkaart. Het fietsnetwerk blijft zichtbaar. Vanaf zoomniveau 14 verschijnen aanklikbare iconen voor overnachtingen (B&B/gastenverblijven, hotels, hostels en campings), horeca, musea, attracties, uitkijkpunten, drinkwater, toiletten en fietsherstelpunten. Een popup toont naam, type en beschikbare adres-, website- en openingsgegevens zonder afzonderlijke OpenStreetMap-link; de kaart behoudt de bronvermelding. Plaatsen zijn informatiepunten; aanklikken voegt geen routepunt toe.
+
+De laag gebruikt een meegeleverde OpenStreetMap-momentopname van het rechthoekige netwerkgebied met een kleine marge, inclusief plaatsen over de gewest- en landsgrenzen binnen dat gebied. Gegevens kunnen ontbreken of verouderd zijn; openingsuren zijn geen live beschikbaarheid. De aantallen en downloaddatums staan onder Netwerkgegevens in Over deze app. In drukke gebieden worden iconen uitgedund; zoom verder in voor meer plaatsen. Na volledige installatie zijn de gegevens offline beschikbaar; achtergrondkaarten en externe websites vereisen internet.

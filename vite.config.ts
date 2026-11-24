@@ -4,9 +4,10 @@ import { VitePWA } from 'vite-plugin-pwa';
 import { readFileSync } from 'node:fs';
 
 const { version } = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8'));
+const tourism = JSON.parse(readFileSync(new URL('./public/data/tourism.json', import.meta.url), 'utf8'));
 
 export default defineConfig({
-  define: { __APP_VERSION__: JSON.stringify(version) },
+  define: { __APP_VERSION__: JSON.stringify(version), __TOURISM_METADATA__: JSON.stringify({ count: tourism.places.length, fetchedAt: tourism.fetchedAt }) },
   root: 'web',
   publicDir: '../public',
   build: { outDir: '../dist', emptyOutDir: true },

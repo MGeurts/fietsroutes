@@ -1,7 +1,7 @@
 {
   "name": "fietsroutes-vlaanderen",
   "private": true,
-  "version": "1.2.0",
+  "version": "1.3.0",
   "type": "module",
   "scripts": {
     "dev": "vite --host 127.0.0.1",
@@ -10,6 +10,7 @@
     "preview": "vite preview --host 127.0.0.1",
     "test": "vitest run",
     "check:host": "node --use-system-ca scripts/check-host.mjs",
+    "data:tourism": "node --use-system-ca scripts/import-tourism.mjs",
     "data:refresh": "node scripts/import-network.mjs",
     "data:update": "npm run data:refresh && npm test && npm run build"
   },

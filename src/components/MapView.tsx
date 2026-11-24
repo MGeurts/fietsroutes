@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import L from '../leafletRuntime';
 import 'leaflet-rotate';
 import 'leaflet/dist/leaflet.css';
@@ -6,12 +6,21 @@ import type { Network, PlannedRoute, Position } from '../domain/network';
 import type { Approach } from '../domain/approach';
 import { mapPointRoles, pointRoleLabels, type PointRole } from '../domain/pointRoles';
 import { SpatialGrid, lineBox, pointBox, type Box } from '../domain/spatialIndex';
+import { parseTourismSnapshot, type TourismSnapshot, type TourismPlace } from '../domain/tourism';
+import type { RouteViewpoint } from '../domain/routeViewpoints';
+import { routeViewpoints } from '../domain/routeViewpoints';
+import { addTourismLayer, tourismPopup } from './tourismLayer';
 
-interface Props { heading?: number | null; headingUp?: boolean; network: Network | null; route: PlannedRoute | null; approach: Approach | null; accuracy: number; onSelect: (id: string) => void; focus: { position?: Position; route?: boolean; token: number }; location: Position | null; riding: boolean; tileLayer: string; zoomCommand: { delta: number; token: number }; onZoomChange: (zoom: number) => void; onCenterChange?: (position: Position) => void }
+interface Props { tourismCategories?: string[]; tourismAlongRoute?: boolean; onPause?: (place: TourismPlace) => void; nearbyTourism?: RouteViewpoint[]; tourismEnabled?: boolean; onTourismData?: (data: TourismSnapshot) => void; heading?: number | null; headingUp?: boolean; network: Network | null; route: PlannedRoute | null; approach: Approach | null; accuracy: number; onSelect: (id: string) => void; focus: { position?: Position; route?: boolean; highlight?: boolean; place?: TourismPlace; token: number }; location: Position | null; riding: boolean; tileLayer: string; zoomCommand: { delta: number; token: number }; onZoomChange: (zoom: number) => void; onCenterChange?: (position: Position) => void }
 const viewport = (map: L.Map): Box => { const b = map.getBounds().pad(0.15); return { west: b.getWest(), south: b.getSouth(), east: b.getEast(), north: b.getNorth() }; };
 const icon = (number: string, role?: PointRole) => L.divIcon({ className: 'junction-icon', html: `<span class="${role ? `point-badge role-${role}` : 'junction'}">${number.replace(/[^0-9]/g, '')}</span>`, iconSize: [32, 32], iconAnchor: [16, 16] });
-export function MapView({ network, route, approach, accuracy, onSelect, focus, location, riding, tileLayer, zoomCommand, onZoomChange, onCenterChange, heading = null, headingUp = true }: Props) {
+export function MapView({ tourismCategories, tourismAlongRoute = false, onPause, nearbyTourism, tourismEnabled = false, onTourismData, network, route, approach, accuracy, onSelect, focus, location, riding, tileLayer, zoomCommand, onZoomChange, onCenterChange, heading = null, headingUp = true }: Props) {
   const element = useRef<HTMLDivElement>(null), mapRef = useRef<L.Map | null>(null);
+  const [tourismStatus, setTourismStatus] = useState('');
+  const [tourismRetry, setTourismRetry] = useState(0);
+  const [tourismFailed, setTourismFailed] = useState(false);
+  const tourismData = useRef<TourismSnapshot | null>(null);
+  const tourismCallback = useRef(onTourismData); tourismCallback.current = onTourismData;
   const callback = useRef(onSelect); callback.current = onSelect;
   const centerCallback = useRef(onCenterChange); centerCallback.current = onCenterChange;
   const zoomCallback = useRef(onZoomChange); zoomCallback.current = onZoomChange;
@@ -25,6 +34,8 @@ export function MapView({ network, route, approach, accuracy, onSelect, focus, l
   useEffect(() => {
     const map = L.map(element.current!, { center: [51.05, 3.73], zoom: 12, zoomControl: false, rotate: true, rotateControl: false, touchRotate: false, shiftKeyRotate: false });
     map.createPane('network-lines', map.getPane('rotatePane')).style.zIndex = '350';
+    map.createPane('tourism-proximity', map.getPane('rotatePane')).style.zIndex = '540';
+    map.createPane('tourism', map.getPane('rotatePane')).style.zIndex = '550';
     const directions = map.createPane('route-directions', map.getPane('norotatePane')); directions.style.zIndex = '450'; directions.style.pointerEvents = 'none';
     L.control.scale({ position: 'bottomleft', imperial: false }).addTo(map);
     map.attributionControl.setPrefix(false);
@@ -34,12 +45,54 @@ export function MapView({ network, route, approach, accuracy, onSelect, focus, l
     const observer = new ResizeObserver(() => map.invalidateSize()); observer.observe(element.current!);
     return () => { observer.disconnect(); map.remove(); mapRef.current = null; };
   }, []);
+  const proximityMarkers = useRef(new Map<string, L.Marker>());
+  useEffect(() => {
+    const markers = proximityMarkers.current;
+    const points = riding && tourismEnabled ? nearbyTourism ?? [] : [];
+    const ids = new Set(points.map(point => point.place.id));
+    for (const [id, marker] of markers) if (!ids.has(id)) { marker.remove(); markers.delete(id); }
+    for (const { place } of points) if (!markers.has(place.id)) {
+      markers.set(place.id, L.marker([place.position[1], place.position[0]], {
+        pane: 'tourism-proximity', interactive: false, keyboard: false,
+        icon: L.divIcon({ className: 'tourism-proximity-icon', html: '<span class="tourism-proximity-pulse" aria-hidden="true"></span>', iconSize: [76, 76], iconAnchor: [38, 38] }),
+      }).addTo(mapRef.current!));
+    }
+  }, [nearbyTourism, riding, tourismEnabled]);
+  useEffect(() => {
+    const markers = proximityMarkers.current;
+    return () => { for (const marker of markers.values()) marker.remove(); markers.clear(); };
+  }, []);
   useEffect(() => { if (zoomCommand.delta) mapRef.current!.setZoom(mapRef.current!.getZoom() + zoomCommand.delta); }, [zoomCommand]);
   useEffect(() => {
     const map = mapRef.current!;
     const layer = L.tileLayer(tileLayer === 'cycle' ? 'https://{s}.tile-cyclosm.openstreetmap.fr/cyclosm/{z}/{x}/{y}.png' : 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a>' + (tileLayer === 'cycle' ? ' · <a href="https://www.cyclosm.org/">CyclOSM</a>' : '') }).addTo(map);
     return () => { layer.remove(); };
   }, [tileLayer]);
+  useEffect(() => {
+    if (!tourismEnabled) return;
+    const controller = new AbortController(); let disposed = false, cleanup: (() => void) | undefined;
+    setTourismFailed(false); setTourismStatus('Toeristische plaatsen laden…');
+    async function load() {
+      try {
+        let data = tourismData.current;
+        if (!data) {
+          const response = await fetch('/data/tourism.json', { signal: controller.signal });
+          if (!response.ok) throw Error('Toerismegegevens niet beschikbaar.');
+          data = parseTourismSnapshot(await response.json());
+        }
+        if (disposed) return;
+        tourismData.current = data;
+        tourismCallback.current?.(data);
+        const selected = data.places.filter(p => !tourismCategories || tourismCategories.includes(p.category));
+        const filtered = tourismAlongRoute && route ? routeViewpoints(route, selected, 500, true).map(p => p.place) : tourismAlongRoute ? [] : selected;
+        cleanup = addTourismLayer(mapRef.current!, { ...data, places: filtered }, setTourismStatus, !riding ? onPause : undefined);
+      } catch {
+        if (!disposed) { setTourismStatus('Toeristische plaatsen konden niet worden geladen.'); setTourismFailed(true); }
+      }
+    }
+    void load();
+    return () => { disposed = true; controller.abort(); cleanup?.(); };
+  }, [tourismEnabled, tourismRetry, tourismCategories, tourismAlongRoute, route, riding, onPause]);
   useEffect(() => {
     if (!index) return;
     const map = mapRef.current!, renderer = L.canvas({ padding: 0.2, pane: 'network-lines' });
@@ -138,6 +191,21 @@ export function MapView({ network, route, approach, accuracy, onSelect, focus, l
     else if (focus.route && route?.steps.length) mapRef.current!.fitBounds(L.latLngBounds(route.steps.flatMap(s => s.coordinates.map(p => L.latLng(p[1], p[0])))), { padding: [50, 50] });
   }, [focus]);
   useEffect(() => {
+    if (!focus.highlight || !focus.position) return;
+    const circle = L.circleMarker([focus.position[1], focus.position[0]], {
+      radius: 30, color: '#e76570', weight: 2, opacity: .7,
+      fillColor: '#f6a3ac', fillOpacity: .28, interactive: false,
+    }).addTo(mapRef.current!);
+    const timer = window.setTimeout(() => circle.remove(), 4000);
+    return () => { window.clearTimeout(timer); circle.remove(); };
+  }, [focus]);
+  useEffect(() => {
+    if (!focus.place) return;
+    const marker = L.marker([focus.place.position[1], focus.place.position[0]], { opacity: 0, interactive: false });
+    marker.bindPopup(tourismPopup(focus.place, !riding ? onPause : undefined)).addTo(mapRef.current!).openPopup();
+    return () => { marker.remove(); };
+  }, [focus, riding, onPause]);
+  useEffect(() => {
     // A clockwise travel bearing requires the opposite map rotation.
     mapRef.current!.setBearing(riding && headingUp && heading !== null ? -heading : 0);
   }, [riding, headingUp, heading]);
@@ -155,5 +223,5 @@ export function MapView({ network, route, approach, accuracy, onSelect, focus, l
     const latLng = L.latLng(location[1], location[0]); circle.setLatLng(latLng).setRadius(accuracy * (riding ? 2 : 1)).addTo(map); marker.setLatLng(latLng).addTo(map);
     if (riding) map.setView(latLng, 16, { animate: false });
   }, [location, accuracy, riding]);
-  return <div className="map-canvas" ref={element} aria-label="Kaart van het Vlaamse fietsknooppuntennetwerk" />;
+  return <><div className="map-canvas" ref={element} aria-label="Kaart van het Vlaamse fietsknooppuntennetwerk" />{tourismEnabled && tourismFailed && <div className={`tourism-status ${riding ? 'during-ride' : ''}`} role="status">{tourismStatus}{tourismFailed && <button onClick={() => setTourismRetry(n => n + 1)}>Opnieuw</button>}</div>}</>;
 }

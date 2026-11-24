@@ -8,6 +8,20 @@ import type { ItineraryPoint } from './domain/itinerary';
 let root: Root, element: HTMLDivElement;
 beforeEach(() => { Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true }); element = document.createElement('div'); root = createRoot(element); });
 afterEach(async () => { await act(async () => root.unmount()); vi.restoreAllMocks(); });
+it('toont uitkijkpunten tussen de knooppunten en centreert ze zonder routebewerking', async () => {
+  const network = { nodes: new Map(['1', '2'].map(id => [id, { id, number: id, position: [3, 51] }])) } as Network;
+  const points: ItineraryPoint[] = [{ id: '1', role: 'start', stopIndex: 0, metersToNext: 1000, metersFromStart: 0 }, { id: '2', role: 'end', stopIndex: 1, metersToNext: null, metersFromStart: 1000 }];
+  const onFocus = vi.fn(), onRemove = vi.fn();
+  const props = { network, points, speed: 20, riding: false, onFocus, onRemove };
+  await act(async () => root.render(<RoutePointList {...props} viewpoints={[{ place: { id: 'node/1', name: 'Panorama', kind: 'Uitkijkpunt', category: 'sight', position: [3.01, 51] }, metersFromStart: 500, metersFromRoute: 20 }]}/>));
+  const rows = element.querySelectorAll('.itinerary-row');
+  expect(rows[0].textContent).toContain('Panorama'); expect(rows[1].textContent).not.toContain('Panorama');
+  expect(element.textContent).toContain('0,5 km vanaf start · 20 m naast de route');
+  await act(async () => element.querySelector<HTMLButtonElement>('.route-viewpoint button')!.click());
+  expect(onFocus).toHaveBeenCalledWith([3.01, 51]); expect(onRemove).not.toHaveBeenCalled();
+  await act(async () => root.render(<RoutePointList {...props}/>));
+  expect(element.querySelector('.route-viewpoint')).toBeNull();
+});
 it('tekent de lijst niet opnieuw bij een GPS-update en past tijden wel aan bij een ander profiel', async () => {
   const network = { nodes: new Map(['1', '2', '3'].map(id => [id, { id, number: id, position: [3, 51] }])) } as Network;
   const points: ItineraryPoint[] = [{ id: '1', role: 'start', stopIndex: 0, metersToNext: 1000 }, { id: '2', role: 'automatic', stopIndex: null, metersToNext: 1000 }, { id: '3', role: 'end', stopIndex: 1, metersToNext: null }];

@@ -8,7 +8,7 @@ import { createNetwork, planRoute, type Dataset } from './domain/network';
 const state = vi.hoisted(() => ({ map: null as any, markers: [] as any[], lines: [] as any[], circles: [] as any[], project: vi.fn(), bounds: { west: 2.99, east: 3.03, south: 50.99, north: 51.03 } }));
 vi.mock('leaflet', () => {
   const layer = (options: any = {}) => {
-    const item: any = { options, addTo: vi.fn(() => item), remove: vi.fn(() => item), bindTooltip: vi.fn(() => item), setIcon: vi.fn(() => item), setStyle: vi.fn(() => item), setZIndexOffset: vi.fn(() => item), setLatLng: vi.fn(() => item), setRadius: vi.fn(() => item), getElement: () => ({ setAttribute: vi.fn() }), on: vi.fn(() => item) }; return item;
+    const item: any = { options, addTo: vi.fn(() => item), remove: vi.fn(() => item), bindTooltip: vi.fn(() => item), bindPopup: vi.fn(() => item), openPopup: vi.fn(() => item), setIcon: vi.fn(() => item), setStyle: vi.fn(() => item), setZIndexOffset: vi.fn(() => item), setLatLng: vi.fn(() => item), setRadius: vi.fn(() => item), getElement: () => ({ setAttribute: vi.fn() }), on: vi.fn(() => item) }; return item;
   };
   return { default: {
     map: () => {
@@ -19,11 +19,12 @@ vi.mock('leaflet', () => {
     control: { scale: () => layer() }, tileLayer: () => layer(), canvas: () => layer(), layerGroup: () => layer(),
     marker: (_position: any, options: any) => { const item = layer(options); state.markers.push(item); return item; },
     polyline: (_points: any, options: any) => { const item = layer(options); state.lines.push(item); return item; },
-    circle: () => layer(), circleMarker: () => { const item = layer(); state.circles.push(item); return item; },
+    circle: () => layer(), circleMarker: (_position: any, options: any) => { const item = layer(options); state.circles.push(item); return item; },
     latLng: (lat: number, lng: number) => ({ lat, lng }), latLngBounds: (points: any) => points, point: (x: number, y: number) => ({ x, y }), divIcon: (options: any) => options,
   } };
 });
 let root: Root, element: HTMLDivElement;
+const tourismPlace = { id: 'node/123', name: 'B&B Test', kind: 'B&B', category: 'stay', position: [3.01, 51.01] };
 beforeEach(() => {
   Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true }); state.markers.length = 0; state.lines.length = 0; state.circles.length = 0; state.project.mockClear();
   vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} });
@@ -31,6 +32,58 @@ beforeEach(() => {
   element = document.createElement('div'); root = createRoot(element);
 });
 afterEach(async () => { await act(async () => root.unmount()); vi.unstubAllGlobals(); });
+it('opent details van een geselecteerde toeristische plaats ook zonder een zichtbare toerismemarker', async () => {
+  const place = { id: 'node/7', name: 'Museum', kind: 'Museum', category: 'sight' as const, position: [3, 51] as [number, number] };
+  const props = { network: null, route: null, approach: null, accuracy: 0, onSelect: vi.fn(), onZoomChange: vi.fn(), zoomCommand: { token: 0, delta: 0 }, location: null, riding: false, tileLayer: 'network' };
+  await act(async () => root.render(<MapView {...props} focus={{ token: 1, position: place.position, place }}/>));
+  const marker = state.markers.find(m => m.options.opacity === 0);
+  expect(marker.openPopup).toHaveBeenCalled();
+  expect(marker.bindPopup.mock.calls[0][0].textContent).toContain('Museum');
+});
+it('markeert een aangeklikt lijstpunt vier seconden en vervangt de vorige cirkel bij een nieuwe selectie', async () => {
+  vi.useFakeTimers();
+  try {
+    const props = { network: null, route: null, approach: null, accuracy: 0, onSelect: vi.fn(), onZoomChange: vi.fn(), zoomCommand: { token: 0, delta: 0 }, location: null, riding: false, tileLayer: 'network' };
+    await act(async () => root.render(<MapView {...props} focus={{ token: 1, position: [3, 51], highlight: true }}/>));
+    const first = state.circles.find(c => c.options.radius === 30);
+    expect(first.options).toMatchObject({ fillColor: '#f6a3ac', interactive: false });
+    await act(async () => vi.advanceTimersByTime(2000)); expect(first.remove).not.toHaveBeenCalled();
+    await act(async () => root.render(<MapView {...props} focus={{ token: 2, position: [3.01, 51], highlight: true }}/>));
+    expect(first.remove).toHaveBeenCalled();
+    const second = state.circles.at(-1);
+    await act(async () => vi.advanceTimersByTime(3999)); expect(second.remove).not.toHaveBeenCalled();
+    await act(async () => vi.advanceTimersByTime(1)); expect(second.remove).toHaveBeenCalled();
+  } finally { vi.useRealTimers(); }
+});
+it('laadt toerisme alleen voor de gekozen laag, toont vanaf zoom 14 en ruimt markers op bij wisselen', async () => {
+  const fetcher = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ version: 1, fetchedAt: '2026-11-24', places: [tourismPlace] }) });
+  vi.stubGlobal('fetch', fetcher);
+  const props = { network: null, route: null, approach: null, accuracy: 0, onSelect: vi.fn(), onZoomChange: vi.fn(), focus: { token: 0 }, zoomCommand: { token: 0, delta: 0 }, location: null, riding: false, tileLayer: 'network' };
+  await act(async () => root.render(<MapView {...props}/>));
+  expect(fetcher).not.toHaveBeenCalled();
+  await act(async () => root.render(<MapView {...props} tourismEnabled={true}/>));
+  expect(fetcher).toHaveBeenCalledTimes(1); expect(state.markers).toHaveLength(0);
+  expect(element.querySelector('.tourism-status')).toBeNull();
+  await act(async () => state.map.setZoom(14));
+  const marker = state.markers.find(m => m.options.pane === 'tourism');
+  expect(marker.options.title).toBe('B&B Test · B&B');
+  expect(marker.bindPopup).toHaveBeenCalled();
+  await act(async () => root.render(<MapView {...props}/>));
+  expect(marker.remove).toHaveBeenCalled(); expect(element.querySelector('.tourism-status')).toBeNull();
+  await act(async () => root.render(<MapView {...props} tourismEnabled={true}/>));
+  expect(fetcher).toHaveBeenCalledTimes(1);
+});
+
+it('biedt opnieuw laden na een ontbrekende toerismesnapshot', async () => {
+  const fetcher = vi.fn().mockResolvedValueOnce({ ok: false }).mockResolvedValue({ ok: true, json: async () => ({ version: 1, fetchedAt: '2026-11-24', places: [] }) });
+  vi.stubGlobal('fetch', fetcher);
+  const props = { network: null, route: null, approach: null, accuracy: 0, onSelect: vi.fn(), onZoomChange: vi.fn(), focus: { token: 0 }, zoomCommand: { token: 0, delta: 0 }, location: null, riding: false, tileLayer: 'network', tourismEnabled: true };
+  await act(async () => root.render(<MapView {...props}/>));
+  expect(element.textContent).toContain('konden niet worden geladen');
+  await act(async () => element.querySelector<HTMLButtonElement>('.tourism-status button')!.click());
+  expect(fetcher).toHaveBeenCalledTimes(2);
+  expect(element.textContent).not.toContain('konden niet worden geladen');
+});
 it('hergebruikt zichtbare knooppunten, netwerkgeometrie en locatiestip tijdens verschuiven en GPS-updates', async () => {
   const data: Dataset = { version: 1, fetchedAt: '', attribution: '', report: { skippedEdges: 0, ambiguousIds: 0, invalidGeometry: 0 }, junctions: [{ id: '1', number: '1', position: [3, 51], owner: 'Test', network: 'Test' }, { id: '2', number: '2', position: [3.01, 51], owner: 'Test', network: 'Test' }], edges: [{ id: 'edge', from: '1', to: '2', coordinates: [[3, 51], [3.01, 51]] }] };
   const network = createNetwork(data), onSelect = vi.fn(), onZoomChange = vi.fn(), focus = { token: 0 }, zoomCommand = { token: 0, delta: 0 };

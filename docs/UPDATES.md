@@ -64,3 +64,8 @@ Als een andere tab de update al activeerde, herlaadt Bijwerken de actieve appver
 ## Samenhang tussen app en netwerk
 
 Publiceer de appbestanden en netwerksnapshot samen. Eénrichtingsroutering vereist zowel de nieuwe oneWay-eigenschap in de dataset als de bijbehorende appcode; alleen network.json vervangen is niet voldoende. QR-codes zijn lokaal gegenereerde publieke deellinks. Om de meegestuurde routenaam over te nemen, moet de ontvangende online app die naamparameter ondersteunen. Een wijziging aan een lokale build of ZIP vervangt geen reeds gepubliceerde GitHub-release en uploadt niet automatisch naar Antagonist.
+
+
+## Toeristische plaatsen verversen
+
+Voer `npm run data:tourism` uit om de OpenStreetMap-momentopname te vernieuwen. Controleer daarna met `npm test` en `npm run build`; het ZIP-archief bevat ook `data/tourism.json`. Deze handeling staat los van `data:refresh` en `data:update` voor het officiële fietsnetwerk. Er zijn geen Overpass-aanvragen vanuit de productieapp.
