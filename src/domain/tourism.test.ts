@@ -1,5 +1,13 @@
 import { expect, it } from 'vitest';
 import { normalizeTourism, parseTourismSnapshot, safeWebsite } from './tourism';
+it('neemt telefoonnummers over uit beide OSM-velden en gebruikt een volledig adres indien aanwezig', () => {
+  const places = normalizeTourism([
+    { type: 'node', id: 1, lat: 51, lon: 3, tags: { amenity: 'restaurant', phone: '+32 1', 'contact:phone': '+32 2', 'addr:full': 'Bosweg 1, Gent' } },
+    { type: 'node', id: 2, lat: 51, lon: 3, tags: { amenity: 'cafe', 'contact:phone': '+32 3' } },
+  ]);
+  expect(places[0]).toMatchObject({ phone: '+32 1', address: 'Bosweg 1, Gent' });
+  expect(places[1].phone).toBe('+32 3');
+});
 
 it('normaliseert punten en gebouwcentra met adres en beschikbare details', () => {
   const places = normalizeTourism([

@@ -24,6 +24,7 @@ Webapp om fietsroutes op het officiële Vlaamse knooppuntennetwerk te plannen, t
 
 ## Documentatie
 
+- [Releasebeschrijving v1.3.1](docs/RELEASE-v1.3.1.md).
 - [Releasebeschrijving v1.3.0](docs/RELEASE-v1.3.0.md).
 - [Releasebeschrijving v1.2.0](docs/RELEASE-v1.2.0.md).
 - [Releasebeschrijving v1.1.0](docs/RELEASE-v1.1.0.md).
@@ -133,6 +134,6 @@ De logo-export schrijft `public/logo.ico` (16–256 px), `public/logo.png` (512 
 
 ## Toeristische kaartlaag
 
-Klik op **Toerisme**, het informatie-icoon onderaan het Toerisme-bedieningsblok onder de centreerknop. De groene knop betekent dat toeristische informatie aan staat. Nogmaals klikken schakelt ze uit. Dit werkt met iedere achtergrondkaart. Het fietsnetwerk blijft zichtbaar. Vanaf zoomniveau 14 verschijnen aanklikbare iconen voor overnachtingen (B&B/gastenverblijven, hotels, hostels en campings), horeca, musea, attracties, uitkijkpunten, drinkwater, toiletten en fietsherstelpunten. Een popup toont naam, type en beschikbare adres-, website- en openingsgegevens zonder afzonderlijke OpenStreetMap-link; de kaart behoudt de bronvermelding. Plaatsen zijn informatiepunten; aanklikken voegt geen routepunt toe.
+Klik op **Toerisme**, het informatie-icoon onderaan het Toerisme-bedieningsblok onder de centreerknop. De groene knop betekent dat toeristische informatie aan staat. Nogmaals klikken schakelt ze uit. Dit werkt met iedere achtergrondkaart. Het fietsnetwerk blijft zichtbaar. Vanaf zoomniveau 14 verschijnen aanklikbare iconen voor overnachtingen (B&B/gastenverblijven, hotels, hostels en campings), horeca, musea, attracties, uitkijkpunten, drinkwater, toiletten en fietsherstelpunten. Een popup toont naam, type en beschikbare adres-, telefoon- en websitegegevens zonder afzonderlijke OpenStreetMap-link; de kaart behoudt de bronvermelding. Plaatsen zijn informatiepunten; aanklikken voegt geen routepunt toe.
 
-De laag gebruikt een meegeleverde OpenStreetMap-momentopname van het rechthoekige netwerkgebied met een kleine marge, inclusief plaatsen over de gewest- en landsgrenzen binnen dat gebied. Gegevens kunnen ontbreken of verouderd zijn; openingsuren zijn geen live beschikbaarheid. De aantallen en downloaddatums staan onder Netwerkgegevens in Over deze app. In drukke gebieden worden iconen uitgedund; zoom verder in voor meer plaatsen. Na volledige installatie zijn de gegevens offline beschikbaar; achtergrondkaarten en externe websites vereisen internet.
+De laag gebruikt een meegeleverde OpenStreetMap-momentopname van het rechthoekige netwerkgebied met een kleine marge, inclusief plaatsen over de gewest- en landsgrenzen binnen dat gebied. Gegevens kunnen ontbreken of verouderd zijn; openingsuren worden niet weergegeven. De aantallen en downloaddatums staan onder Netwerkgegevens in Over deze app. In drukke gebieden worden iconen uitgedund; zoom verder in voor meer plaatsen. Na volledige installatie zijn de gegevens offline beschikbaar; achtergrondkaarten en externe websites vereisen internet.

@@ -69,3 +69,25 @@ Publiceer de appbestanden en netwerksnapshot samen. Eénrichtingsroutering verei
 ## Toeristische plaatsen verversen
 
 Voer `npm run data:tourism` uit om de OpenStreetMap-momentopname te vernieuwen. Controleer daarna met `npm test` en `npm run build`; het ZIP-archief bevat ook `data/tourism.json`. Deze handeling staat los van `data:refresh` en `data:update` voor het officiële fietsnetwerk. Er zijn geen Overpass-aanvragen vanuit de productieapp.
+
+De toerisme-import haalt acht kleinere gebieden na elkaar op, met vijf seconden rust tussen geslaagde aanvragen. Tijdelijke fouten krijgen maximaal drie pogingen. Bij HTTP 429 wacht de import minstens een minuut; Retry-After van de server wordt volledig gerespecteerd, ook als het een HTTP-datum is. Er wordt niet automatisch van server gewisseld om limieten te omzeilen.
+
+Geslaagde gebieden blijven in de genegeerde map .cache/tourism-import bewaard. Bij een mislukking of Ctrl+C hervat `npm run data:tourism` **zonder `--fresh`** de onvoltooide run, maximaal zes uur lang. Als gebieden 1–3 geslaagd zijn en gebied 4 faalt, worden alleen gebied 4 en de overige ontbrekende gebieden opgehaald. Na een geslaagde run haalt de volgende opdracht opnieuw verse gegevens op. Een gewijzigd querygebied start eveneens een nieuwe run. Gelijktijdige imports worden voorkomen; een vergrendeling van een beëindigd proces wordt bij de volgende start hersteld.
+
+**Let op:** herhaal `--fresh` niet na een fout als je de geslaagde deelgebieden wilt behouden. Deze optie begint bewust helemaal opnieuw.
+
+Volledig opnieuw beginnen:
+
+```powershell
+npm run data:tourism -- --fresh
+```
+
+De snapshot wordt pas na ontvangst en validatie van alle gebieden atomair vervangen. Dubbele OSM-objecten worden samengevoegd. Een lege import of onverwachte daling van meer dan 30% vervangt de bestaande snapshot niet. Die daling vereist controle van de brongegevens; --fresh omzeilt de controle niet. De downloaddatum is de start van de run, zodat hervatte gegevens niet ten onrechte als volledig nieuw worden voorgesteld. Verouderde cachebestanden worden na een succesvolle import opgeruimd.
+
+`npm run test:tourism-import` controleert onder meer hervatten, fouten, Retry-After, annulering en bescherming van de oude snapshot zonder publieke diensten te belasten. Deze tests worden ook door `npm test` uitgevoerd.
+
+Bij geheugen- of tijdslimieten toont de import voortaan de exacte Overpass-melding. De serveraanvragen mogen maximaal 128 MB werkgeheugen gebruiken. Een gebied dat toch te zwaar is, wordt automatisch in tweeën gedeeld (maximaal drie niveaus); geslaagde deelgebieden worden ook bewaard voor hervatten. Een structureel te zware query wordt niet driemaal identiek herhaald.
+
+## Windows: EPERM bij vervangen van gegevens
+
+Bij EPERM, EACCES of EBUSY probeert de importer atomair vervangen enkele keren opnieuw. Het doelbestand wordt niet vooraf verwijderd. Blijft de fout optreden, controleer of een editor, antivirusprogramma of ander proces het bestand vasthoudt en of je schrijfrechten hebt. De foutmelding vermeldt het behouden tijdelijke bestand. Na een geslaagde WFS-download hoef je niet opnieuw te downloaden: gebruik `npm run data:refresh -- --cached`, gevolgd door `npm test` en `npm run build`. Dit verwerkt de bestaande .cache/wfs-source.json opnieuw. Ook de toerisme-import gebruikt deze vervangingslogica.

@@ -1,14 +1,15 @@
 {
   "name": "fietsroutes-vlaanderen",
   "private": true,
-  "version": "1.3.0",
+  "version": "1.3.1",
   "type": "module",
   "scripts": {
     "dev": "vite --host 127.0.0.1",
     "build": "tsc -b && vite build",
     "postbuild": "node scripts/package-antagonist.mjs",
     "preview": "vite preview --host 127.0.0.1",
-    "test": "vitest run",
+    "test": "vitest run && npm run test:tourism-import",
+    "test:tourism-import": "node --test scripts/overpass-request.test.mjs scripts/tourism-import-core.test.mjs scripts/atomic-file.test.mjs",
     "check:host": "node --use-system-ca scripts/check-host.mjs",
     "data:tourism": "node --use-system-ca scripts/import-tourism.mjs",
     "data:refresh": "node scripts/import-network.mjs",

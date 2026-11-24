@@ -1,5 +1,7 @@
 import { normalizeSourceEdge } from './normalize-edge.mjs';
-import { mkdir, writeFile, rename, readFile } from 'node:fs/promises';
+import { mkdir, writeFile, readFile } from 'node:fs/promises';
+import { randomUUID } from 'node:crypto';
+import { replaceFile } from './atomic-file.mjs';
 
 const base = 'https://geodata.toerismevlaanderen.be/geoserver/wfs';
 async function download(layer) {
@@ -58,6 +60,8 @@ for (const f of lines) {
 if (junctions.length < 4000 || edges.length < 7000) throw Error(`Datasetcontrole mislukt: ${JSON.stringify(report)}`);
 const dataset = { version: 1, fetchedAt: sourceFetchedAt, processedAt: new Date().toISOString(), source: base, attribution: 'Toerisme Vlaanderen en de vijf provinciale toeristische organisaties', junctions, edges, report };
 await mkdir('public/data', { recursive: true });
-await writeFile('public/data/network.json.tmp', JSON.stringify(dataset));
-await rename('public/data/network.json.tmp', 'public/data/network.json');
+const temporary = `.cache/network.${randomUUID()}.tmp`;
+await writeFile(temporary, JSON.stringify(dataset));
+try { await replaceFile(temporary, 'public/data/network.json'); }
+catch (error) { console.error(`${error.message}\nOpnieuw verwerken zonder nieuwe download: npm run data:refresh -- --cached`); process.exit(1); }
 console.log(JSON.stringify({ junctions: junctions.length, edges: edges.length, report }, null, 2));

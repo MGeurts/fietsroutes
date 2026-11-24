@@ -5,7 +5,7 @@ import { safeWebsite, tourismCategories, type TourismPlace, type TourismSnapshot
 export function tourismPopup(place: TourismPlace, onPause?: (place: TourismPlace) => void): HTMLElement {
   const root = document.createElement('div'); root.className = 'tourism-popup';
   const title = document.createElement('strong'); title.textContent = place.name; root.append(title);
-  for (const text of [place.kind, place.address, place.openingHours ? `Openingsuren: ${place.openingHours}` : '']) {
+  for (const text of [place.kind, place.address, place.phone ? `Tel.: ${place.phone}` : '']) {
     if (text) { const line = document.createElement('p'); line.textContent = text; root.append(line); }
   }
   const website = safeWebsite(place.website);

@@ -7,7 +7,7 @@ export const tourismCategories = {
 export type TourismCategory = keyof typeof tourismCategories;
 export interface TourismPlace {
   id: string; position: [number, number]; category: TourismCategory; name: string;
-  kind: string; address?: string; website?: string; openingHours?: string;
+  kind: string; address?: string; website?: string; phone?: string; openingHours?: string;
 }
 export interface TourismSnapshot { version: 1; fetchedAt: string; places: TourismPlace[] }
 const kinds: Record<string, [TourismCategory, string]> = {
@@ -31,7 +31,7 @@ export function normalizeTourism(elements: unknown[]): TourismPlace[] {
     const id = `${e.type}/${e.id}`;
     const address = [[tags['addr:street'], tags['addr:housenumber']].filter(Boolean).join(' '), [tags['addr:postcode'], tags['addr:city']].filter(Boolean).join(' ')].filter(Boolean).join(', ');
     const name = [tags.name, tags['name:nl'], tags.official_name, tags.loc_name].find(value => value?.trim())?.trim() || kind[1];
-    places.set(id, { id, position: [location.lon!, location.lat!], category: kind[0], kind: kind[1], name, address: address || undefined, website: safeWebsite(tags.website || tags['contact:website']), openingHours: tags.opening_hours });
+    places.set(id, { id, position: [location.lon!, location.lat!], category: kind[0], kind: kind[1], name, address: tags['addr:full']?.trim() || address || undefined, phone: tags.phone?.trim() || tags['contact:phone']?.trim() || undefined, website: safeWebsite(tags.website || tags['contact:website']), openingHours: tags.opening_hours });
   }
   return [...places.values()];
 }
@@ -39,7 +39,7 @@ export function parseTourismSnapshot(value: unknown): TourismSnapshot {
   const s = value as TourismSnapshot;
   if (!s || s.version !== 1 || typeof s.fetchedAt !== 'string' || !Array.isArray(s.places) || s.places.length > 100000) throw Error('Ongeldige toerismegegevens.');
   for (const p of s.places) {
-    if (!p || !/^(node|way|relation)\/\d+$/.test(p.id) || !Object.hasOwn(tourismCategories, p.category) || typeof p.name !== 'string' || typeof p.kind !== 'string' || !Array.isArray(p.position) || p.position.length !== 2 || !p.position.every(Number.isFinite) || Math.abs(p.position[0]) > 180 || Math.abs(p.position[1]) > 90 || [p.address, p.website, p.openingHours].some(v => v !== undefined && typeof v !== 'string')) throw Error('Ongeldige toeristische plaats.');
+    if (!p || !/^(node|way|relation)\/\d+$/.test(p.id) || !Object.hasOwn(tourismCategories, p.category) || typeof p.name !== 'string' || typeof p.kind !== 'string' || !Array.isArray(p.position) || p.position.length !== 2 || !p.position.every(Number.isFinite) || Math.abs(p.position[0]) > 180 || Math.abs(p.position[1]) > 90 || [p.address, p.website, p.phone, p.openingHours].some(v => v !== undefined && typeof v !== 'string')) throw Error('Ongeldige toeristische plaats.');
   }
   return s;
 }

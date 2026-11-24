@@ -39,6 +39,8 @@
 
 /* Keep the route summary compact and the junction actions within reach. */
 .missing-start{color:#b42335}
+.pause-time-select{width:100%;min-height:45px;padding:10px 12px;border:1px solid #dce5e1;border-radius:9px;background:#fafcfb;color:inherit;font-size:.9rem}
+.pause-time-select+p{margin-top:20px}
 .tourism-controls{display:flex;flex-direction:column;width:46px;border:1px solid #d3dfd6;border-radius:10px;background:white;box-shadow:0 3px 12px #123b3025}
 .map-control-stack .tourism-controls .map-button{width:44px;min-width:44px;height:44px;min-height:44px;border:0;border-radius:9px 9px 0 0;box-shadow:none}
 .map-control-stack .tourism-controls .tourism-toggle{border-top:1px solid #e2e9e4;border-radius:0 0 9px 9px}
