@@ -18,7 +18,7 @@ function Preview({ route, label }: { route: PlannedRoute; label: string }) {
   }, [route]);
   return <div ref={element} className="round-trip-preview" role="img" aria-label={'Kaartvooruitzicht ' + label}/>;
 }
-interface Props { network: Network; start: string | undefined; targetKm: number; onDistance: (value: number) => void; speed: number; onChoose: (route: PlannedRoute) => void }
+interface Props { network: Network; start: string | undefined; targetKm: number; onDistance: (value: number) => void; speed: number; onChoose: (route: PlannedRoute, direction: string) => void }
 export function RoundTripChooser({ network, start, targetKm, onDistance, speed, onChoose }: Props) {
   const worker = useRef<Worker | null>(null);
   const [options, setOptions] = useState<RoundTripOption[]>([]), [busy, setBusy] = useState(false), [error, setError] = useState('');
@@ -46,7 +46,7 @@ export function RoundTripChooser({ network, start, targetKm, onDistance, speed, 
     <p className="muted">Kies je afstand. We zoeken vanaf je startpunt één lus in elke windrichting.</p>
     <label className="field-label" htmlFor="distance">Gewenste afstand</label>
     <div className="distance-input"><input id="distance" type="range" min="15" max="80" step="5" value={targetKm} onChange={e => onDistance(Number(e.target.value))}/><strong>{targetKm} km</strong></div>
-    <p>Start: {start ? 'knooppunt ' + network.nodes.get(start)?.number : 'kies een punt op de kaart'}</p>
+    <p>Start: {start ? 'knooppunt ' + network.nodes.get(start)?.number : <span className="missing-start">kies een startpunt op de kaart</span>}</p>
     <p className="muted">Maximaal 20% afstandsverschil en zo weinig mogelijk dubbele trajecten. Als het netwerk geen geschikte lus in een richting toelaat, tonen we dat. Je route verandert pas wanneer je een voorstel kiest.</p>
     <button className="primary" disabled={!start || busy} onClick={generate}>{busy ? 'Rondritten berekenen…' : options.length ? 'Opnieuw voorstellen' : 'Rondritten voorstellen'}</button>
     {busy && <p className="round-trip-progress" role="status">{options.length} van 4 richtingen onderzocht…</p>}
@@ -56,7 +56,7 @@ export function RoundTripChooser({ network, start, targetKm, onDistance, speed, 
       const minutes = route ? Math.round(route.meters / 1000 / speed * 60) : 0;
       return <section className="round-trip-option" key={direction.key} aria-label={'Rondrit ' + direction.label}>
         <h3>{direction.label}</h3>
-        {route ? <><Preview route={route} label={direction.label}/><p><strong>{(route.meters / 1000).toLocaleString('nl-BE', { maximumFractionDigits: 1 })} km</strong><span>{Math.floor(minutes / 60)} u {minutes % 60} min</span></p><button className="primary" onClick={() => onChoose(route)}>Kies {direction.label}</button></> : <p className="round-trip-unavailable">{option ? 'Geen geschikte lus gevonden. Probeer een andere afstand of startplaats.' : busy ? 'Wordt berekend…' : 'Niet berekend.'}</p>}
+        {route ? <><Preview route={route} label={direction.label}/><p><strong>{(route.meters / 1000).toLocaleString('nl-BE', { maximumFractionDigits: 1 })} km</strong><span>{Math.floor(minutes / 60)} u {minutes % 60} min</span></p><button className="primary" onClick={() => onChoose(route, direction.label)}>Kies {direction.label}</button></> : <p className="round-trip-unavailable">{option ? 'Geen geschikte lus gevonden. Probeer een andere afstand of startplaats.' : busy ? 'Wordt berekend…' : 'Niet berekend.'}</p>}
       </section>;
     })}</div>}
   </>;

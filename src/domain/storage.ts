@@ -1,10 +1,11 @@
-export interface SavedRoute { id: string; name: string; stops: string[]; favorite: boolean; updatedAt: string }
+export interface SavedRoute { id: string; name: string; stops: string[]; speed?: number; favorite: boolean; updatedAt: string }
 const key = 'fietsroutes:library:v1';
 export function validateRoute(value: unknown): SavedRoute {
   if (!value || typeof value !== 'object') throw Error('Ongeldig routebestand.');
   const r = value as Record<string, unknown>;
   if (typeof r.id !== 'string' || r.id.length > 100 || typeof r.name !== 'string' || r.name.length > 120 || !Array.isArray(r.stops) || r.stops.length < 2 || r.stops.length > 200 || !r.stops.every(s => typeof s === 'string' && /^\d{1,16}$/.test(s)) || typeof r.favorite !== 'boolean' || typeof r.updatedAt !== 'string') throw Error('Ongeldig routebestand.');
-  return { id: r.id, name: r.name, stops: r.stops, favorite: r.favorite, updatedAt: r.updatedAt };
+  if (r.speed !== undefined && ![15, 18, 20, 25].includes(r.speed as number)) throw Error('Ongeldig fietsprofiel.');
+  return { id: r.id, name: r.name, stops: r.stops, speed: r.speed as number | undefined, favorite: r.favorite, updatedAt: r.updatedAt };
 }
 export function readLibrary(): SavedRoute[] {
   const raw = localStorage.getItem(key);
@@ -22,7 +23,7 @@ export function parseBackup(text: string): SavedRoute[] {
 export function mergeLibrary(current: SavedRoute[], imported: SavedRoute[]): SavedRoute[] {
   const result = [...current];
   for (const route of imported) {
-    if (result.some(r => r.name === route.name && JSON.stringify(r.stops) === JSON.stringify(route.stops))) continue;
+    if (result.some(r => r.name === route.name && (r.speed ?? 20) === (route.speed ?? 20) && JSON.stringify(r.stops) === JSON.stringify(route.stops))) continue;
     result.push({ ...route, id: crypto.randomUUID() });
   }
   return result;

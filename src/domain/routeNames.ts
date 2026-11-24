@@ -1,6 +1,6 @@
-export function roundTripName(startNumber: string | null, meters: number): string {
+export function roundTripName(startNumber: string | null, meters: number, direction?: string): string {
   const length = (meters / 1000).toLocaleString('nl-BE', { maximumFractionDigits: 1 });
-  return `${startNumber ? `${startNumber} - ` : ''}Rondrit ${length} km`;
+  return `${startNumber ? `${startNumber} - ` : ''}Rondrit${direction ? ` ${direction}` : ''} ${length} km`;
 }
 export function gpxFilename(name: string): string {
   // Preserve decimal commas. Remove only characters forbidden in Windows filenames.

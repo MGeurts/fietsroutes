@@ -8,6 +8,7 @@ it('behoudt de decimale komma in de gedownloade bestandsnaam', () => {
 it('zet het startnummer voor de standaard rondritnaam', () => {
   expect(roundTripName('29', 62800)).toBe('29 - Rondrit 62,8 km');
   expect(roundTripName('534', 27800)).toBe('534 - Rondrit 27,8 km');
+  expect(roundTripName('29', 82600, 'Noord')).toBe('29 - Rondrit Noord 82,6 km');
 });
 it('nummert kopieën verder zonder bestaande namen te hergebruiken', () => {
   const base = '535 - Rondrit 32,2 km';

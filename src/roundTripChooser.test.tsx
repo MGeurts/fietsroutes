@@ -35,7 +35,7 @@ it('toont vooruitzichten en verandert de route pas na een bewuste keuze', async 
   expect(element.textContent).toContain('Geen geschikte lus gevonden'); expect(choose).not.toHaveBeenCalled();
   await act(async () => { worker.send({ type: 'done' }); });
   const button = [...element.querySelectorAll('button')].find(b => b.textContent === 'Kies Noord')!;
-  await act(async () => button.click()); expect(choose).toHaveBeenCalledWith(route);
+  await act(async () => button.click()); expect(choose).toHaveBeenCalledWith(route, 'Noord');
 });
 it('annuleert oude resultaten zodra de gekozen afstand verandert', async () => {
   const props = { network, start: '1', onDistance: vi.fn(), speed: 20, onChoose: vi.fn() };

@@ -24,6 +24,7 @@ Webapp om fietsroutes op het officiële Vlaamse knooppuntennetwerk te plannen, t
 
 ## Documentatie
 
+- [Releasebeschrijving v1.2.0](docs/RELEASE-v1.2.0.md).
 - [Releasebeschrijving v1.1.0](docs/RELEASE-v1.1.0.md).
 - [Releasebeschrijving v1.0.2](docs/RELEASE-v1.0.2.md).
 - [Releasebeschrijving v1.0.1](docs/RELEASE-v1.0.1.md).
@@ -66,6 +67,9 @@ Met Flock is geen afzonderlijk serverproces nodig om de gebouwde app te openen. 
 
 ## Huidige functies
 
+- Compact routeblad met een vastblijvende knooppuntenbalk en actieknoppen tijdens scrollen. Het aantal bewaarde routes blijft ook op smalle schermen zichtbaar.
+- Bewaarstatus bij de routenaam, bescherming tegen het vervangen van niet bewaarde wijzigingen en fietsprofiel per bibliotheekroute. De geopende route en het bewaarde fietstype zijn herkenbaar in Mijn routes.
+
 - Drie kaartkeuzes via een modal: **Standard (OSM)**, **OSM + Fietsnetwerk** (standaard) en **CyclOSM**.
 - Geolocatie bij opstart, een locatiepunt met nauwkeurigheidskring en een centreerknop boven de zoomselector. Het actuele zoomniveau staat in de selector; de kaartlagenknop staat eronder.
 - Plaatsen zoeken via Photon/OpenStreetMap, inclusief gemeenten en dorpen zoals Zutendaal. Knooppuntnummers en netwerknamen worden lokaal doorzocht.
@@ -73,7 +77,7 @@ Met Flock is geen afzonderlijk serverproces nodig om de gebouwde app te openen. 
 - Vaste markeringen voor Start, manuele en automatische tussenpunten en Einde, consistent op kaart, in de lijst en in de volledige knooppuntvolgorde.
 - **E-bike · 20 km/u** als standaard fietsprofiel. Ook stadsfiets, toerfiets en racefiets zijn beschikbaar voor de tijdsinschatting.
 - Punten verwijderen, werkroute leegmaken, ongedaan maken/opnieuw, route omkeren en de volledige route centreren. De werkroute wordt lokaal automatisch hersteld na herladen; het logo wist de route niet.
-- Vier rondritvoorstellen met een gewenste afstand, één per windrichting, met kaartvooruitzicht en keuze vóór toepassing. De standaardnaam begint met het startnummer, bijvoorbeeld `535 - Rondrit 32,2 km`.
+- Vier rondritvoorstellen met een gewenste afstand, één per windrichting, met kaartvooruitzicht en keuze vóór toepassing. De standaardnaam begint met het startnummer, bijvoorbeeld `535 - Rondrit Noord 32,2 km`.
 - Knop **Suggestie** voor een gestructureerde routenaam, bijvoorbeeld `534 - Naar 64 - 25,3 km` of `534 - Rondrit - 32,2 km`.
 - Lokale routebibliotheek met favorieten, zoeken, datum en tijd van de laatste bewaring, bijwerken, genummerde kopieën en JSON-backups.
 - GPX-export met behoud van de decimale komma in bestandsnamen, herimport van eigen GPX, deellinks met QR-code en routenaam voor overdracht naar je mobiele telefoon en een afdrukbaar knooppuntenstrookje.

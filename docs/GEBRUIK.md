@@ -51,6 +51,16 @@ Een deellink heeft bij openen voorrang op een herstelkopie. Zodra de link is ing
 
 Bij een nieuwe appversie verschijnt een melding met Bijwerken en Later. Bijwerken activeert de nieuwe appversie die de browser op de achtergrond heeft gedownload. Eerst wordt de werkroute bewaard; daarna neemt de nieuwe serviceworker de pagina over en herstart de app. Na maximaal 15 seconden zonder overname verschijnt een foutmelding en kun je opnieuw proberen. Bewaarde bibliotheekroutes blijven behouden. Deze knop haalt geen nieuwe brondata op; bij opslagproblemen wordt de update geblokkeerd. Tijdens navigatie is de updateknop uitgeschakeld. Het actuele versienummer staat links van de infoknop.
 
+## Bewaarstatus en veilig wisselen
+
+Onder de routenaam verschijnt **● Niet bewaard** in amber of **✓ Bewaard op dit apparaat** in groen. De bewaarknop toont Bewaren, Wijzigingen bewaren of een uitgeschakelde ✓ Bewaard. Na bewaren verschijnt een bevestiging. Wijzigingen aan naam, puntkeuze of fietsprofiel maken de route opnieuw niet bewaard.
+
+Bij een andere route openen, een rondrit kiezen, GPX importeren of de werkroute leegmaken vraagt de app eerst wat met niet bewaarde wijzigingen moet gebeuren: **Annuleren**, **Verwerpen** of **Bewaren en doorgaan**. De dialoog toont de naam van de huidige route. Mislukt bewaren, dan blijft de huidige route behouden. Alleen een nieuw startpunt kiezen activeert deze waarschuwing niet; wijzigingen aan een bestaande bibliotheekroute blijven wel beschermd.
+
+Het fietsprofiel wordt met de route bewaard en bij openen hersteld. Oude routes zonder profiel openen als E-bike · 20 km/u. In Mijn routes staat het fietstype met een icoon; de geopende route heeft een groen accent en ✓ Geopend. De bibliotheekknop toont ook op smalle schermen het aantal bewaarde routes.
+
+Het routeblad heeft een compacte hoofding. De rij Knooppunten met actieknoppen blijft zichtbaar bij het scrollen.
+
 ## Routeknoppen
 
 Naast de titel **Knooppunten** staan:
@@ -62,7 +72,7 @@ Naast de titel **Knooppunten** staan:
 | Route omkeren | Keert de gekozen puntvolgorde om en berekent de verbindingen opnieuw in de toegestane rijrichtingen. De terugweg kan anders of langer zijn; zonder geldige terugweg blijft de huidige route behouden en verschijnt een melding. |
 | Route verwijderen | Maakt de werkroute leeg en zet de naam terug op Mijn fietsroute; de puntkeuze herstellen is mogelijk via Ongedaan maken. Een opgeslagen route in de bibliotheek blijft bestaan. |
 
-Onder de rondritknop staan de acties in drie rijen: **Bewaren/Bijwerken · Delen**, **GPX Export · GPX Import** en **Strookje · Nieuwe route**.
+Onder de rondritknop staan de acties in drie rijen: **Bewaren/Wijzigingen bewaren · Delen**, **GPX Export · GPX Import** en **Strookje · Nieuwe route**.
 
 **Nieuwe route** maakt eveneens de werkroute leeg en zet de naam terug op Mijn fietsroute. Tijdens het fietsen zijn routebewerkingen uitgeschakeld.
 
@@ -72,7 +82,7 @@ Kies een startknooppunt en klik op **Maak er een rondrit van**. Stel een gewenst
 
 Een voorstel mag maximaal 20% van de gevraagde afstand afwijken en maximaal 15% dubbel bereden trajectlengte bevatten. De richting wordt bepaald door het naar trajectlengte gewogen middelpunt van de lus ten opzichte van de Start. Door de vorm en de beschikbaarheid van het officiële netwerk kan een richting geen geschikte lus opleveren; dan verschijnt bij die richting een melding. Een gewijzigde afstand annuleert de vorige berekening en wist de oude voorstellen. De routeberekening zelf werkt lokaal; de achtergrondkaarten in de vooruitzichten vereisen internet.
 
-De standaardnaam bevat het startnummer en de berekende lengte, bijvoorbeeld `535 - Rondrit 32,2 km`. Je kunt deze naam aanpassen. Bij latere routebewerkingen wordt een bestaande naam niet automatisch bijgewerkt; de afstandsweergave toont wel de opnieuw berekende lengte.
+De standaardnaam bevat het startnummer, de gekozen windrichting en de berekende lengte, bijvoorbeeld `535 - Rondrit Noord 32,2 km`. Je kunt deze naam aanpassen. Bij latere routebewerkingen wordt een bestaande naam niet automatisch bijgewerkt; de afstandsweergave toont wel de opnieuw berekende lengte.
 
 ## Aanrijroute naar de Start
 
@@ -90,7 +100,7 @@ Routes staan in de browseropslag van dit apparaat en dit webadres. Een andere br
 
 ## GPX, backups, delen en afdrukken
 
-- **GPX Export** downloadt het traject en de gekozen knooppunt-ID's. Een komma in de naam blijft behouden, bijvoorbeeld `535 - Rondrit 32,2 km.gpx`.
+- **GPX Export** downloadt het traject en de gekozen knooppunt-ID's. Een komma in de naam blijft behouden, bijvoorbeeld `535 - Rondrit Noord 32,2 km.gpx`.
 - **GPX Import** opent GPX uit deze app of een JSON-bibliotheekbackup. GPX van andere apps aan het netwerk koppelen wordt nog niet ondersteund.
 - **Backup downloaden** in Mijn routes bewaart de bibliotheek als JSON. Backupimport voegt routes toe zonder bestaande te overschrijven en slaat identieke naam/puntcombinaties over.
 - **Delen** opent een QR-code die je met de camera van je mobiele telefoon kunt scannen. De QR-code en de kopieerbare link gebruiken altijd `https://fietsroutes.kreaweb.be/`, ook als je op de laptop via Flock werkt. Open de link op je mobiele telefoon en kies daar **Bewaren**. **Link kopiëren** en, indien ondersteund, **Deel link** zijn eveneens beschikbaar. De QR-code wordt volledig lokaal gemaakt, zonder externe QR-dienst. De routenaam en gekozen knooppunten worden overgedragen; fietsprofiel en bibliotheek worden niet meegestuurd. De route wordt op de netwerkversie van de ontvanger opnieuw berekend.

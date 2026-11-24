@@ -100,9 +100,9 @@ Richtingspijlen worden eenmaal per route en zoomniveau berekend en ruimtelijk ge
 
 ## Opslag en uitwisseling
 
-De bibliotheek staat als JSON onder `fietsroutes:library:v1` in `localStorage`. Records bevatten `id`, `name`, `stops`, `favorite` en `updatedAt`. Een route heeft 2–200 gekozen punten en een naam van maximaal 120 tekens. Bij openen worden trajecten opnieuw berekend op de meegeleverde snapshot. Fietsprofiel en historische geometrie worden niet in de bibliotheek bewaard.
+De bibliotheek staat als JSON onder `fietsroutes:library:v1` in `localStorage`. Records bevatten `id`, `name`, `stops`, optioneel `speed`, `favorite` en `updatedAt`. Een route heeft 2–200 gekozen punten en een naam van maximaal 120 tekens. Bij openen worden trajecten opnieuw berekend op de meegeleverde snapshot. Het fietsprofiel wordt als speed (15, 18, 20 of 25 km/u) bewaard; ontbrekende speed bij oudere records valt terug op 20. Historische geometrie wordt niet bewaard.
 
-Backupimport valideert de records, controleert routeerbaarheid, kent nieuwe ID's toe en slaat identieke naam/puntcombinaties over. Een onleesbare bibliotheek blokkeert schrijven om onbedoeld gegevensverlies te voorkomen. Kopieën krijgen unieke namen in de vorm `(kopie N)`; bestaande records worden niet achteraf hernoemd.
+Backupimport valideert de records, controleert routeerbaarheid, kent nieuwe ID's toe en slaat identieke naam/punt/profielcombinaties over. Een onleesbare bibliotheek blokkeert schrijven om onbedoeld gegevensverlies te voorkomen. Kopieën krijgen unieke namen in de vorm `(kopie N)`; bestaande records worden niet achteraf hernoemd.
 
 GPX bewaart de gekozen punten met de eigen namespace `https://fietsroutes.app/schema/1` en schrijft brontrajecten als afzonderlijke tracksegmenten. De importer ondersteunt die eigen uitvoer; externe GPX-koppeling volgt later. `gpxFilename()` behoudt onder meer decimale komma's en verwijdert tekens die Windows-bestandsnamen niet toestaan.
 
@@ -179,3 +179,8 @@ RidePanels toont bovenaan de volgende genummerde bezoek-ID, afstand en daaropvol
 updateRideSpeed gebruikt coords.speed in m/s en rekent om naar km/u. Zonder die waarde gebruikt de terugval fixes met 2–15 seconden tussenruimte en nauwkeurigheid tot 25 meter; kleine verplaatsingen worden als stilstand beschouwd en onmogelijke snelheden geweigerd. GPS-snelheid vereist nauwkeurigheid tot 50 meter. Bij ontbrekende/verouderde of onnauwkeurige GPS worden geen actuele snelheid en ETA gesuggereerd. ETA = huidige tijd + resterende afstand / gekozen fietsprofielsnelheid; pauzes en de gemeten snelheid veranderen deze schatting niet. Bij routeafwijking wordt geen ETA getoond.
 
 De roteerknop gebruikt alleen Navigation of Compass en heeft dezelfde standaardafmetingen als centreren en kaartlagen. Tijdens navigatie gebruikt de positie-indicator een rode stip (radius 12 px) met witte rand en schaduw. De lichtroze cirkel heeft visueel tweemaal de gemelde GPS-radius; dit verandert de gebruikte nauwkeurigheidswaarde en voortgangslogica niet. ShareRoute wordt pas geladen bij openen van de deelmodal; de chunk wordt wel geprecachet voor offline gebruik.
+
+
+## Bewaarstatus en route vervangen (v1.2.0)
+
+De bewaarstatus vergelijkt naam, gekozen punten en fietsprofiel met de actieve bibliotheekroute. Vervangende acties lopen via confirmReplacement; een nieuwe werkroute met alleen een startpunt vraagt geen bevestiging. De vervolgactie wordt pas uitgevoerd na Verwerpen of een geslaagde opslag. Bij een opslagfout blijft de dialoog met foutmelding open. De bibliotheek markeert activeId als Geopend en toont per route het fietsprofiel. De knooppuntenbalk gebruikt position: sticky binnen panel-scroll, zonder negatieve zijmarges die horizontale overflow veroorzaken.
